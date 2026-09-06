@@ -1,0 +1,132 @@
+
+(rules PCB SBC386-0
+  (snap_angle 
+    fortyfive_degree
+  )
+  (autoroute_settings
+    (fanout off)
+    (autoroute on)
+    (postroute on)
+    (vias on)
+    (via_costs 50)
+    (plane_via_costs 5)
+    (start_ripup_costs 100)
+    (start_pass_no 78835)
+    (layer_rule F.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.6)
+    )
+    (layer_rule B.Cu
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 1.6)
+    )
+  )
+  (rule
+    (width 203.2)
+    (clear 178.0)
+    (clear 0.0 (type smd_to_turn_gap))
+    (clear 44.6 (type smd_smd))
+    (clear 152.6 (type Power_Power))
+  )
+  (padstack "Via[0-1]_889:584.2_um"
+    (shape
+      (circle F.Cu 889.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 889.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (padstack "Via[0-1]_1193.8:812.8_um"
+    (shape
+      (circle F.Cu 1193.8 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 1193.8 0.0 0.0)
+    )
+    (attach off)
+  )
+  (via 
+    "Via[0-1]_889:584.2_um" "Via[0-1]_889:584.2_um" default
+  )
+  (via 
+    "Via[0-1]_1193.8:812.8_um" "Via[0-1]_1193.8:812.8_um" default
+  )
+  (via 
+    "Via[0-1]_889:584.2_um-kicad_default" "Via[0-1]_889:584.2_um" "kicad_default"
+  )
+  (via 
+    "Via[0-1]_1193.8:812.8_um-kicad_default" "Via[0-1]_1193.8:812.8_um" "kicad_default"
+  )
+  (via 
+    "Via[0-1]_889:584.2_um-Power" "Via[0-1]_889:584.2_um" Power
+  )
+  (via 
+    "Via[0-1]_1193.8:812.8_um-Power" "Via[0-1]_1193.8:812.8_um" Power
+  )
+  (via_rule
+    default "Via[0-1]_889:584.2_um"
+  )
+  (via_rule
+    "kicad_default" "Via[0-1]_889:584.2_um-kicad_default"
+  )
+  (via_rule
+    Power "Via[0-1]_1193.8:812.8_um-Power"
+  )
+  (class default
+    (clearance_class default)
+    (via_rule default)
+    (rule
+      (width 203.2)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "kicad_default"
+    "~RESET_0" "Net-(C4-Pad1)" "B_HALT" "Net-(D1-Pad2)" "B_D5" "B_D6" "B_D3" "B_D4"
+    "B_A2" "B_A4" "B_A5" "B_A6" "B_A19" "B_A14" "B_/M1" "B_VBAT"
+    "B_/IORQ" "B_A13" "B_A9" "B_/IR7" "B_/IR6" "B_/IR5" "B_/IR2" "B_/INT"
+    ~EOP "B_DT/R" "B_D0" "B_D7" "B_D2" "B_A0" "B_A3" "B_A1"
+    "B_A8" "B_A7" "B_A16" "B_A17" "B_A18" "B_D1" "B_A11" "B_A10"
+    "B_/NMI" "B_/HALT" "B_/RESOUT" "B_A12" "B_A15" "B_/MREQ" "B_/RESET" A17
+    "Net-(J1-Pad2)" "/UART-SIO/~R_DSR" "/UART-SIO/R_RXD" "/UART-SIO/~R_DTR" "/UART-SIO/R_TXD" "/UART-SIO/~R_CTS" "Net-(J3-Pad2)" "Net-(J4-Pad3)"
+    A23 "RTC_DQ" "RTC_CLK" IR1 IR5 IR6 IR7 "RTC_~RESET"
+    COMCLK PEREQ NMI ~ERROR ~BUSY IR2 ~LBA D0
+    D1 D2 D3 D4 D5 D6 D7 D8
+    D9 D10 D11 D12 D13 D14 D15 "M_~IO"
+    "D_~C" "DT_~R" ~READY ~BS8 ~RD ~WR ~BLE ~BHE
+    ~ADS A1 A2 A3 A4 A5 A6 A7
+    A8 A9 A10 A11 A12 A13 A14 A15
+    A16 A18 A19 "~T_RTS0" RESET CLK2 "~CS_XIO" "~CS_DRAM"
+    "~CS_XMEM" "~CS_SRAM" "T_RXD0" "T_TXD0" "~T_CTS0" "Net-(U7-Pad10)" "Net-(U7-Pad11)" "Net-(U7-Pad12)"
+    "Net-(U8-Pad2)" "Net-(U8-Pad3)" "Net-(U15-Pad2)" "Net-(D3-Pad1)" "Net-(D4-Pad1)" "Net-(D5-Pad1)" "Net-(D6-Pad1)" "B_/WR"
+    "B_/RD" "CPU_PU" "FPU_PU" "~CS_ROM" "~CS_LIO" ~READYO "Net-(U3-Pad15)" "~CS_SRAML"
+    "~CS_SRAMH" "~DAT_EN" "B_/DREQ" DREQ0 ~DACK0 HALT "~LITE_0" "~LITE_1"
+    "~LITE_2" "~LITE_3" "B_/BUSAK" "B_/IR3" "B_/SXTAK" "~IDE_INT14" TMRCLK0 IR3
+    IR14
+    (clearance_class "kicad_default")
+    (via_rule kicad_default)
+    (rule
+      (width 203.2)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class Power
+    VCC GND
+    (clearance_class Power)
+    (via_rule Power)
+    (rule
+      (width 812.8)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+)

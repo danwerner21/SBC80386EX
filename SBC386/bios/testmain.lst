@@ -1,0 +1,594 @@
+Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/testmain.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 0000041C bytes
+0000                          cvdu_get_:
+0000    53                        push        bx 
+0001    52                        push        dx 
+0002    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0006    0F B6 D0                  movzx       dx,al 
+0009    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+000D    0F B6 06 02 00            movzx       ax,byte ptr _bitrev+0x2 
+0012    26 8B 5F 63               mov         bx,word ptr es:0x63[bx] 
+0016    01 D8                     add         ax,bx 
+0018    E8 00 00                  call        outp_ 
+001B    0F B6 06 03 00            movzx       ax,byte ptr _bitrev+0x3 
+0020    01 D8                     add         ax,bx 
+0022    E8 00 00                  call        inp_ 
+0025    5A                        pop         dx 
+0026    5B                        pop         bx 
+0027    C3                        ret         
+
+Routine Size: 40 bytes,    Routine Base: _TEXT + 0000
+
+0028                          cvdu_put_:
+0028    53                        push        bx 
+0029    51                        push        cx 
+002A    88 D1                     mov         cl,dl 
+002C    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0030    0F B6 D0                  movzx       dx,al 
+0033    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0037    0F B6 06 02 00            movzx       ax,byte ptr _bitrev+0x2 
+003C    26 8B 5F 63               mov         bx,word ptr es:0x63[bx] 
+0040    01 D8                     add         ax,bx 
+0042    E8 00 00                  call        outp_ 
+0045    0F B6 06 03 00            movzx       ax,byte ptr _bitrev+0x3 
+004A    0F B6 D1                  movzx       dx,cl 
+004D    01 D8                     add         ax,bx 
+004F    E8 00 00                  call        outp_ 
+0052    59                        pop         cx 
+0053    5B                        pop         bx 
+0054    C3                        ret         
+
+Routine Size: 45 bytes,    Routine Base: _TEXT + 0028
+
+0055                          test_cvdu_:
+0055    53                        push        bx 
+0056    52                        push        dx 
+0057    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+005B    30 E4                     xor         ah,ah 
+005D    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0061    80 C4 04                  add         ah,0x04 
+0064    BA 5A 00                  mov         dx,0x005a 
+0067    26 89 47 63               mov         word ptr es:0x63[bx],ax 
+006B    31 C0                     xor         ax,ax 
+006D    E8 00 00                  call        cvdu_put_ 
+0070    BA C6 00                  mov         dx,0x00c6 
+0073    B8 15 00                  mov         ax,0x0015 
+0076    E8 00 00                  call        cvdu_put_ 
+0079    BA AC 00                  mov         dx,0x00ac 
+007C    B8 0D 00                  mov         ax,0x000d 
+007F    E8 00 00                  call        cvdu_put_ 
+0082    31 C0                     xor         ax,ax 
+0084    E8 00 00                  call        cvdu_get_ 
+0087    3C 5A                     cmp         al,0x5a 
+0089    75 1A                     jne         L$1 
+008B    B8 15 00                  mov         ax,0x0015 
+008E    E8 00 00                  call        cvdu_get_ 
+0091    3C C6                     cmp         al,0xc6 
+0093    75 10                     jne         L$1 
+0095    B8 0D 00                  mov         ax,0x000d 
+0098    E8 00 00                  call        cvdu_get_ 
+009B    3C AC                     cmp         al,0xac 
+009D    75 06                     jne         L$1 
+009F    B8 01 00                  mov         ax,0x0001 
+00A2    5A                        pop         dx 
+00A3    5B                        pop         bx 
+00A4    C3                        ret         
+00A5                          L$1:
+00A5    31 C0                     xor         ax,ax 
+00A7    5A                        pop         dx 
+00A8    5B                        pop         bx 
+00A9    C3                        ret         
+
+Routine Size: 85 bytes,    Routine Base: _TEXT + 0055
+
+00AA                          vga_get_:
+00AA    53                        push        bx 
+00AB    51                        push        cx 
+00AC    52                        push        dx 
+00AD    89 C1                     mov         cx,ax 
+00AF    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+00B3    89 C2                     mov         dx,ax 
+00B5    26 8B 5F 63               mov         bx,word ptr es:0x63[bx] 
+00B9    C1 EA 08                  shr         dx,0x08 
+00BC    83 C3 05                  add         bx,0x0005 
+00BF    89 D8                     mov         ax,bx 
+00C1    30 F6                     xor         dh,dh 
+00C3    E8 00 00                  call        outp_ 
+00C6    43                        inc         bx 
+00C7    0F B6 D1                  movzx       dx,cl 
+00CA    89 D8                     mov         ax,bx 
+00CC    E8 00 00                  call        outp_ 
+00CF    8D 47 01                  lea         ax,0x1[bx] 
+00D2    E8 00 00                  call        inp_ 
+00D5    E9 C0 00                  jmp         L$5 
+
+Routine Size: 46 bytes,    Routine Base: _TEXT + 00AA
+
+00D8                          vga_put_:
+00D8    53                        push        bx 
+00D9    51                        push        cx 
+00DA    C8 02 00 00               enter       0x0002,0x00 
+00DE    89 C1                     mov         cx,ax 
+00E0    88 56 FE                  mov         byte ptr -0x2[bp],dl 
+00E3    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+00E7    89 C2                     mov         dx,ax 
+00E9    26 8B 5F 63               mov         bx,word ptr es:0x63[bx] 
+00ED    C1 EA 08                  shr         dx,0x08 
+00F0    83 C3 05                  add         bx,0x0005 
+00F3    89 D8                     mov         ax,bx 
+00F5    30 F6                     xor         dh,dh 
+00F7    E8 00 00                  call        outp_ 
+00FA    43                        inc         bx 
+00FB    0F B6 D1                  movzx       dx,cl 
+00FE    89 D8                     mov         ax,bx 
+0100    E8 00 00                  call        outp_ 
+0103    0F B6 56 FE               movzx       dx,byte ptr -0x2[bp] 
+0107    8D 47 01                  lea         ax,0x1[bx] 
+010A    E8 00 00                  call        outp_ 
+010D    C9                        leave       
+010E    59                        pop         cx 
+010F    5B                        pop         bx 
+0110    C3                        ret         
+
+Routine Size: 57 bytes,    Routine Base: _TEXT + 00D8
+
+0111                          test_vga_:
+0111    53                        push        bx 
+0112    52                        push        dx 
+0113    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0117    30 E4                     xor         ah,ah 
+0119    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+011D    80 C4 04                  add         ah,0x04 
+0120    BA A5 00                  mov         dx,0x00a5 
+0123    26 89 47 63               mov         word ptr es:0x63[bx],ax 
+0127    31 C0                     xor         ax,ax 
+0129    E8 00 00                  call        vga_put_ 
+012C    BA C6 00                  mov         dx,0x00c6 
+012F    B8 0B 00                  mov         ax,0x000b 
+0132    E8 00 00                  call        vga_put_ 
+0135    BA 5C 00                  mov         dx,0x005c 
+0138    B8 17 00                  mov         ax,0x0017 
+013B    E8 00 00                  call        vga_put_ 
+013E    31 C0                     xor         ax,ax 
+0140    E8 00 00                  call        vga_get_ 
+0143    3C A5                     cmp         al,0xa5 
+0145    75 1A                     jne         L$2 
+0147    B8 0B 00                  mov         ax,0x000b 
+014A    E8 00 00                  call        vga_get_ 
+014D    3C C6                     cmp         al,0xc6 
+014F    75 10                     jne         L$2 
+0151    B8 17 00                  mov         ax,0x0017 
+0154    E8 00 00                  call        vga_get_ 
+0157    3C 5C                     cmp         al,0x5c 
+0159    75 06                     jne         L$2 
+015B    B8 01 00                  mov         ax,0x0001 
+015E    5A                        pop         dx 
+015F    5B                        pop         bx 
+0160    C3                        ret         
+0161                          L$2:
+0161    31 C0                     xor         ax,ax 
+0163    5A                        pop         dx 
+0164    5B                        pop         bx 
+0165    C3                        ret         
+
+Routine Size: 85 bytes,    Routine Base: _TEXT + 0111
+
+0166                          test_vga_mem_:
+0166    53                        push        bx 
+0167    51                        push        cx 
+0168    52                        push        dx 
+0169    56                        push        si 
+016A    BE 00 B8                  mov         si,0xb800 
+016D    31 C9                     xor         cx,cx 
+016F    31 DB                     xor         bx,bx 
+0171    30 E4                     xor         ah,ah 
+0173    BA 81 00                  mov         dx,0x0081 
+0176    05 04 04                  add         ax,0x0404 
+0179    E8 00 00                  call        outp_ 
+017C    8E C6                     mov         es,si 
+017E    26 80 3F A5               cmp         byte ptr es:[bx],0xa5 
+0182    75 11                     jne         L$3 
+0184    26 80 7F 0B C6            cmp         byte ptr es:0xb[bx],0xc6 
+0189    75 0A                     jne         L$3 
+018B    26 80 7F 17 5C            cmp         byte ptr es:0x17[bx],0x5c 
+0190    75 03                     jne         L$3 
+0192    B9 01 00                  mov         cx,0x0001 
+0195                          L$3:
+0195    89 C8                     mov         ax,cx 
+0197                          L$4:
+0197    5E                        pop         si 
+0198                          L$5:
+0198    5A                        pop         dx 
+0199    59                        pop         cx 
+019A    5B                        pop         bx 
+019B    C3                        ret         
+
+Routine Size: 54 bytes,    Routine Base: _TEXT + 0166
+
+019C                          test_4uart_:
+019C    53                        push        bx 
+019D    52                        push        dx 
+019E    A8 1F                     test        al,0x1f 
+01A0    74 05                     je          L$6 
+01A2    31 C0                     xor         ax,ax 
+01A4    5A                        pop         dx 
+01A5    5B                        pop         bx 
+01A6    C3                        ret         
+01A7                          L$6:
+01A7    0F B6 D0                  movzx       dx,al 
+01AA    31 DB                     xor         bx,bx 
+01AC    80 C6 04                  add         dh,0x04 
+01AF    EB 09                     jmp         L$8 
+01B1                          L$7:
+01B1    43                        inc         bx 
+01B2    83 C2 08                  add         dx,0x0008 
+01B5    83 FB 04                  cmp         bx,0x0004 
+01B8    7D 09                     jge         L$9 
+01BA                          L$8:
+01BA    89 D0                     mov         ax,dx 
+01BC    E8 00 00                  call        uart_det_ 
+01BF    85 C0                     test        ax,ax 
+01C1    75 EE                     jne         L$7 
+01C3                          L$9:
+01C3    5A                        pop         dx 
+01C4    5B                        pop         bx 
+01C5    C3                        ret         
+
+Routine Size: 42 bytes,    Routine Base: _TEXT + 019C
+
+01C6                          _equip_flag:
+01C6    56                        push        si 
+01C7    57                        push        di 
+01C8    C8 02 00 00               enter       0x0002,0x00 
+01CC    CD 11                     int         0x11 
+01CE    89 86 FE FF               mov         word ptr -0x2[bp],ax 
+01D2                          L$10:
+01D2    8B 46 FE                  mov         ax,word ptr -0x2[bp] 
+01D5                          L$11:
+01D5    C9                        leave       
+01D6    5F                        pop         di 
+01D7    5E                        pop         si 
+01D8    C3                        ret         
+
+Routine Size: 19 bytes,    Routine Base: _TEXT + 01C6
+
+01D9                          _conv_mem:
+01D9    56                        push        si 
+01DA    57                        push        di 
+01DB    C8 02 00 00               enter       0x0002,0x00 
+01DF    CD 12                     int         0x12 
+01E1    89 86 FE FF               mov         word ptr -0x2[bp],ax 
+01E5    EB EB                     jmp         L$10 
+
+Routine Size: 14 bytes,    Routine Base: _TEXT + 01D9
+
+01E7                          _set_tick_count:
+01E7    56                        push        si 
+01E8    57                        push        di 
+01E9    55                        push        bp 
+01EA    89 E5                     mov         bp,sp 
+01EC    8B 96 08 00               mov         dx,word ptr 0x8[bp] 
+01F0    8B 8E 0A 00               mov         cx,word ptr 0xa[bp] 
+01F4    B4 01                     mov         ah,0x01 
+01F6    CD 1A                     int         0x1a 
+01F8    8B 46 08                  mov         ax,word ptr 0x8[bp] 
+01FB    8B 56 0A                  mov         dx,word ptr 0xa[bp] 
+01FE    EB D5                     jmp         L$11 
+
+Routine Size: 25 bytes,    Routine Base: _TEXT + 01E7
+
+0200                          _get_time:
+0200    56                        push        si 
+0201    57                        push        di 
+0202    C8 04 00 00               enter       0x0004,0x00 
+0206    B4 02                     mov         ah,0x02 
+0208    CD 1A                     int         0x1a 
+020A    89 8E FE FF               mov         word ptr -0x2[bp],cx 
+020E    89 96 FC FF               mov         word ptr -0x4[bp],dx 
+0212    8B 46 FC                  mov         ax,word ptr -0x4[bp] 
+0215    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
+0218    EB BB                     jmp         L$11 
+
+Routine Size: 26 bytes,    Routine Base: _TEXT + 0200
+
+021A                          testmain_:
+021A    53                        push        bx 
+021B    51                        push        cx 
+021C    52                        push        dx 
+021D    56                        push        si 
+021E    57                        push        di 
+021F    C8 0A 00 00               enter       0x000a,0x00 
+0223    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0227    26 8B 87 E1 00            mov         ax,word ptr es:0xe1[bx] 
+022C    C1 E8 05                  shr         ax,0x05 
+022F    25 1F 00                  and         ax,0x001f 
+0232    89 C6                     mov         si,ax 
+0234    46                        inc         si 
+0235    56                        push        si 
+0236    50                        push        ax 
+0237    26 8B B7 E1 00            mov         si,word ptr es:0xe1[bx] 
+023C    26 8B 87 E1 00            mov         ax,word ptr es:0xe1[bx] 
+0241    C1 EE 03                  shr         si,0x03 
+0244    C1 E8 02                  shr         ax,0x02 
+0247    83 E6 03                  and         si,0x0003 
+024A    30 E4                     xor         ah,ah 
+024C    26 8B 9F E1 00            mov         bx,word ptr es:0xe1[bx] 
+0251    24 01                     and         al,0x01 
+0253    30 FF                     xor         bh,bh 
+0255    40                        inc         ax 
+0256    80 E3 03                  and         bl,0x03 
+0259    50                        push        ax 
+025A    0F B6 84 18 00            movzx       ax,byte ptr DGROUP:L$51[si] 
+025F    01 DB                     add         bx,bx 
+0261    50                        push        ax 
+0262    FF B7 10 00               push        word ptr DGROUP:L$50[bx] 
+0266    1E                        push        ds 
+0267    68 00 00                  push        offset DGROUP:L$30 
+026A    E8 00 00                  call        _cprintf 
+026D    83 C4 0E                  add         sp,0x000e 
+0270    B4 03                     mov         ah,0x03 
+0272    33 D2                     xor         dx,dx 
+0274    CD 14                     int         0x14 
+0276    89 86 F6 FF               mov         word ptr -0xa[bp],ax 
+027A    8B 46 F6                  mov         ax,word ptr -0xa[bp] 
+027D    30 E4                     xor         ah,ah 
+027F    50                        push        ax 
+0280    8B 46 F6                  mov         ax,word ptr -0xa[bp] 
+0283    C1 E8 08                  shr         ax,0x08 
+0286    50                        push        ax 
+0287    1E                        push        ds 
+0288    68 38 00                  push        offset DGROUP:L$31 
+028B    E8 00 00                  call        _cprintf 
+028E    83 C4 08                  add         sp,0x0008 
+0291    E8 00 00                  call        _equip_flag 
+0294    89 46 FA                  mov         word ptr -0x6[bp],ax 
+0297    89 46 F8                  mov         word ptr -0x8[bp],ax 
+029A    E8 00 00                  call        _conv_mem 
+029D    50                        push        ax 
+029E    1E                        push        ds 
+029F    68 63 00                  push        offset DGROUP:L$32 
+02A2    E8 00 00                  call        _cprintf 
+02A5    83 C4 06                  add         sp,0x0006 
+02A8    F6 46 FA 01               test        byte ptr -0x6[bp],0x01 
+02AC    75 0C                     jne         L$12 
+02AE    1E                        push        ds 
+02AF    68 8F 00                  push        offset DGROUP:L$33 
+02B2    E8 00 00                  call        _cprintf 
+02B5    83 C4 04                  add         sp,0x0004 
+02B8    EB 16                     jmp         L$13 
+02BA                          L$12:
+02BA    8B 46 FA                  mov         ax,word ptr -0x6[bp] 
+02BD    C1 E8 06                  shr         ax,0x06 
+02C0    30 E4                     xor         ah,ah 
+02C2    24 03                     and         al,0x03 
+02C4    40                        inc         ax 
+02C5    50                        push        ax 
+02C6    1E                        push        ds 
+02C7    68 93 00                  push        offset DGROUP:L$34 
+02CA    E8 00 00                  call        _cprintf 
+02CD    83 C4 06                  add         sp,0x0006 
+02D0                          L$13:
+02D0    1E                        push        ds 
+02D1    68 97 00                  push        offset DGROUP:L$35 
+02D4    E8 00 00                  call        _cprintf 
+02D7    83 C4 04                  add         sp,0x0004 
+02DA    F6 46 F8 02               test        byte ptr -0x8[bp],0x02 
+02DE    75 0A                     jne         L$14 
+02E0    1E                        push        ds 
+02E1    68 8F 00                  push        offset DGROUP:L$33 
+02E4    E8 00 00                  call        _cprintf 
+02E7    83 C4 04                  add         sp,0x0004 
+02EA                          L$14:
+02EA    1E                        push        ds 
+02EB    68 B1 00                  push        offset DGROUP:L$36 
+02EE    E8 00 00                  call        _cprintf 
+02F1    8B 46 F8                  mov         ax,word ptr -0x8[bp] 
+02F4    C1 E8 09                  shr         ax,0x09 
+02F7    30 E4                     xor         ah,ah 
+02F9    83 C4 04                  add         sp,0x0004 
+02FC    24 07                     and         al,0x07 
+02FE    50                        push        ax 
+02FF    1E                        push        ds 
+0300    68 CE 00                  push        offset DGROUP:L$37 
+0303    C7 46 FC 00 00            mov         word ptr -0x4[bp],0x0000 
+0308    E8 00 00                  call        _cprintf 
+030B    83 C4 06                  add         sp,0x0006 
+030E    EB 0B                     jmp         L$16 
+0310                          L$15:
+0310    83 46 FC 20               add         word ptr -0x4[bp],0x0020 
+0314    81 7E FC F0 00            cmp         word ptr -0x4[bp],0x00f0 
+0319    73 1A                     jae         L$17 
+031B                          L$16:
+031B    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
+031F    E8 00 00                  call        test_4uart_ 
+0322    85 C0                     test        ax,ax 
+0324    74 EA                     je          L$15 
+0326    FF 76 FC                  push        word ptr -0x4[bp] 
+0329    1E                        push        ds 
+032A    68 E8 00                  push        offset DGROUP:L$38 
+032D    E8 00 00                  call        _cprintf 
+0330    83 C4 06                  add         sp,0x0006 
+0333    EB DB                     jmp         L$15 
+0335                          L$17:
+0335    B8 E8 00                  mov         ax,0x00e8 
+0338    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
+033D    E8 00 00                  call        test_vga_ 
+0340    85 C0                     test        ax,ax 
+0342    74 0F                     je          L$18 
+0344    1E                        push        ds 
+0345    68 06 01                  push        offset DGROUP:L$39 
+0348    C7 46 FE E8 00            mov         word ptr -0x2[bp],0x00e8 
+034D    E8 00 00                  call        _cprintf 
+0350    83 C4 04                  add         sp,0x0004 
+0353                          L$18:
+0353    B8 E0 00                  mov         ax,0x00e0 
+0356    E8 00 00                  call        test_vga_ 
+0359    85 C0                     test        ax,ax 
+035B    74 0F                     je          L$19 
+035D    1E                        push        ds 
+035E    68 1B 01                  push        offset DGROUP:L$40 
+0361    C7 46 FE E0 00            mov         word ptr -0x2[bp],0x00e0 
+0366    E8 00 00                  call        _cprintf 
+0369    83 C4 04                  add         sp,0x0004 
+036C                          L$19:
+036C    B8 D8 00                  mov         ax,0x00d8 
+036F    E8 00 00                  call        test_vga_ 
+0372    85 C0                     test        ax,ax 
+0374    74 0F                     je          L$20 
+0376    1E                        push        ds 
+0377    68 30 01                  push        offset DGROUP:L$41 
+037A    C7 46 FE D8 00            mov         word ptr -0x2[bp],0x00d8 
+037F    E8 00 00                  call        _cprintf 
+0382    83 C4 04                  add         sp,0x0004 
+0385                          L$20:
+0385    B8 F0 00                  mov         ax,0x00f0 
+0388    E8 00 00                  call        test_vga_ 
+038B    85 C0                     test        ax,ax 
+038D    74 11                     je          L$21 
+038F    1E                        push        ds 
+0390    68 45 01                  push        offset DGROUP:L$42 
+0393    C7 46 FE F0 00            mov         word ptr -0x2[bp],0x00f0 
+0398    E8 00 00                  call        _cprintf 
+039B    83 C4 04                  add         sp,0x0004 
+039E    EB 06                     jmp         L$22 
+03A0                          L$21:
+03A0    83 7E FE 00               cmp         word ptr -0x2[bp],0x0000 
+03A4    74 21                     je          L$25 
+03A6                          L$22:
+03A6    0F B6 46 FE               movzx       ax,byte ptr -0x2[bp] 
+03AA    E8 00 00                  call        test_vga_mem_ 
+03AD    85 C0                     test        ax,ax 
+03AF    74 05                     je          L$23 
+03B1    B8 5A 01                  mov         ax,offset DGROUP:L$43 
+03B4    EB 03                     jmp         L$24 
+03B6                          L$23:
+03B6    B8 5C 01                  mov         ax,offset DGROUP:L$44 
+03B9                          L$24:
+03B9    8C DB                     mov         bx,ds 
+03BB    53                        push        bx 
+03BC    50                        push        ax 
+03BD    1E                        push        ds 
+03BE    68 62 01                  push        offset DGROUP:L$45 
+03C1    E8 00 00                  call        _cprintf 
+03C4    83 C4 08                  add         sp,0x0008 
+03C7                          L$25:
+03C7    B8 C0 00                  mov         ax,0x00c0 
+03CA    E8 00 00                  call        test_cvdu_ 
+03CD    85 C0                     test        ax,ax 
+03CF    74 0A                     je          L$26 
+03D1    1E                        push        ds 
+03D2    68 91 01                  push        offset DGROUP:L$46 
+03D5    E8 00 00                  call        _cprintf 
+03D8    83 C4 04                  add         sp,0x0004 
+03DB                          L$26:
+03DB    B8 D0 00                  mov         ax,0x00d0 
+03DE    E8 00 00                  call        test_cvdu_ 
+03E1    85 C0                     test        ax,ax 
+03E3    74 0A                     je          L$27 
+03E5    1E                        push        ds 
+03E6    68 A6 01                  push        offset DGROUP:L$47 
+03E9    E8 00 00                  call        _cprintf 
+03EC    83 C4 04                  add         sp,0x0004 
+03EF                          L$27:
+03EF    B8 E0 00                  mov         ax,0x00e0 
+03F2    E8 00 00                  call        test_cvdu_ 
+03F5    85 C0                     test        ax,ax 
+03F7    74 0A                     je          L$28 
+03F9    1E                        push        ds 
+03FA    68 BB 01                  push        offset DGROUP:L$48 
+03FD    E8 00 00                  call        _cprintf 
+0400    83 C4 04                  add         sp,0x0004 
+0403                          L$28:
+0403    B8 F0 00                  mov         ax,0x00f0 
+0406    E8 00 00                  call        test_cvdu_ 
+0409    85 C0                     test        ax,ax 
+040B    74 0A                     je          L$29 
+040D    1E                        push        ds 
+040E    68 D0 01                  push        offset DGROUP:L$49 
+0411    E8 00 00                  call        _cprintf 
+0414    83 C4 04                  add         sp,0x0004 
+0417                          L$29:
+0417    C9                        leave       
+0418    5F                        pop         di 
+0419    E9 7B FD                  jmp         L$4 
+
+Routine Size: 514 bytes,    Routine Base: _TEXT + 021A
+
+No disassembly errors
+
+Segment: CONST WORD USE16 000001E5 bytes
+0000                          L$30:
+0000    0A 53 49 4F 30 20 69 73 20 73 65 74 3A 20 20 20 .SIO0 is set:   
+0010    25 64 25 63 25 64 20 61 74 20 73 70 65 65 64 5F %d%c%d at speed_
+0020    69 6E 64 65 78 20 3D 20 25 64 20 28 53 65 74 75 index = %d (Setu
+0030    70 20 25 64 2E 29 0A 00                         p %d.)..
+0038                          L$31:
+0038    0A 50 6F 72 74 20 73 74 61 74 75 73 20 30 78 25 .Port status 0x%
+0048    30 32 78 20 20 20 4D 6F 64 65 6D 20 73 74 61 74 02x   Modem stat
+0058    75 73 20 30 78 25 30 32 78 0A 00                us 0x%02x..
+0063                          L$32:
+0063    0A 43 6F 6E 76 65 6E 74 69 6F 6E 61 6C 20 4D 65 .Conventional Me
+0073    6D 6F 72 79 20 61 76 61 69 6C 61 62 6C 65 20 3D mory available =
+0083    20 25 64 4B 20 62 79 74 65 73 0A 00              %dK bytes..
+008F                          L$33:
+008F    4E 6F 20 00                                     No .
+0093                          L$34:
+0093    25 64 20 00                                     %d .
+0097                          L$35:
+0097    66 6C 6F 70 70 79 20 64 72 69 76 65 28 73 29 20 floppy drive(s) 
+00A7    61 74 74 61 63 68 65 64 0A 00                   attached..
+00B1                          L$36:
+00B1    4D 61 74 68 20 63 6F 2D 70 72 6F 63 65 73 73 6F Math co-processo
+00C1    72 20 69 6E 73 74 61 6C 6C 65 64 0A 00          r installed..
+00CE                          L$37:
+00CE    25 64 20 73 65 72 69 61 6C 20 52 53 2D 32 33 32 %d serial RS-232
+00DE    20 70 6F 72 74 28 73 29 0A 00                    port(s)..
+00E8                          L$38:
+00E8    34 55 41 52 54 20 62 6F 61 72 64 20 66 6F 75 6E 4UART board foun
+00F8    64 20 61 74 20 30 78 34 25 30 32 78 0A 00       d at 0x4%02x..
+0106                          L$39:
+0106    56 47 41 33 20 66 6F 75 6E 64 20 61 74 20 30 78 VGA3 found at 0x
+0116    34 45 38 0A 00                                  4E8..
+011B                          L$40:
+011B    56 47 41 33 20 66 6F 75 6E 64 20 61 74 20 30 78 VGA3 found at 0x
+012B    34 45 30 0A 00                                  4E0..
+0130                          L$41:
+0130    56 47 41 33 20 66 6F 75 6E 64 20 61 74 20 30 78 VGA3 found at 0x
+0140    34 44 38 0A 00                                  4D8..
+0145                          L$42:
+0145    56 47 41 33 20 66 6F 75 6E 64 20 61 74 20 30 78 VGA3 found at 0x
+0155    34 46 30 0A 00                                  4F0..
+015A                          L$43:
+015A    20 00                                            .
+015C                          L$44:
+015C    20 6E 6F 74 20 00                                not .
+0162                          L$45:
+0162    56 47 41 33 20 64 69 72 65 63 74 20 61 63 63 65 VGA3 direct acce
+0172    73 73 20 74 6F 20 76 69 64 65 6F 20 6D 65 6D 6F ss to video memo
+0182    72 79 25 73 6F 70 65 72 61 62 6C 65 2E 0A 00    ry%soperable...
+0191                          L$46:
+0191    43 56 44 55 20 66 6F 75 6E 64 20 61 74 20 30 78 CVDU found at 0x
+01A1    34 45 38 0A 00                                  4E8..
+01A6                          L$47:
+01A6    43 56 44 55 20 66 6F 75 6E 64 20 61 74 20 30 78 CVDU found at 0x
+01B6    34 44 38 0A 00                                  4D8..
+01BB                          L$48:
+01BB    43 56 44 55 20 66 6F 75 6E 64 20 61 74 20 30 78 CVDU found at 0x
+01CB    34 45 30 0A 00                                  4E0..
+01D0                          L$49:
+01D0    43 56 44 55 20 66 6F 75 6E 64 20 61 74 20 30 78 CVDU found at 0x
+01E0    34 46 30 0A 00                                  4F0..
+
+Segment: CONST2 WORD USE16 00000021 bytes
+0000                          _bitrev:
+0000    00 08 04 0C 02 0A 06 0E 01 09 05 0D 03 0B 07 0F ................
+0010                          L$50:
+0010    05 00 06 00 07 00 08 00                         ........
+0018                          L$51:
+0018    6E 6F 3F 65 3F 6D 3F 73 00                      no?e?m?s.
+
+Segment: _DATA WORD USE16 00000000 bytes
+

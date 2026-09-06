@@ -1,0 +1,26 @@
+===============
+Wed 07-Feb-2018
+===============
+There are no circuit wiring updates.
+
+Possible chip substitutions:
+	74F257 --> 74ALS157	(3 places) good up to 33mhz (tested)
+
+
+
+
+
+**** Below updates apply to the 386EX prototype board only.  They do
+not apply to Version 2.0 or later. ****
+
+===============
+Wed 29-Nov-2017
+===============
+
+Circuit update (mandatory) to allow auto-detect of FPU chip
+     Wire from U8.6 (RTC_DQ) to RR1.8 (10k p.u.)
+     Wire from U2.56 (PEREQ) to RR1.9 (10k p.u.)
+     Wire from U1.89 (PEREQ) to U1.105 (port P1 bit3)
+See the accompanying photo for easy pin location.
+
+--JRC

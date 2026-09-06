@@ -1,0 +1,154 @@
+Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/strtobcd.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 00000129 bytes
+0000                          ndigit_:
+0000    3C 30                     cmp         al,0x30 
+0002    72 07                     jb          L$1 
+0004    3C 39                     cmp         al,0x39 
+0006    77 03                     ja          L$1 
+0008    2C 30                     sub         al,0x30 
+000A    C3                        ret         
+000B                          L$1:
+000B    B0 FF                     mov         al,0xff 
+000D    C3                        ret         
+
+Routine Size: 14 bytes,    Routine Base: _TEXT + 0000
+
+000E                          strtobcd_:
+000E    56                        push        si 
+000F    57                        push        di 
+0010    C8 08 00 00               enter       0x0008,0x00 
+0014    50                        push        ax 
+0015    52                        push        dx 
+0016    53                        push        bx 
+0017    51                        push        cx 
+0018    C6 46 FE 00               mov         byte ptr -0x2[bp],0x00 
+001C    C7 46 F8 0A 00            mov         word ptr -0x8[bp],0x000a 
+0021    89 46 FA                  mov         word ptr -0x6[bp],ax 
+0024    89 56 FC                  mov         word ptr -0x4[bp],dx 
+0027    E8 00 00                  call        __get_errno_ptr_ 
+002A    31 DB                     xor         bx,bx 
+002C    89 C6                     mov         si,ax 
+002E    8E C2                     mov         es,dx 
+0030    31 FF                     xor         di,di 
+0032    26 89 1C                  mov         word ptr es:[si],bx 
+0035    8E 46 FC                  mov         es,word ptr -0x4[bp] 
+0038                          L$2:
+0038    8B 76 FA                  mov         si,word ptr -0x6[bp] 
+003B    26 8A 04                  mov         al,byte ptr es:[si] 
+003E    3C 20                     cmp         al,0x20 
+0040    74 04                     je          L$3 
+0042    3C 09                     cmp         al,0x09 
+0044    75 05                     jne         L$4 
+0046                          L$3:
+0046    FF 46 FA                  inc         word ptr -0x6[bp] 
+0049    EB ED                     jmp         L$2 
+004B                          L$4:
+004B    8D 44 01                  lea         ax,0x1[si] 
+004E    26 80 3C 2D               cmp         byte ptr es:[si],0x2d 
+0052    75 06                     jne         L$5 
+0054    C6 46 FE FF               mov         byte ptr -0x2[bp],0xff 
+0058    EB 0A                     jmp         L$6 
+005A                          L$5:
+005A    26 80 3C 2B               cmp         byte ptr es:[si],0x2b 
+005E    75 07                     jne         L$7 
+0060    C6 46 FE 01               mov         byte ptr -0x2[bp],0x01 
+0064                          L$6:
+0064    89 46 FA                  mov         word ptr -0x6[bp],ax 
+0067                          L$7:
+0067    C4 76 FA                  les         si,dword ptr -0x6[bp] 
+006A    26 0F B6 04               movzx       ax,byte ptr es:[si] 
+006E    E8 00 00                  call        ndigit_ 
+0071    0F B6 F0                  movzx       si,al 
+0074    3B 76 F8                  cmp         si,word ptr -0x8[bp] 
+0077    7C 1A                     jl          L$8 
+0079    8B 76 F6                  mov         si,word ptr -0xa[bp] 
+007C    8B 46 F4                  mov         ax,word ptr -0xc[bp] 
+007F    89 76 FA                  mov         word ptr -0x6[bp],si 
+0082    89 46 FC                  mov         word ptr -0x4[bp],ax 
+0085    E8 00 00                  call        __get_errno_ptr_ 
+0088    89 C6                     mov         si,ax 
+008A    8E C2                     mov         es,dx 
+008C    26 C7 04 01 00            mov         word ptr es:[si],0x0001 
+0091    EB 6C                     jmp         L$14 
+0093                          L$8:
+0093    0F B6 D8                  movzx       bx,al 
+0096    31 FF                     xor         di,di 
+0098                          L$9:
+0098    FF 46 FA                  inc         word ptr -0x6[bp] 
+009B    C4 76 FA                  les         si,dword ptr -0x6[bp] 
+009E    26 0F B6 04               movzx       ax,byte ptr es:[si] 
+00A2    E8 00 00                  call        ndigit_ 
+00A5    3C FF                     cmp         al,0xff 
+00A7    74 3F                     je          L$13 
+00A9    0F B6 F0                  movzx       si,al 
+00AC    3B 76 F8                  cmp         si,word ptr -0x8[bp] 
+00AF    7D 22                     jge         L$12 
+00B1    81 FF 99 09               cmp         di,0x0999 
+00B5    72 08                     jb          L$10 
+00B7    75 1A                     jne         L$12 
+00B9    81 FB 99 99               cmp         bx,0x9999 
+00BD    73 14                     jae         L$12 
+00BF                          L$10:
+00BF    B9 04 00                  mov         cx,0x0004 
+00C2                          L$11:
+00C2    D1 E3                     shl         bx,0x01 
+00C4    D1 D7                     rcl         di,0x01 
+00C6    E2 FA                     loop        L$11 
+00C8    0F B6 F0                  movzx       si,al 
+00CB    31 C0                     xor         ax,ax 
+00CD    01 F3                     add         bx,si 
+00CF    11 C7                     adc         di,ax 
+00D1    EB C5                     jmp         L$9 
+00D3                          L$12:
+00D3    E8 00 00                  call        __get_errno_ptr_ 
+00D6    FF 46 FA                  inc         word ptr -0x6[bp] 
+00D9    89 C3                     mov         bx,ax 
+00DB    8E C2                     mov         es,dx 
+00DD    31 FF                     xor         di,di 
+00DF    26 C7 07 01 00            mov         word ptr es:[bx],0x0001 
+00E4    31 C3                     xor         bx,ax 
+00E6    EB B0                     jmp         L$9 
+00E8                          L$13:
+00E8    FF 4E FA                  dec         word ptr -0x6[bp] 
+00EB    80 7E FE 00               cmp         byte ptr -0x2[bp],0x00 
+00EF    7D 0E                     jge         L$14 
+00F1    B8 99 99                  mov         ax,0x9999 
+00F4    29 D8                     sub         ax,bx 
+00F6    89 C3                     mov         bx,ax 
+00F8    B8 99 99                  mov         ax,0x9999 
+00FB    19 F8                     sbb         ax,di 
+00FD    89 C7                     mov         di,ax 
+00FF                          L$14:
+00FF    83 7E F0 00               cmp         word ptr -0x10[bp],0x0000 
+0103    75 06                     jne         L$15 
+0105    83 7E F2 00               cmp         word ptr -0xe[bp],0x0000 
+0109    74 16                     je          L$16 
+010B                          L$15:
+010B    FF 46 FA                  inc         word ptr -0x6[bp] 
+010E    8E 46 F0                  mov         es,word ptr -0x10[bp] 
+0111    8B 76 F2                  mov         si,word ptr -0xe[bp] 
+0114    8B 46 FA                  mov         ax,word ptr -0x6[bp] 
+0117    26 89 04                  mov         word ptr es:[si],ax 
+011A    8B 46 FC                  mov         ax,word ptr -0x4[bp] 
+011D    26 89 44 02               mov         word ptr es:0x2[si],ax 
+0121                          L$16:
+0121    89 D8                     mov         ax,bx 
+0123    89 FA                     mov         dx,di 
+0125    C9                        leave       
+0126    5F                        pop         di 
+0127    5E                        pop         si 
+0128    C3                        ret         
+
+Routine Size: 283 bytes,    Routine Base: _TEXT + 000E
+
+No disassembly errors
+
+Segment: CONST WORD USE16 00000000 bytes
+
+Segment: CONST2 WORD USE16 00000000 bytes
+
+Segment: _DATA WORD USE16 00000000 bytes
+

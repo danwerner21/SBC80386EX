@@ -1,0 +1,33 @@
+echo off
+
+set USBdrv=F
+set save386=386EX2
+set secondary=G:\SBC386\BIOS
+
+dir *.zip > %tmp%\foo
+sort /+40 < %tmp%\foo
+if "%1"=="" goto err2
+if exist %1.zip goto err1
+REM  make roms
+copy save.bat save.bak
+pkzip -P %1 0*.txt COPYING make*.* *.as? *.inc r*.hex *.c *.h *.rul
+pkzip -Pa %1 *.lnk save.bak
+REM *.lib *.cfg *.asm *. *.inc *.b* e*.sys *.c *.h *.doc *.txt
+REM pkzip -Pa %1.zip fpem\*.asm fpem\make*.* unasm\*.* tools\*.*
+echo .
+copy %1.zip outdated
+echo .
+echo Please mount flash drive in USB port
+pause
+echo on
+copy %1.zip %USBdrv%:\%save386%
+copy *.* %secondary%
+goto end
+:err1
+echo %1.zip ALREADY EXISTS
+goto end
+:err2
+echo .
+echo Usage:  SAVE  filename
+:end
+

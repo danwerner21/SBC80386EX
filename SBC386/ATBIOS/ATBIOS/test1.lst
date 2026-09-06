@@ -1,0 +1,3954 @@
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-1
+
+
+				TITLE	TEST1 ---- 06/10/85  POWER ON SELF TEST
+				 (POST)
+				
+				INCLUDE	MODREF.INC
+			     C	PAGE 118,121
+			     C	;TITLE TEST1 ---- 06/10/85 POWER ON SELF TEST (POST)
+			     C	.286C
+			     C	
+			     C	;-------------------------------------------------------------------------------
+			     C	; BIOS I/O INTERFACE							       ;
+			     C	;									       ;
+			     C	;	   THESE LISTINGS PROVIDE INTERFACE INFORMATION FOR ACCESSING          ;
+			     C	;	   THE BIOS ROUTINES. THE POWER ON SELF TEST IS INCLUDED.	       ;
+			     C	;									       ;
+			     C	;	   THE BIOS ROUTINES ARE MEANT TO BE ACCESSED THROUGH		       ;
+			     C	;	   SOFTWARE INTERRUPTS ONLY. ANY ADDRESSES PRESENT IN		       ;
+			     C	;	   THESE LISTINGS ARE INCLUDED ONLY FOR	COMPLETENESS,		       ;
+			     C	;	   NOT FOR REFERENCE. APPLICATIONS WHICH REFERENCE ANY		       ;
+			     C	;	   ABSOLUTE ADDRESSES WITHIN THE CODE SEGMENTS OF BIOS		       ;
+			     C	;	   VIOLATE THE STRUCTURE AND DESIGN OF BIOS.			       ;
+			     C	;									       ;
+			     C	;-------------------------------------------------------------------------------
+			     C	
+			     C	
+			     C	;-------------------------------------------------------------------------------
+			     C	;   MODULE REFERENCE                                                           ;
+			     C	;                                                                              ;
+			     C	;    TEST1.ASM      -->  POST AND MANUFACTURING TEST ROUTINES                  ;
+			     C	;      DSEG.INC	    -->   DATA SEGMENTS LOCATIONS                              ;
+			     C	;      POSTEQU.INC  -->   COMMON EQUATES FOR POST AND BIOS                     ;
+			     C	;      SYSDATA.INC  -->   POWER ON SELF TEST EQUATES FOR PROTECTED MODE        ;
+			     C	;                          POST TEST.01 THROUGH TEST.16                        ;
+			     C	;    TEST2.ASM	    -->  POST TEST AND INITIALIZATION ROUTINES                 ;
+			     C	;			  POST TEST.17 THROUGH TEST.22                         ;
+			     C	;    TEST3.ASM	    -->  POST EXCEPTION INTERRUPT TESTS                        ;
+			     C	;    TEST4.ASM	    -->	 POST AND BIOS UTILITY ROUTINES                        ;
+			     C	;			   CMOS_READ	 - READ CMOS LOCATION ROUTINE          ;
+			     C	;                          CMOS WRITE	 - WRITE CMOS LOCATION ROUTINE         ;
+			     C	;                          DDS	         - LOAD (DS:) WITH DATA SEGMENT        ;
+			     C	;                          E_MSG	 - POST ERROR MESSAGE HANDLER          ;
+			     C	;                          MFG_HALT	 - MANUFACTURING ERROR TRAP            ;
+			     C	;                          P_MSG	 - POST STRING DISPLAY ROUTINE         ;
+			     C	;                          ERR_BEEP	 - POST ERROR BEEP PROCEDURE           ;
+			     C	;                          BEEP	         - SPEAKER BEEP CONTROL ROUTINE        ;
+			     C	;                          WAITF	 - FIXED TIME WAIT ROUTINE             ;
+			     C	;                          CONFIG_BAD	 - SET BAD CONFIG IN CMOS_DIAG         ;
+			     C	;                          XPC_BYTE	 - DISPLAY-HEX BYTE AS 00 - FF         ; 
+			     C	;                          PRT_HEX	 - DISPLAY CHARACTER                   ;
+			     C	;                          PRT_SEG	 - DISPLAY SEGMENT FORMAT ADDRESS      ;
+			     C	;                          PROT_PRT_HEX  - POST PROTECTED MODE DISPLAY         ;
+			     C	;                          ROM_CHEECKSUM - CHECK ROM MODULES FOR CHECKSUM      ;
+			     C	;                          ROM_CHECK	 - ROM SCAN AND INITIALIZE             ;
+			     C	;                          KBD_RESET	 - POST KEYBOARD RESET ROUTINE         ;
+			     C	;                          BLINK_INT	 - MANUFACTURING TOGGLE BIT ROUTINE    ;
+			     C	;                          SET_TOD 	 - SET TIMER FROM CMOS RTC             ;
+			     C	;                          D11	         - DUMMY INTERRUPT HANDLER   ->INT ??H ;
+			     C	;                          RE_DIRECT 	 - HARDWARE INT  9 REDIRECT (L 2)      ;
+			     C	;                          INT_287	 - HARDWARE INT 13 REDIRECT (287)      ;
+			     C	;			   PROC_SHUTDOWN - 80286 RESET ROUTINE                 ;
+			     C	;    TEST5.ASM	    -->  EXCEPTTON INTERRUPT TEST HANDLERS FOR POST TESTS      ;
+			     C	;		           SYSINIT1	 - BUILD PROTECTED MODE POINTERS       ;
+			     C	;		           GDT_BLD	 - BUILD THE GDT FOR POST              ;
+			     C	;		           SIDT_BLD	 - BUILD THE IDT FOR POST              ;
+			     C	;    TEST6.ASM	    -->  POST TESTS AND SYSTEM BOOT STRAP                      ;
+			     C	;		           STGTST_CNT	 - SEGMENT STORAGE TEST                ;
+			     C	;		           ROM_ERR	 - ROM ERROR DISPLAY ROUTINE           ;
+			     C	;		           XMIT_8042	 - KEYBOARD DIAGNOSTIC OUTPUT          ;
+			     C	;		           BOOT_STRAP	 - BOOT STRAP LOADER	      -INT 19H ;
+			     C	;    DSKETTE.ASM    -->	 DISKETTE BIOS                                         ;
+			     C	;                          DISKETTE_IO_1 - INT 13H BIOS ENTRY (40H)   -INT 13H ;
+			     C	;                          DISK_INT_1	 - HARDWARE INTERRUPT HANDLER -INT 0EH ;
+			     C	;                          DSKETTE_SETUP - POST SETUP DRIVE TYPES              ;
+			     C	;    DISK.ASM       -->  FIXED DISK BIOS                                       ;
+			     C	;                          DISK_SETUP	 - SETUP DISK VECTORS AND TEST         ;
+			     C	;                          DISK_IO	 - INT 13H BIOS ENTRY         -INT 13H ;
+			     C	;                          HD_IRT	 - HARDWARE INTERRUPT HANDLER -INT 16H ;
+			     C	;    KYBD.ASM       -->  KEYBOARD BIOS                                         ;
+			     C	;	                   KEYBOARD_IO_1 - INT 16H BIOS ENTRY	      -INT 16H ;
+			     C	;	                   KB_INT_1	 - HARDWARE INTERRUPT	      -INT 09H ;
+			     C	;	                   SND_DATA	 - KEYBOARD TRANSMISSION               ;
+			     C	;    PRT.ASM	    -->  PRINTER ADAPTER BIOS               	      -INT 17H ;
+			     C	;    RS232.ASM	    -->  COMMUNICATIONS BIOS FOR RS232	              -INT 14H ;
+			     C	;    VIDEO.ASM	    -->  VIDEO BIOS		                      -INT 10H ;
+			     C	;    BIOS.ASM	    -->  BIOS ROUTINES                                         ;
+			     C	;		           MEMORY_SIZE_DET_1 - REAL MODE SIZE         -INT 12H ;
+			     C	;		           EQUIPMENT_1   - EQUIPMENT DETERMINATION    -INT 11H ;
+			     C	;		           NMI_INT_1	 - NMI HANDLER	              -INT 02H ;
+			     C	;    BIOS1.ASM      -->  INTERRUPT 15H BIOS ROUTINES	              -INT 15H ;
+			     C	;                          DEV_OPEN	 - NULL DEVICE OPEN HANDLER            ;
+			     C	;                          DEV_CLOSE	 - NULL DEVICE CLOSE HANDLER           ;
+			     C	;                          PROG_TERM	 - NULL PROGRAM TERMINATION            ;
+			     C	;                          EVENT_WAIT	 - RTC EVENT WAIT/TIMEOUT ROUTINE      ;
+			     C	;                          JOY_STICK	 - JOYSTICK PORT HANDLER               ;
+			     C	;                          SYS_REQ	 - NULL SYSTEM REQUEST KEY             ;
+			     C	;                          WAIT		 - RTC TIMED WAIT ROUTINE              ;
+			     C	;                          BLOCKMOVE	 - EXTENDED MEMORY MOVE INTERFACE      ;
+			     C	;                          GATE_A20	 - ADDRESS BIT 20 CONTROL              ;
+			     C	;                          EXT_MEMORY	 - EXTENDED MEMORY SIZE DETERMINE      ;
+			     C	;                          SET_VMODE	 - SWITCH PROCESSOR TO VIRTUAL MODE    ;
+			     C	;		           DEVICE_BUSY	 - NULL DEVICE BUSY HANDLER            ;
+			     C	;		           INT_COMPLETE  - NULL INTERRUPT COMPLETE HANDLER     ;
+			     C	;    BIOS2.ASM	    -->  BIOS INTERRUPT ROUTINES                               ;
+			     C	;		           TIME_OF_DAY_1 - TIME OF DAY ROUTINES	      -INT 1AH ;
+			     C	;		           RTC_INT	 - IRQ LEVEL 8 ALARM HANDLER  -INT 70H ;
+			     C	;		           PRINT_SCREEN1 - PRINT SCREEN ROUTINE	      -INT 05H ;
+			     C	;		           TIMER_INT_1	 - TIMER1 INTERRUPT HANDLER  ->INT 1CH ;
+			     C	;    ORGS.ASM	    -->	 COMPATIBILITY MODULE                                  ;
+			     C	;		           POST ERROR MESSAGES                                 ;
+			     C	;		           DISKETTE - DISK - VIDEO DATA TABLES                 ;
+			     C	;-------------------------------------------------------------------------------
+			     C	.LIST
+				INCLUDE	POSTEQU.INC
+			     C	;TITLE POSTEQU.INC
+			     C	
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-2
+
+
+			     C	;----------------------------------------
+			     C	;	EQUATES USED BY POST AND BIOS 	;
+			     C	;----------------------------------------
+			     C	
+ = 00FC                      C	MODEL_BYTE	EQU	0FCH		; SYSTEM MODEL BYTE
+ = 0000                      C	SUB_MODEL_BYTE	EQU	000H		; SYSTEM SUB-MODEL TYPE
+ = 0001                      C	BIOS_LEVEL	EQU	001H		; BIOS REVISION LEVEL
+ = F8A7                      C	RATE_UPPER	EQU	0F8A7H		; 0F952H -10%
+ = F9F0                      C	RATE_LOWER	EQU	0F9F0H		; 0F952H -10%
+			     C	
+			     C	;--------- 8042 KEYBOARD INTERFACE AND DIAGNOSTIC CONTROL REGISTERS ------------
+ = 0060                      C	PORT_A		EQU	060H		; 8042 KEYBOARD SCAN CODE/CONTROL PORT
+ = 0061                      C	PORT_B		EQU	061H		; PORT B READ/WRITE DIAGNOSTIC REGISTER
+ = 00F3                      C	RAM_PAR_ON	EQU	11110011B	; AND MASK FOR PARITY CHECKING ENABLE ON
+ = 000C                      C	RAM_PAR_OFF	EQU	00001100B	; OR MASK FOR PARITY CHECKING ENABLE OFF
+ = 00C0                      C	PARITY_ERR	EQU	11000000B	; R/W MEMORY - I/O CHANNEL PARITY ERROR
+ = 0001                      C	GATE2		EQU	00000001B	; TIMER 2 INPUT CATE CLOCK BIT
+ = 0002                      C	SPK2		EQU	00000010B	; SPEAKER OUTPUT DATA ENABLE BIT
+ = 0010                      C	REFRESH_BIT	EQU	00010000B	; REFRESH TEST BIT
+ = 0020                      C	OUT2		EQU	00100000B	; SPEAKER TIMER OUT2 INPUT BIT
+ = 0040                      C	IO_CHECK	EQU	01000000B	; I/O (MEMORY) CHECK OCCURRED BIT MASK
+ = 0080                      C	PARITY_CHECK	EQU	10000000B	; MEMORY PARITY CHECK OCCURRED BIT MASK
+ = 0064                      C	STATUS_PORT	EQU	064H		; 8042 STATUS PORT
+ = 0001                      C	OUT_BUF_FULL	EQU	00000001B	;   0 =	+OUTPUT BUFFER FULL
+ = 0002                      C	INPT_BUF_FULL	EQU	00000010B	;   1 =	+INPUT BUFFER FULL
+ = 0004                      C	SYS_FLAG	EQU	00000100B	;   2 =	-SYSTEM FLAG -POST/-SELF TEST
+ = 0008                      C	CMD_DATA	EQU	00001000B	;   3 =	-COMMAND/+DATA
+ = 0010                      C	KYBD_INH	EQU	00010000B	;   4 =	+KEYBOARD INHIBITED
+ = 0020                      C	TRANS_TMOUT	EQU	00100000B	;   5 =	+TRANSMIT TIMEOUT
+ = 0040                      C	RCV_TMOUT	EQU	01000000B	;   6 =	+RECEIVE TIME OUT
+ = 0080                      C	PARITY_EVEN	EQU	10000000B	;   7 =	+PARITY IS EVEN
+			     C	
+			     C	;--------- 8042 INPUT PORT BIT DEFINITION SAVED IN @MFG_TST --------------------
+ = 0008                      C	BASE_MEM8	EQU	00001000B	; BASE PLANAR R/W MEMORY EXTENSION 640/X
+ = 0010                      C	BASE_MEM	EQU	00010000B	; BASE PLANAR R/W MEMORY SIZE 256/512
+ = 0020                      C	MFG_LOOP	EQU	00100000B	; LOOP POST JUMPER BIT FOP MANUFACTURING
+ = 0040                      C	DSP_JMP		EQU	01000000B	; DISPLAY TYPE SWITCH JUMPER BIT
+ = 0080                      C	KEY_BD_INHIB	EQU	10000000B	; KEYBOARD INHIBIT SWITCH BIT
+			     C	
+			     C	;--------- 8042 COMMANDS -------------------------------------------------------
+			     C	
+ = 0060                      C	WRITE_8042_LOC	EQU	060H		; WRITE 8042 COMMAND BYTE
+ = 00AA                      C	SELF_TEST	EQU	0AAH		; 8042 SELF TEST
+ = 00AB                      C	INTR_FACE_CK	EQU	0ABH		; CHECK 8042 INTERFACE COMMAND
+ = 00AD                      C	DIS_KBD		EQU	0ADH		; DISABLE KEYBOARD COMMAND
+ = 00AE                      C	ENA_KBD		EQU	0AEH		; ENABLE KEYBOARD -OMMAND
+ = 00C0                      C	READ_8042_INPUT	EQU	0C0H		; READ 8042 INPUT ;OPT
+ = 00DD                      C	DISABLE_BIT20	EQU	0DDH		; DISABLE ADDRESS LINE BIT 20
+ = 00DF                      C	ENABLE_BIT20	EQU	0DFH		; ENABLE ADDRESS LINE BIT 20
+ = 00E0                      C	KYBD_CLK_DATA	EQU	0E0H		; GET KEYBOARD CLOCK AND DATA COMMAND
+ = 00FE                      C	SHUT_CMD	EQU	0FEH		; CAUSE A SHUTDOWN COMMAND
+ = 0001                      C	KYBD_CLK	EQU	001H		; KEYBOARD CLOCK BIT 0
+			     C	
+			     C	;---------- KEYBOARD/LEO COMMANDS ----------------------------------------------
+ = 00ED                      C	LED_CMD		EQU	0EDH		; LED WRITE COMMAND
+ = 00F2                      C	KB_READ_ID	EQU	0F2H		; READ KEYBOARD ID COMMAND
+ = 00F4                      C	K8_ENABLE	EQU	0F4H		; KEYBOARD ENABLE
+			     C	
+			     C	;---------- 8042 KEYBOARD RESPONSE ---------------------------------------------
+ = 00AA                      C	KB_OK		EQU	0AAH		; RESPONSE FROM SELF DIAGNOSTIC
+ = 00FA                      C	KB_ACK		EQU	0FAH		; ACKNOWLEDGE PROM TRANSMISSION
+ = 00FE                      C	KB_RESEND	EQU	0FEH		; RESEND REQUEST
+ = 00FF                      C	KB_OVER_RUN	EQU	0FFH		; OVER RUN SCAN CODE
+			     C	
+			     C	;---------- FLAG EQUATES WITHIN @KB_FLAG----------------------------------------
+ = 0001                      C	RIGHT_SHIFT	EQU	00000001B	; RIGHT SHIFT KEY DEPRESSED
+ = 0002                      C	LEFT_SHIFT	EQU	00000010B	; LEFT SHIFT KEY DEPRESSED
+ = 0004                      C	CTL_SHIFT	EQU	00000100B	; CONTROL SHIFT KEY DEPRESSED
+ = 0008                      C	ALT_SHIFT	EQU	00001000B	; ALTERNATE SHIFT KEY DEPRESSED
+ = 0010                      C	SCROLL_STATE	EQU	00010000B	; SCROLL LOCK STATE HAS BEEN TOGGLED
+ = 0020                      C	NUM_STATE	EQU	00100000B	; NUM LOCK STATE HAS BEEN TOGGLED
+ = 0040                      C	CAPS_STATE	EQU	01000000B	; CAPS LOCK STATE HAS BEEN TOGGLED
+ = 0080                      C	INS_STATE	EQU	10000000B	; INSERT STATE IS ACTIVE
+			     C	
+			     C	;---------- FLAG EQUATES WITHIN	@KB_FLAG_1 -------------------------------------
+ = 0004                      C	SYS_SHIFT	EQU	00000100B	; SYSTEM KEY DEPRESSED AND HELD
+ = 0008                      C	HOLD_STATE	EQU	00001000B	; SUSPEND KEY HAS BEEN TOGGLED
+ = 0010                      C	SCROLL_SHIFT	EQU	00010000B	; SCROLL LOCK KEY IS DEPRESSED
+ = 0020                      C	NUM_SHIFT	EQU	00100000B	; NUM LOCK KEY IS DEPRESSED
+ = 0040                      C	CAPS_SHIFT	EQU	01000000B	; CAPS LOCK KEY IS DEPRE55ED
+ = 0080                      C	INS_SHIFT	EQU	10000000B	; INSERT KEY IS DEPRESSED
+			     C	
+			     C	;---------- FLAGS EQUATES WITHIN @KB_FLAG_2 -----------------------------------
+ = 0007                      C	KB_LEDS		EQU	00000111B	; KEYBOARD LED STATE BITS
+			     C	;		EQU	00001000B	; RESERVED (MUST BE ZERO)
+ = 0010                      C	KB_FA		EQU	00010000B	; ACKNOWLEDGMENT RECEIVED
+ = 0020                      C	KS_FE		EQU	00100000B	; RESEND RECEIVED FLAG
+ = 0040                      C	KB_PR_LED	EQU	01000000B	; MODE INDICATOR UPDATE
+ = 0080                      C	KB_ERR		EQU	10000000B	; REYBOARD TRANSMIT ERROR FLAG
+			     C	
+			     C	;----------- FLAGS EQUATES WITHIN @KB_FLAG_3 -----------------------------------
+ = 0001                      C	KBX		EQU	00000001B	; KBX INSTALLED
+ = 0002                      C	LC_HC		EQU	00000010B	; LAST SCAN CODED WAS A HIDDEN CODE
+ = 0004                      C	GRAPH_ON	EQU	00000100B	; ALL GRAPHICS KEY DOWN (W.T. ONLY)
+			     C	;		EQU	00011000B	; RESERVED (MUST BE ZERO)
+ = 0020                      C	SET_NUM_LK	EQU	00100000B	; FORCE NUM LOCK IF READ ID AND KBX
+ = 0040                      C	LC_AB		EQU	01000000B	; LAST CHARACTER WAS FIRST ID CHARACTER
+ = 0080                      C	RD_ID		EQU	10000000B	; DOING A READ ID (MUST BE BIT0)
+			     C	
+			     C	;---------- KEYBOARD SCAN CODES ------------------------------------------------
+ = 00AB                      C	ID_1		EQU	0ABH		; 1ST ID CHARACTER FOR KBX
+ = 0041                      C	ID_2		EQU	041H		; 2ND ID CHARACTER FOR KBX
+ = 0038                      C	ALT_KEY		EQU	56		; SCAN CODE FOR	 ALTERNATE SHIFT KEY
+ = 001D                      C	CTL_KEY		EQU	29		; SCAN CODE FOR	 CONTROL KEY
+ = 003A                      C	CAPS_KEY	EQU	58		; SCAN CODE FOR	 SHIFT LOCK KEY
+ = 0053                      C	DEL_KEY		EQU	83		; SCAN CODE FOR	 DELETE KEY
+ = 0052                      C	INS_KEY		EQU	82		; SCAN CODE FOR	 INSERT KEY
+ = 002A                      C	LEFT_KEY	EQU	42		; SCAN CODE FOR	 LEFT SHIFT
+ = 0045                      C	NUM_KEY		EQu	69		; SCAN CODE FOR	 NUMBER LOCK KEY
+ = 0036                      C	RIGRT_KEY	EQU	54		; SCAN CODE FOR	 RIGHT SHIFT
+ = 0046                      C	SCROLL_KEY	EQU	70		; SCAN CODE FOR	 SCROLL LOCK KEY
+ = 0054                      C	SYS_KEY		EQU	84		; SCAN CODE FOR	 SYSTEM KEY
+			     C	
+			     C	;----------------------------------------
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-3
+
+
+			     C	;	CMOS EQUATES FOR THIS SYSTEM	;
+			     C	;-------------------------------------------------------------------------------
+ = 0070                      C	CMOS_PORT	EQU	070H		; I/O ADDRESS OF CMOS ADDRESS PORT
+ = 0071                      C	CMOS_DATA	EQU	071H		; I/O ADDRESS OF CMOS DATA PORT
+ = 100000008                 C	NMI		EQU	100000008	; DISABLE NMI INTERRUPTS MASK -
+			     C						; HIGH BIT OF CMOS LOCATION ADDRESS
+			     C	
+			     C	;--------- CMOS TABLE LOCATION ADDRESS'S ## ------------------------------------
+ = 0000                      C	CMOS_SECONDS	EQU	000H		; SECONDS
+ = 0001                      C	CMOS_SEC_ALARM	EQU	001H		; SECONDS ALARM  ## NOTE:  ALL LOCATIONS
+ = 0002                      C	CMOS_MINUTES	EQU	002H		; MINUTES	      | IN THE CMOS AREA
+ = 0003                      C	CMOS_MIN_ALARM	EQU	003H		; MINUTES ALARM	      | ARE IBM USE ONLY
+ = 0004                      C	CMOS_HOURS	EQU	004H		; HOURS		      | AND SUBJECT TO
+ = 0005                      C	CMOS_HR_ALARM	EQU	005H		; HOURS ALARM	      | CHANGE. ONLY THE
+ = 0006                      C	CMOS_DAY_WEEK	EQU	006H		; DAY OF THE WEEK     |	POST & BIOS CODE
+ = 0007                      C	CMOS_DAY_MONTH	EQU	007H		; DAY OF THE MONTH    |	SHOULD DIRECTLY
+ = 0008                      C	CMOS_MONTH	EQU	008H		; MONTH		      | ACCESS LOCATIONS
+ = 0009                      C	CMOS_YEAR	EQU	009H		; YEAR (TWO DIGITS)   | IN CMOS STORAGE.
+ = 000A                      C	CMCS_REG_A	EQU	00AH		; STATUS REGISTER A   '-----------------
+ = 000B                      C	CMOS_REG_B	EQU	00BH		; STATUS REGISTER B  ALARM
+ = 000C                      C	CMOS_REG_C	EQU	00CH		; STATUS REGISTER C  FLAGS
+ = 000D                      C	CMOS_REG_D	EQU	00DH		; STATUS REGISTER D  BATTERY
+ = 000E                      C	CMOS_DIAG	EQU	00EH		; POST DIAGNOSTIC STATUS RESULTS BYTE
+ = 000F                      C	CMOS_SHUT_DOWN	EQU	00FH		; SHUTDOWN STATUS COMMAND BYTE
+ = 0010                      C	CMOS_DISKETTE	EQU	010H		; DISKETTE DRIVE TYPE BYTE	      ;
+			     C	;		EQU	011H		; - RESERVED			      ;C
+ = 0012                      C	CMOS_DISK	EQU	012H		; FIXED DISK TYPE BYTE		      ;H
+			     C	;		EQU	013H		; - RESERVED			      ;E
+ = 0014                      C	CMOS_EQUIP	EQU	014H		; EQUIPMENT WORD LOW BYTE	      ;C
+ = 0015                      C	CMOS_B_M_S_LO	EQU	015H		; BASE MEMORY SIZE - LOW BYTE (X1024) ;K
+ = 0016                      C	CMOS_B_M_S_HI	EQU	016H		; BASE MEMORY SIZE - HIGH BYTE	      ;S
+ = 0017                      C	CMOS_E_M_S_LO	EQU	017H		; EXPANSION MEMORY SIZE - LOW BYTE    ;U
+ = 0018                      C	CMOS_E_M_S_HI	EQU	018H		; EXPANSION MEMORY SIZE - HIGH BYTE   ;M
+ = 0019                      C	CMOS_DISK_1	EQU	019H		; FIXED DISK TYPE - DRIVE C EXTENSION ;E
+ = 001A                      C	CMOS_DISK_2	EQU	01AH		; FIXED DISK TYPE - DRIVE D EXTENSION ;D
+			     C			EQU	01BH		; - 1BH THROUGH 2DH - RESERVED	      ;
+.\POSTEQU.INC(152): error A2105: Expected: instruction, directive, or label
+ = 002E                      C	CMOS_CKSUM_HI	EQU	02EH		; CMOS CHECKSUM	- HIGH BYTE           ;*
+ = 002F                      C	CMOS_CKSUM_LO	EQU	02FH		; CMOS CHECKSUM	- LOW BYTE	      ;*
+ = 0030                      C	CMOS_U_M_S_LO	EQU	030H		; USABLE MEMORY ABOVE 1 MEG - LOW BYTE
+ = 0031                      C	CMOS_U_M_S_HI	EQU	031H		; USABLE MEMORY ABOVE 1 MEG - HIGH BYTE
+ = 0032                      C	CMOS_CENTURY	EQU	032H		; DATE CENTURY BYTE (BCD)
+ = 0033                      C	CMOS_INFO128	EQU	033H		; 128KB INFORMATION STATUS FLAG BYTE
+			     C	;		EQU	034H		; - 34H THROUGH 3FH - RESERVED
+			     C	
+			     C	;---------- CMOS DIAGNOSTIC STATUS ERROR FLAGS WITHIN CMOS DIAG ----------------
+ = 0004                      C	CMOS_CLK_FAIL	EQU	00000100B	; CMOS CLOCK NOT UPDATING OR NOT VALID
+ = 0008                      C	HF_FAIL		EQU	00001000B	; FIXED DISK FAILURE ON INITIALIZATION
+ = 0010                      C	W_MEM_SIZE	EQU	00010000B	; MEMORY SIZE NOT EQUAL TO CONFIGURATION
+ = 0020                      C	BAD_CONFIG	EQU	00100000B	; MINIMUM CONFIC USED INSTEAD OF CMOS
+ = 0040                      C	BAD_CKSUM	EQU	01000000B	; CHECKSUM ERROR
+ = 0080                      C	BAD_BAT		EQU	10000000B	; DEAD BATTERY - CMOS LOST POWER
+			     C	
+			     C	;---------- CMOS INFORMATION FLAGS ---------------------------------------------
+ = 0080                      C	M640K		EQU	10000000B	; 512K -> 640K OPTION INSTALLED		(125K)
+			     C	;		EQU	01000000B	; FLAG USED BY CMOS SETUP UTILITY
+			     C	
+			     C	;---------- DISKETTE EQUATES ---------------------------------------------------
+ = 0001                      C	DUAL		EQU	00000001B	; MASK FOR COMBO/DSP ADAPTER
+ = 0080                      C	INT_FLAG	EQU	10000000B	; INTERRUPT OCCURRENCE PLAG
+ = 0080                      C	DSK_CHG		EQU	10000000B	; DISKETTE CHANCE FLAG MASK BIT
+ = 0010                      C	DETERMINED	EQU	00010000B	; SET STATE DETERMINED IN STATE BITS
+ = 0010                      C	HOME		EQU	00010000B	; TRACK 0 MASK
+ = 0004                      C	SENSE_DRV_ST	EQU	00000100B	; SENSE DRIVE STATUS COMMAND
+ = 0030                      C	TRK_SLAP	EQU	030H		; CRASH STOP (48 TPI DRIVES)
+ = 000A                      C	QUIET_SEEK	EQU	00AH		; SEEK TO TRACK 10
+ = 0002                      C	MAX_DRV		EQU	2		; MAX NUMBER OF DRIVES
+ = 000F                      C	HD12_SETTLE	EQU	15		; 1.2 M HEAD SETTLE TIME
+ = 0014                      C	HD320_SETTLE	EQU	20		; 320 K HEAD SETTLE TIME
+ = 0025                      C	MOTOR_WAIT	EQU	37		; 2 SECONDS OF COUNTS FOR MOTOR TURN OFF
+			     C	
+			     C	;---------- DISKETTE ERROR -----------------------------------------------------
+ = 0080                      C	TIME_OUT	EQU	080H		; ATTACHMENT FAILED TO RESPOND
+ = 0040                      C	BAD_SEEK	EQU	040H		; SEEK OPERATION FAILED
+ = 0020                      C	BAD_NEC		EQU	020H		; DISKETTE CONTROLLER HAS FAILED
+ = 0010                      C	BAD_CRC		EQU	010H		; BAD CRC ON DISKETTE READ
+ = 0009                      C	DMA_BOUNDARY	EQU	009H		; ATTEMPT TO DMA ACROSS 64K BOUNDARY
+ = 0008                      C	BAD_DMA		EQU	008H		; DMA OVERRUN ON OPERATION
+ = 0006                      C	MEDIA_CHANCE	EQU	006H		; MEDIA REMOVED ON DUAL ATTACH CARD
+ = 0004                      C	RECORD_NOT_FND	EQU	004H		; REQUESTED SECTOR NOT FOUND
+ = 0003                      C	WRITE_PROTECT	EQU	003H		; WRITE ATTEMPTED ON WRITE PROTECT DISK
+ = 0002                      C	BAD_ADDR_MARK	EQU	002H		; ADDRESS MARK NOT FOUND
+ = 0001                      C	BAD_CMD		EQU	001H		; BAD COMMAND PASSED TO DISKETTE I/O
+			     C	
+			     C	;---------- DISK CHANGE LINE EQUATES -------------------------------------------
+ = 0001                      C	NOCHGLN		EQU	001H		; NO DISK CHANGE LINE AVAILABLE
+ = 0002                      C	CHGLN		EQU	002H		; DISK CHANGE LINE AVAILABLE
+			     C	
+			     C	;---------- MEDIA/DRIVE STATE INDICATORS ---------------------------------------
+			     C	
+ = 0001                      C	TRK_CAPA	EQU	00000001B	; NO TRACK CAPABILITY
+ = 0002                      C	FMT_CAPA	EQU	00000010B	; MULTIPLE FORMAT CAPABILITY (1.2M)
+ = 0004                      C	DRV_DET		EQU	00000100B	; DRIVE DETERMINED
+ = 0010                      C	MED_DET		EQU	00010000B	; MEDIA DETERMINED BIT
+ = 0020                      C	DBL_STEP	EQU	00100000B	; DOUBLE STEP BIT
+ = 00C0                      C	RATE_MSK	EQU	11000000B	; MASK FOR CLEARING ALL BUT RATE
+ = 0000                      C	RATE_500	EQU	00000000B	; 500 KBS DATA RATE
+ = 0040                      C	RATE_300	EQU	01000000B	; 300 KBS DATA RATE
+ = 0080                      C	RATE_250	EQU	10000000B	; 250 KBS DATA RATE
+ = 000C                      C	STRT_MSK	EQU	00001100B	; OPERATION START RATE MASK
+ = 00C0                      C	SEND_MSK	EQU	11000000B	; MASK FOR SEND RATE BITS
+			     C	
+			     C	;---------- MEDIA/DRIVE	STATE INDICATORS COMPATIBILITY -------------------------
+ = 0000                      C	M3D3U		EQU	00000000B	; 360 MEDIA/DRIVE NOT ESTABLISHED
+ = 0001                      C	M3D1U		EQU	00000001B	; 360 MEDIA,1.2DRIVE NOT ESTABLISHED
+ = 0002                      C	M1D1U		EQU	00000010B	; 1.2 MEDIA/DRIVE NOT ESTABLISHED
+ = 0007                      C	MED_UNK		EQU	00000111B	; NONE OF THE ABOVE
+			     C	
+			     C	;----------- INTERRUPT EQUATES -------------------------------------------------
+ = 0020                      C	EOI		EQU	020H		; END OF INTERRUPT COMMAND TO 8259
+ = 0020                      C	INTA00		EQU	020H		; 8259 PORT
+ = 0021                      C	INTA01		EQU	021H		; 8259 PORT
+ = 00A0                      C	INTB00		EQU	0A0H		; 2ND 8259
+ = 00A1                      C	INTB01		EQU	0A1H		;
+ 0000  CD 00                 C	INT TYPE	EQU	070H		; START OF 8259 INTERRUPT TABLE LOCATION
+.\POSTEQU.INC(230): error A2009: Symbol not defined: EQU
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-4
+
+
+ = 0010                      C	INT_VIDEO	EQU	010H		; VIDEO VECTOR
+			     C	;-------------------------------------------------------------------------------
+ = 0008                      C	DMA08		EQU	008H		; DMA STATUS REGISTER PORT ADDRESS
+ = 0000                      C	DMA		EQU	000H		; DMA CH.0 ADDRESS REGISTER PORT ADDRESS
+ = 00D0                      C	DMA15		EQU	0D0H		; 2ND DMA STATUS PORT ADDRESS
+ = 00C0                      C	DMA1		EQU	0C0H		; 2ND DMA CH.0 ADDRESS REGISTER ADDRESS
+			     C	;-------------------------------------------------------------------------------
+ = 0040                      C	TIMER		EQU	040H		; 8254 TIMER - BASE ADDRESS
+			     C	
+			     C	;--------- MANUFACTURING PORT --------------------------------------------------
+ = 0080                      C	MFG_PORT	EQU	80H		; MANUFACTURING AND POST CHECKPOINT PORT
+			     C						;  DMA CHANNEL 0 PAGE REGISTER ADDRESS
+			     C	
+			     C	;--------- MANUFACTURING BIT DEFINITION FOR @MFG_ERR_FLAG+1 --------------------
+ = 0001                      C	MEM_FAIL	EQU	00000001B	; STORAGE TEST FAILED	     (ERROR 2OX)
+ = 0002                      C	PRO_FAIL	EQU	00000010B	; VIRTUAL MODE TEST FAILED   (ERROR 104)
+ = 0004                      C	LMCS_FAIL	EQU	00000100B	; LOW MEG CHIP SELECT FAILED (ERROR 109)
+ = 0008                      C	KYCLK_FAIL	EQU	00001000B	; KEYBOARD CLOCK TEST FAILED (ERROR 304)
+ = 0010                      C	KY_SYS_FAIL	EQU	00010000B	; KEYBOARD OR SYSTEM FAILED  (ERROR 303)
+ = 0020                      C	KYBD_FAIL	EQU	00100000B	; KEYBOARD FAILED	     (ERROR 301)
+ = 0040                      C	DSK_FAIL	EQU	01000000B	; DISKETTE TEST FAILED	     (ERROR 601)
+ = 0080                      C	KEY_FAIL	EQU	10000000B	; KEYBOARD LOCKED	     (ERROR 302)
+			     C	
+			     C	;-------------------------------------------------------------------------------
+ = 0081                      C	DMA_PAGE	EQU	081H		; START OF DMA PAGE REGRISTERS
+ = 008F                      C	LAST_DMA_PAGE	EQU	08FH		; LAST DMA PAGE REGISTER
+			     C	
+			     C	;-------------------------------------------------------------------------------
+ = 00F0                      C	X287		EQU	0F0H		; MATH COPROCESSOR CONTROL PORT
+			     C	
+			     C	;-------------------------------------------------------------------------------
+ = 0000                      C	POST_SS		EQU	00000H		; POST STACK SEGMENT
+ = 8000                      C	POST_SP		EQU	08000H		; POST STACK POINTER
+			     C	
+			     C	;-------------------------------------------------------------------------------
+ = 000D                      C	CR		EQU	000DH		; CARRIAGE RETURN CHARACTER
+ = 000A                      C	LF		EQU	000AH		; LINE FEED CHARACTER
+ = 0008                      C	RVRT		EQU	00001000B	; VIDEO VERTICAL RETRACE BIT
+ = 0001                      C	RHRZ		EQU	00000001B	; VIDEO HORIZONTAL RETRACE BIT
+ = 0100                      C	H		EQU	256		; HIGH BYTE FACTOR (X 100H)
+ = 0101                      C	X		EQU	H+1		; HIGH AND LOW BYTE FACTOR (X 101H)
+			     C	
+			     C	.LIST
+				INCLUDE DSEG.INC
+			     C	;TITLE DESG.INC
+			     C	
+			     C	;----------------------------------------
+			     C	;	80286 INTERRUPT LOCATIONS	; 	
+			     C	;	REFERENCED BY POST & BIOS	;
+			     C	;----------------------------------------
+			     C	
+ 0000                        C	ABS0		SEGMENT	AT 0		; ADDRESS= 0000:0000
+			     C	
+ 0000  00                    C	@STG_LOC0	DB	?		; START OF INTERRUPT VECTOR TABLE
+			     C	
+ 0008                        C			ORG	4*002H
+ 0008  00000000              C	@NMI_PTR	DD	?		; NON-MASKABLE INTERRUPT VECTOR
+			     C	
+ 0014                        C			ORG	4*005H
+ 0014  00000000              C	@INT5_PTR	DD	?		; PRINT SCREEN INTERRUPT VECTOR
+			     C	
+ 0020                        C			ORG	4*008H
+ 0020  00000000              C	@INT_PTR	DD	?		; HARDWARE INTERRUPT POINTER (8-F)
+			     C	
+ 0040                        C			ORG	4*010H
+ 0040  00000000              C	@VIDEO_INT	DD	?		; VIDEO I/O INTERRUPT VECTOR
+			     C	
+ 004C                        C			ORG	4*013H
+ 004C  00000000              C	@ORG_VECTOR	DD	?		; DISKETTE/DISK INTERRUPT VECTOR
+			     C	
+ 0060                        C			ORG	4*018H
+ 0060  00000000              C	@BASIC_PTR	DD	?		; POINTER TO CASSETTE BASIC
+			     C	
+ 0074                        C			ORG	4*01DH
+ 0074  00000000              C	@PARM_PTR	DD	?		; POINTER TO VIDEO PARAMETERS
+			     C	
+ 0078                        C			ORG	4*01EH
+ 0078  00000000              C	@DISK_POINTER	DD	?		; POINTER TO DISKETTE PARAMETER TABLE
+			     C	
+ 007C                        C			ORG	4*01FH
+ 007C  00000000              C	@EXT_PTR	DD	?		; POINTER TO GRAPHIC CHARACTERS 128-255
+			     C	
+ 0100                        C			ORG	4*040H
+ 0100  00000000              C	@DISK_VECTOR	DD	?		; POINTER TO DISKETTE INTERRUPT CODE
+			     C	
+ 0104                        C			ORG	4*041H
+ 0104  00000000              C	@HF_TBL_VEC	DD	?		; POINTER TO FIRST DISK PARAMETER TABLE
+			     C	
+ 0118                        C			ORG	4*046H
+ 0118  00000000              C	@HF1_TBL_VEC	DD	?		; POINTER TO SECOND DISK PARAMETER TABLE
+			     C	
+ 01C0                        C			ORG	4*070H
+ 01C0  00000000              C	@SLAVE_INT_PTR	DD	?		; POINTER TO SLAVE INTERRUPT HANDLER
+			     C	
+ 01D8                        C			ORG	4*076H
+ 01D8  00000000              C	@HDISK_INT	DD	?		; POINTER TO FIXED DISK INTERRUPT CODE
+			     C	
+ 0400                        C			ORG	0400H
+ 0400  0000                  C	@TOS		DW	?		; STACK -- USED DURING POST ONLY
+			     C						;   USE WILL OVERLAY INTERRUPTS VECTORS
+ 0500                        C			ORG	0500H
+ 0500                        C	@MFG_TEST_RTN	LABEL	FAR		; LOAD LOCATION FOR MANUFACTURING TESTS
+			     C	
+ 7C00                        C			ORG	7C00H
+ 7C00                        C	@BOOT_LOCN	LABEL	FAR		; BOOT STRAP CODE LOAD LOCATION
+			     C	
+ 7C00                        C	ABS0		ENDS
+			     C	
+			     C	
+			     C	;----------------------------------------
+			     C	;	ROM BIOS DATA AREAS		;
+			     C	;----------------------------------------
+			     C	
+ 0000                        C	DATA		SEGMENT	AT 40H		; ADDRESS= 0040:0000
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-5
+
+
+ 0000  0000                  C	@RS232_BASE	DW	?		; BASE ADDRESSES OF RS232 ADAPTERS
+ 0002  0000                  C			DW	?		;  SECOND LOGICAL RS232 ADAPTER
+ 0004  0000                  C			DW	?		;   RESERVED
+ 0006  0000                  C			DW	?		;   RESERVED
+ 0008  0000                  C	@PRINTER_BASE	DW	?		; BASE ADDRESSES OF PRINTER ADAPTERS
+ 000A  0000                  C			DW	?		;  SECOND LOGICAL PRINTER ADAPTER
+ 000C  0000                  C			DW	?		;  THIRD LOGICAL PRINTER ADAPTER
+ 000E  0000                  C			DW	?		;   RESERVED
+ 0010  0000                  C	@EQUIP_FLAG	DW	?		; INSTALLED HARDWARE FLAGS
+ 0012  00                    C	@MFG_TST	DB	?		; INITIALIZATION FLAGS
+ 0013  0000                  C	@MEMORY_SIZE	DW	?		; BASE MEMORY SIZE IN K BYTES (X 1024)
+ 0015  00                    C	@MFG_ERR_FLAG	DB	?		; SCRATCHPAD FOR MANUFACTURING
+ 0016  00                    C			DB	?		;  ERROR CODES
+			     C	
+			     C	;----------------------------------------
+			     C	;	KEYBOARD DATA AREAS		;
+			     C	;----------------------------------------
+			     C	
+ 0017  00                    C	@KB_FLAG	DB	?		; KEYBOARD SHIFT STATE AND STATUS FLAGS
+ 0018  00                    C	@KB_FLAG_1	DB	?		; SECOND BYTE OF KEYBOARD STATUS
+ 0019  00                    C	@ALT_INPUT	DB	?		; STORAGE FOR ALTERNATE KEY PAD ENTRY
+ 001A  0000                  C	@BUFFER_HEAD	DW	?		; POINTER TO HEAD OF KEYBOARD BUFFER
+ 001C  0000                  C	@BUFFER_TAIL	DW	?		; POINTER TO TAIL OF KEYBOARD BUFFER
+			     C	
+			     C	; ------	HEAD = TAIL	INDICATES THAT THE BUFFER IS EMPTY
+			     C	
+ 001E  0010[                 C	@KB_BUFFER	DW	16 DUP (?)	; ROOM FOR 15 SCAN CODE ENTRIES
+	   ????              C	
+			 ]   C	
+			     C	
+			     C	
+			     C	
+			     C	;----------------------------------------
+			     C	;	DISKETTE DATA AREAS		;
+			     C	;----------------------------------------
+			     C	
+ 003E  00                    C	@SEEK_STATUS	DB	?		; DRIVE RECALIBRATION STATUS
+			     C						; bIT 3-0 = DRIVE 3-0 RECALIBRATION
+			     C						; BEFORE NEXT SEEK IF BIT IS = 0
+ 003F  00                    C	@MOTOR_STATUS	DB	?		; MOTOR STATUS
+			     C						; BIT 3-0 = DRIVE 3-0 CURRENTLY RUNNING
+			     C						; BIT 7 = CURRENT OPERATION IS A WRITE
+ 0040  00                    C	@MOTOR_COUNTD	DB	?		; TIME OUT COUNTER FOR MOTOR(S) TURN OFF
+ 0041  00                    C	@DSKETTE_STATUS	DB	?		; RETURN CODE STATUS BYTE
+			     C						; CMD_BLOCK IN STACK FOR DISK OPERATION
+ 0042  0007[                 C	@NEC_STATUS	DB	7 DUP(?)	; STATUS BYTES FROM DISKETTE OPERATION
+	   ??                C	
+			 ]   C	
+			     C	
+			     C	
+			     C	
+			     C	
+			     C	;----------------------------------------
+			     C	;	VIDEO DISPLAY DATA AREA		;
+			     C	;----------------------------------------
+			     C	
+ 0049  00                    C	@CRT_MODE	DB	?		; CURRENT DISPLAY MODE (TYPE)
+ 004A  0000                  C	@CRT_COLS	DW	?		; NUMBER OF COLUMNS ON SCREEN
+ 004C  0000                  C	@CRT_LEN	DW	?		; LENGTH OF REGEN BUFFER IN BYTES
+ 004E  0000                  C	@CRT_START	DW	?		; STARTING ADDRESS IN REGEN BUFFER
+ 0050  0008[                 C	@CURSOR_POSN	DW	8 DUP(?)	; CURSOR FOR EACH OF UP TO 8 PAGES
+	   ????              C	
+			 ]   C	
+			     C	
+			     C	
+			     C	
+ 0060  0000                  C	@CURSOR_MODE	DW	?		; CURRENT CURSOR MODE SETTING
+ 0062  00                    C	@ACTIVE_PAGE	DB	?		; CURRENT PAGE BEING DISPLAYED
+ 0063  0000                  C	@ADDR_6845	DW	?		; BASE ADDRESS FOR ACTIVE DISPLAY CARD
+ 0065  00                    C	@CRT_MODE_SET	DB	?		; CURRENT SETTING OF THE 3X8 REGISTER
+ 0066  00                    C	@CRT_PALETTE	DB	?		; CURRENT PALETTE SETTING - COLOR CARD
+			     C	
+			     C	;----------------------------------------
+			     C	;	POST AND BIOS WORK DATA AREA	;
+			     C	;----------------------------------------
+			     C	
+			     C						; STACK SAVE, ETC.
+ 0067  0000                  C	@IO_ROM_INIT	DW	?		; POINTER TO ROM INITIALIZATION ROUTINE
+ 0069  0000                  C	@IO_ROM_SEG	DW	?		; POINTER TO I/O ROM SEGMENT
+ 006B  0000                  C	@INTR_FLAG	DW	?		; FLAG INDICATING AN INTERRUPT HAPPENED
+			     C	
+			     C	;----------------------------------------
+			     C	;	TIMER DATA AREA 		;
+			     C	;----------------------------------------
+			     C	
+ 006D  0000                  C	@TIMER_LOW	DW	?		; LOW WORD OF TIMER COUNT
+ 006F  0000                  C	@TIMER_HIGH	DW	?		; HIGH WORD OF TIMER COUNT
+ 0071  00                    C	@TIMER_OFL	DB	?		; TIMER HAS ROLLED OVER SINCE LAST READ
+			     C	
+			     C	;----------------------------------------
+			     C	;	SYSTEM DATA AREA		;
+			     C	;----------------------------------------
+			     C	
+ 0072  00                    C	@BIOS_BREAK	DB	?		; BIT 7=1 IF BREAK KEY HAS BEEN PRESSED
+ 0073  0000                  C	@RESET_FLAG	DW	?		; WORD=1234H IF KEYBOARD RESET UNDERWAY
+			     C	
+			     C	;----------------------------------------
+			     C	;	FIXED DISK DATA AREAS		;
+			     C	;----------------------------------------
+			     C	
+ 0075  00                    C	@DISK_STATUS1	DB	?		; FIXED DISK STATUS
+ 0076  00                    C	@HF_NUM		DB	?		; COUNT OF FIXED DISK DRIVES
+ 0077  00                    C	@CONTROL_BYTE	DB	?		; HEAD CONTROL BYTE
+ 0078  00                    C	@PORT_OFF	DB	?		; RESERVED (PORT OFFSET)
+			     C	
+			     C	;----------------------------------------
+			     C	;	TIME-OUT VARIABLES		;
+			     C	;----------------------------------------
+			     C	
+			     C	0PRINT_TIM_OUT	DB	?		; TIME OUT COUNTERS FOR PRINTER RESPONSE
+.\DSEG.INC(171): warning A4001: Extra characters on line
+ 0079  00                    C			DB	?		;  SECOND LOGICAL PRINTER ADAPTER
+ 007A  00                    C			DB	?		;  THIRD LOGICAL PRINTER ADAPTER
+ 007B  00                    C			DB	?		;   RESERVED
+ 007C  00                    C	@RS232_TIM_OUT	DB	?		; TIME OUT COUNTERS FOR RS232 RESPONSE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-6
+
+
+ 007D  00                    C			DB	?		;  SECOND LOGICAL RS232 ADAPTER
+ 007E  00                    C			DB	?		;   RESERVED
+ 007F  00                    C			DB	?		;   RESERVED
+			     C	
+			     C	;----------------------------------------
+			     C	;	ADDITIONAL KEYBOARD DATA AREA 	;
+			     C	;----------------------------------------
+			     C	
+			     C						; BUFFER LOCATION WITHIN SEGMENT 40H
+ 0080  0000                  C	@BUFFER_START	DW	?		; OFFSET OF KEYBOARD BUFFER START
+ 0082  0000                  C	@BUFFER_END	DW	?		; OFFSET OF END OF BUFFER
+			     C	
+			     C	;----------------------------------------
+			     C	;	EGA/PGA DISPLAY WORK AREA	;
+			     C	;----------------------------------------
+			     C	
+ 0084  00                    C	@ROWS		DB	?		; ROWS ON THE ACTIVE SCREEN (LESS 1)
+ 0085  0000                  C	@POINTS		DW	?		; BYTES PER CHARACTER
+ 0087  00                    C	@INFO		DB	?		; MODE OPTIONS
+ 0088  00                    C	@INFO_3		DB	?		; FEATURE SIT SWITCHES
+ 0089  00                    C			DB	?		; RESERVED FOR DISPLAY ADAPTERS
+ 008A  00                    C			DB	?		; RESERVED FOR DISPLAY ADAPTERS
+			     C	
+			     C	;----------------------------------------
+			     C	;	ADDITIONAL MEDIA DATA		;
+			     C	;----------------------------------------
+			     C	
+ 008B  00                    C	@LASTRATE	DB	?		; LAST DISKETTE DATA RATE SELECTED
+ 008C  00                    C	@HF_STATUS	DB	?		; STATUS REGISTER
+ 008D  00                    C	@HF_ERROR	DB	?		; ERROR REGISTER
+ 008E  00                    C	@HF_INT_FLAG	DB	?		; FIXED DISK INTERRUPT FLAG
+ 008F  00                    C	@HF_CNTRL	DB	?		; COMBO FIXED DISK/DISKETTE CARD BIT 0.1
+ 0090  00                    C	@DSK_STATE	DB	?		; DRIVE 0 MEDIA STATE
+ 0091  00                    C			DB	?		; DRIVE 1 MEDIA STATE
+ 0092  00                    C			DB	?		; DRIVE 0 OPERATION START STATE
+ 0093  00                    C			DB	?		; DRIVE 1 OPERATION START STATE
+ 0094  00                    C	@DSK_TRK	DB	?		; DRIVE 0 PRESENT CYLINDER
+ 0095  00                    C			DB	?		; DRIVE 1 PRESENT CYLINDER
+			     C	
+			     C	;----------------------------------------
+			     C	;	ADDITIONAL KEYBOARD FLAGS	;
+			     C	;----------------------------------------
+			     C	
+ 0096  00                    C	@KB_FLAG_3	DB	?		; KEYBOARD MODE STATE AND TYPE FLAGS
+ 0097  00                    C	@KB_FLAG_2	DB	?		; KEYBOARD LED FLAGS
+			     C	
+			     C	;----------------------------------------
+			     C	;	REAL TIME CLOCK DATA AREA	;
+			     C	;----------------------------------------
+			     C	
+ 0098  0000                  C	@USER_FLAG	DW	?		; OFFSET ADDRESS OF USERS WAIT FLAG
+ 009A  0000                  C	@USER_FLAG_SEG	DW	?		; SEGMENT ADDRESS OF USER WAIT FLAG
+ 009C  0000                  C	@RTC_LOW	DW	?		; LOW WORD OF USER WAIT FLAG
+ 009E  0000                  C	@RTC_HIGH	DW	?		; HIGH WORD OF USER WAIT FLAG
+ 00A0  00                    C	@RTC_WAIT_FLAG	DB	?		; WAIT ACTIVE FLAG (01=BUSY, 80=POSTED)
+			     C						; 	          (00=POST ACKNOWLEDGED)
+			     C	
+			     C	;----------------------------------------
+			     C	;	AREA FOR NETWORK ADAPTER	;
+			     C	;----------------------------------------
+			     C	
+ 00A1  0007[                 C	@NET		DB	7 DUP(?)	; RESERVED FOR NETWORK ADAPTERS
+	   ??                C	
+			 ]   C	
+			     C	
+			     C	
+			     C	;----------------------------------------
+			     C	;	EGA/PGA PALETTE POINTER 	;
+			     C	;----------------------------------------
+			     C	
+ 00A8  00000000              C	@SAVE_PTR	DD	?		; POINTER TO EGA PARAMETER CONTROL BLOCK
+			     C	
+			     C						; RESERVED
+			     C	;----------------------------------------
+			     C	;	DATA AREA - PRINT SCREEN	;
+			     C	;----------------------------------------
+			     C	
+ 0100                        C			ORG	100H		; ADDRESS= 0040:0100	(REF 0050:0000)
+			     C	
+ 0100  00                    C	@STATUS_BYTE	DB	?		; PRINT SCREEN STATUS BYTE
+			     C						;  00=READY/OK,	 01=BUSY,   FF=ERROR
+			     C	
+ 0101                        C	DATA		ENDS			; END OF BIOS DATA SEGMENT
+			     C	
+			     C	.LIST
+				INCLUDE	SYSDATA.INC
+			     C	;TITLE SYSDATA.INC
+			     C	
+			     C	;------------------------------------------------------------------------------
+			     C	;	PROTECTED MODE EQUATES FOR POST TESTS AND BIOS ROUTINES		      ;
+			     C	;------------------------------------------------------------------------------
+			     C	
+			     C	;-----		LENGTH EQUATES FOR PROTECTED MODE TESTS
+			     C	
+ = 0300                      C	SDA_LEN		EQU	00300H		; SYSTEM DATA AREA LENGTH
+ = 0800                      C	SYS_IDT_LEN	EQU	256*8		; 256 SYSTEM IDT ENTRIES, 8 BYTES EACH
+ = 0088                      C	GDT_LEN		EQU	TYPE GDT_DEF	; GDT STRUCTURE LENGTH
+ = 0008                      C	DESC_LEN	EQU	TYPE DATA_DESC	; LENGTH OF A DESCRIPTOR
+ = 1000                      C	MCRT_SIZE	EQU	4*1024		; MONOCHROME CRT SIZE
+ = 4000                      C	CCRT_SIZE	EQU	16*1024		; COMPATIBLE COLOR CRT SIZE
+ = FFFF                      C	ECCRT_SIZE	EQU	0FFFFH		; SIZE OF EACH PORTION OF THE ENHANCED
+ = FFFF                      C	MAX_SEG_LEN	EQU	0FFFFH		; MAXIMUM SEGMENT LENGTH = 64K
+ = 0000                      C	NULL_SEG_LEN	EQU	00000H		; NULL SEGMENT LENGTH = 0
+			     C	
+			     C	;-----		LOCATION EQUATES FOR PROTECTED MODE TESTS
+			     C	
+ = D0A0                      C	SYS_IDT_LOC	EQU	0D0A0H		; THE SYSTEM IDT IS AT THE BOTTOM
+ = 0400                      C	SDA_LOC		EQU	00400H		; SAME AS REAL
+ = D8A0                      C	GDT_LOC		EQU	(SYS_IDT_LOC + SYS_IDT_LEN)
+ = 0000                      C	MCRT@_LO	EQU	0000H		; MONOCHROME CRT ADDRESS
+ = 000B                      C	MCRT@_HI	EQU	0BH		; (0B0000H)
+ = 8000                      C	CCRT@_LO	EQU	8000H		; COMPATIBLE COLOR CRT ADDRESS
+ = 000B                      C	CCRT@_HI	EQU	0BH		; (0B8000H)
+ = 0000                      C	ECCRT@_LO_LO	EQU	0000H
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-7
+
+
+ = 000A                      C	ECCRT@_LO_HI	EQU	0AH		; (0A0000H)
+ = 0000                      C	ECCRT@_HI_LO	EQU	0000H
+ = 000B                      C	ECCRT@_HI_HI	EQU	0BH		; (0B0000H)
+ = 0000                      C	CSEG@_LO	EQU	0000H		; CODE SEGMENT POST/BIOS
+ = 000F                      C	CSEG@_HI	EQU	0FH		; (0F0000H) FOR TESTS
+ = 0000                      C	NSEG@_LO	EQU	0000H		; ABS0
+ = 0000                      C	NSEG@_HI	EQU	00H
+			     C	
+			     C	;----- 	DEFINITIONS FOR ACCESS RIGHTS BYTES
+			     C	
+ = 00F3                      C	CPL3_DATA_ACCESS	EQU	11110011B	; PRESENT
+			     C							; DPL = 3
+			     C							; CODE/DATA SEGMENT
+			     C							; NOT EXECUTABLE
+			     C							; GROW-UP (OFFSET <= LIMIT)
+			     C							; WRITABLE
+			     C							; ACCESSED
+ = 0093                      C	CPL0_DATA_ACCESS	EQU	10010011B	; DPL =	0
+ = 009B                      C	CPL0_CODE_ACCESS	EQU	10011011B	; CPL 0 - NON-CONFORMING
+ = 00E2                      C	LDT_DESC		EQU	11100010B
+ = 0081                      C	FREE_TSS		EQU	10000001B
+ = 0086                      C	INT_GATE		EQU	10000110B
+ = 0087                      C	TRAP_GATE		EQU	10000111B
+			     C	
+ = 0001                      C	VIRTUAL_ENABLE		EQU	0000000000000001B	; PROTECTED MODE ENABLE
+			     C	
+			     C	;-----	THE GLOBAL DESCRIPTOR TABLE DEFINITION FOR POWER ON SELF TESTS
+			     C	
+			     C	GDT_DEF		STRUC
+ 0000  0000000000000000      C			DQ	?		; UNUSED ENTRY
+ 0008  0000000000000000      C	GDT_PTR		DQ	?		; THIS ENTRY POINTS TO THIS TABLE
+ 0010  0000000000000000      C	SYS_IDT_PTR	DQ	?		; POST INTERRUPT DESCRIPTOR TABLE
+ 0018  0000000000000000      C	RSDA_PTR	DQ	?		; THE REAL SYSTEM DATA AREA FOR POST
+ 0020  0000000000000000      C	C_BWCRT_PTR	DQ	?		; COMPATIBLE BW CRT FOR POST
+ 0028  0000000000000000      C	C_CCRT_PTR	DQ	?		; COMPATIBLE COLOR CRT FOR POST
+ 0030  0000000000000000      C	E_CCRT_PTR	DQ	?		; ENHANCED COLOR GRAPHICS CRT (l6 BYTES)
+ 0038  0000000000000000      C	E_CCRT_PTR2	DQ	?
+ 0040  0000000000000000      C	SYS_ROM_CS	DQ	?		; CS - POST IDT, ROM RESIDENT
+ 0048  0000000000000000      C	ES_TEMP		DQ	?		; DYNAMIC POINTER FOR ES
+ 0050  0000000000000000      C	CS_TEMP		DQ	?		; DYNAMIC POINTER FOR CS
+ 0058  0000000000000000      C	SS_TEMP		DQ	?		; DYNAMIC POINTER FOR SS
+ 0060  0000000000000000      C	DS_TEMP		DQ	?		; DYNAMIC POINTER FOR DS
+ 0068  0000000000000000      C	POST_TR		DQ	?		; TR VALUE FOR THIS MACHINE'S TSS
+ 0070  0000000000000000      C	POST_TSS_PTR	DQ	?
+ 0078  0000000000000000      C	POST_LDTR	DQ	?		; LDTR VALUE FOR THIS MACHINE'S LDT
+ 0080  0000000000000000      C	POST_LDT_PTR	DQ	?
+ 0088                        C	GDT_DEF		ENDS
+			     C	
+			     C	;----- SEGMENT DESCRIPTOR TABLE ENTRY STRUCTURE
+			     C	
+			     C	DATA_DESC	STRUC
+ 0000  0000                  C	SEG_LIMIT	DW	?		; SEGMENT LIMIT (1- 65535 BYTES)
+ 0002  0000                  C	BASE_LO_WORD	DW	?		; 24 BIT SEGMENT PHYSICAL
+ 0004  00                    C	BASE_HI_BYTE	DB	?		; ADDRESS (0 - (16M-1))
+ 0005  00                    C	DATA_ACC_RIGHTS	DB	?		; ACCESS RIGHTS BYTE
+ 0006  0000                  C	DATA_RESERVED	DW	?		; RESERVED - MUST BE 0000 FOR THE 80286
+ 0008                        C	DATA_DESC 	ENDS
+			     C	
+			     C	;----- GATE DESCRIPTOR TABLE ENTRY STRUCTURE
+			     C	
+			     C	GATE_DESC	STRUC
+ 0000  0000                  C	ENTRY_POINT	DW	?		; DESTINATION ROUTINE ENTRY POINT
+ 0002  0000                  C	CS_SECECTOR	DW	?		; SELECTOR FOR DESTINATION SEGMENT
+ 0004  00                    C	WORD_COUNT	DB	?		; NUMBER OF WORDS TO COPY FROM STACK
+ 0005  00                    C	GATE_ACC_RIGHTS	DB	?		; ACCESS RIGHTS BYTE
+ 0006  0000                  C	GATE_RESERVED	DW	?		; RESERVED - MUST BE 0000 FOR THE 80286
+ 0008                        C	GATE_DESC	ENDS
+			     C	
+			     C	.LIST
+				
+				
+ 0000				CODE	SEGMENT	WORD PUBLIC
+				
+					PUBLIC	C8042
+					PUBLIC	OBF_42
+					PUBLIC	POST1
+					PUBLIC	START_1
+				
+					EXTRN	CMOS_READ:NEAR
+					EXTRN	CMOS_WRITE:NEAR
+					EXTRN	CONFIG_BAD:NEAR
+					EXTRN	D11:NEAR
+					EXTRN	DDS:NEAR
+					EXTRN	DUMMY_RETURN:NEAR
+					EXTRN	ERR_BEEP:NEAR
+					EXTRN	GATE_A20:NEAR
+					EXTRN	KBD_RESET:NEAR
+					EXTRN	NMI_INT:NEAR
+					EXTRN	POST2:NEAR
+					EXTRN	PRINT_SCREEN:NEAR
+					EXTRN	PROC_SHUTDOWN:NEAR
+					EXTRN	ROM_CHECK:NEAR
+					EXTRN	SHUT2:NEAR
+					EXTRN	SHUT3:NEAR
+					EXTRN	SHUT4:NEAR
+					EXTRN	SHUT6:NEAR
+					EXTRN	SHUT7:NEAR
+					EXTRN	SHUT9:NEAR
+					EXTRN	SLAVE_VECTOR_TABLE:NEAR
+					EXTRN	STGTST_CNT:NEAR
+					EXTRN	SYSINIT1:NEAR
+					EXTRN	VECTOR_TABLE:NEAR
+					EXTRN	VIDEO_PARMS:BYTE
+				
+					ASSUME	CS:CODE,DS:NOTHING,ES:NOTHING,SS:NOTHING
+				
+ 0000				POST1	PROC	NEAR
+				
+ = 0000				BEGIN	EQU	$
+ 0000  36 34 38 30 30 39		DB	'6480090COPR. IBM CORP. 1981,1985  '		;COPYRIGHT NOTICE
+       30 43 4F 50 52 2E	
+       20 49 42 4D 20 43	
+       4F 52 50 2E 20 31	
+       39 38 31 2C 31 39	
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-8
+
+
+       38 35 20 20		
+					EVEN							;EVEN BOUNDARY
+					;	 6 4 8 0 0 9 0   C O P R .   I B M   1 9 8 5	;EVEN MODULE
+					;	  6 4 8 0 0 9 1   C O P R .   I B M   1 9 8 5	;ODD  MODULE
+ 0022  36 36 34 34 38 38		DB	'66448800009901  CCOOPPRR..  IIBBMM  11998855'	;COPYRIGHT NOTICE
+       30 30 30 30 39 39	
+       30 31 20 20 43 43	
+       4F 4F 50 50 52 52	
+       2E 2E 20 20 49 49	
+       42 42 4D 4D 20 20	
+       31 31 39 39 38 38	
+       35 35			
+ 004E  20 20				DB	'  '					;PAD
+				
+				;-------------------------------------------------
+				;	INITIAL RELIABILITY TESTS -- (POST1)    :
+				;-------------------------------------------------
+				
+				;------------------------------------------
+				;  TEST.01					:
+				;       80286 PROCESSOR TEST (REAL MODE)	:
+				;  DESCRIPTION					:
+				;	VERIFY FLAGS, REGISTERS			:
+				;	AND CONDITIONAL JUMPS.			:
+				;------------------------------------------
+				
+					ASSUME	DS:DATA
+				
+ 0050  FA			START_1:	CLI		; DISABLE INTERRUPTS
+ 0051  B8 B615				MOV	AX,0D500H+CMOS_REG_D+NMI	; FLAG MASK IN (AH) AND NMI MASK IN (AL)
+test1.ASM(69): error A2029: Division by 0 or overflow
+ 0054  E6 70				OUT	CMOS_PORT,AL	; DISABLE NMI INTERRUPTS
+ 0056  9E				SAHF		; SET "SF" "ZF" "AF" "PF" "CF" FLAGS ON
+ 0057  73 27				JNC	ERR02	; GO TO ERROR ROUTINE IF "CF" NOT SET
+ 0059  75 25				JNZ	ERR02	; GO TO ERROR ROUTINE IF "ZF" NOT SET
+ 005B  7B 23				JNP	ERR02	; GO TO ERROR ROUTINE IF "PF" NOT SET
+ 005D  79 21				JNS	ERR02	; GO TO ERROR ROUTINE IF "SF" NOT SET
+ 005F  9F				LAHF		; LOAD FLAG IMAGE TO (AH)
+ 0060  B1 05				MOV	CL,5	; LOAD COUNT REGISTER WITH SHIFT COUNT
+ 0062  D2 EC				SHR	AH,CL	; SHIFT *AF" INTO CARRY BIT POSITION
+ 0064  73 1A				JNC	ERR02	; GO TO ERROR ROUTINE IF *AF" NOT SET
+ 0066  B0 40				MOV	AL,40H	; SET THE *OF" FLAG ON
+ 0068  D0 E0				SHL	AL,1	; SETUP FOR TESTING
+ 006A  71 14				JNO	ERR02	; GO TO ERROR ROUTINE IF *OF" NOT SET
+ 006C  32 E4				XOR	AH,AH	; SET (AH) = 0
+ 006E  9E				SAHF		; CLEAR "SF*, "CF", "ZF", AND "PF"
+ 006F  76 00				JBE	EM02	; GO TO ERROR ROUTINE IF *CF* ON
+test1.ASM(85): error A2009: Symbol not defined: EM02
+							; GO TO ERROR ROUTINE IF "ZF" ON
+ 0071  78 0D				JS	ERR02	; GO TO ERROR ROUTINE IF *SF* ON
+ 0073  7A 0B				JP	ERR02	; GO TO ERROR ROUTINE IF "PF" ON
+ 0075  9F				LAHF		; LOAD FLAG IMAGE TO (AH)
+ 0076  D2 EC				SHR	AH,CL	; SHIFT *AF" INTO CARRY BIT POSITION
+ 0078  72 06				JC	ERR02	; GO TO ERROR ROUTINE IF ON
+ 007A  D0 E4				SHL	AH,1	; CHECK THAT "OF" IS CLEAR
+ 007C  70 02				JO	ERR02	; GO TO ERROR ROUTINE IF ON
+ 007E  74 00				JZ	VA	; CONTINUE CONFIDENCE TESTS IF *ZF" SET
+test1.ASM(94): error A2009: Symbol not defined: VA
+ 0080				ERR02:
+ 0080  F4				HLT		; ERROR HALT
+ 0081  EB FD				JMP	ERR02	; ERROR LOOP TRAP
+ 0083				C7A:
+ 0083  B8 ---- R			MOV	AX,DATA	; SET DATA SEGMENT
+ 0086  8E D8				MOV	DS,AX	; INTO THE (DS) SEGMENT REGISTER
+				
+				;-----	CHECK FOR PROCESSOR SHUTDOWN
+ 0088  E4 64				IN	AL,STATUS_PORT	; READ CURRENT KEYBOARD PROCESSOR STATUS
+ 008A  A8 04				TEST	AL,SYS_FLAG	; CHECK FOR SHUTDOWN IN PROCESS FLAG
+ 008C  75 03				JNZ	C7B	; GO IF YES
+ 008E  E9 0125 R			JMP	SHUT0	; USE CONTINUE NORMAL POWER ON CODE
+				
+				;----- CHECK FOR SHUTDOWN 09
+ 0091				C7B:
+ 0091  A0 000F U			MOV	AL,CMOS_SHUT_DOWN+NNI	; CMOS ADDRESS FOR SHUTDOWN BYTE
+test1.ASM(110): error A2009: Symbol not defined: NNI
+ 0094  E6 70				OUT	CMOS_PORT,AL
+ 0096  EB 00				JMP	$+2	; I/O DELAY
+ 0098  E4 00				IN	AL,CMCS_DATA	; GET REQUEST NUMBER
+test1.ASM(113): error A2009: Symbol not defined: CMCS_DATA
+ 009A  3C 09				CMP	AL,09H	; WAS IT SHUTDOWN REQUEST 9?
+ 009C  86 C4				XCHG	AL,AH	; SAVE THE SHUTDOWN REQUEST
+ 009E  74 42				JE	C7C	; BYPASS INITIALIZING INTERRUPT CHIPS
+				
+				;----- CHECK FOR SHUTDOWN 0A
+ 00A0  80 FC 0A				CMP	AH,0AH	; WAS IT SHUTDOWN REQUEST A?
+ 00A3  74 3D				JE	C7C	; BYPASS INITIALIZING INTERRUPT CHIPS
+ 00A5  2A C0				SUB	AL,AL	; INSURE MATH PROCESSOR RESET
+ 00A7  E6 F1				OUT	X287+1,AL
+				
+				;---------------------------------------------------------
+				;    RE-INITIALIZE THE 8259 INTERRUPT #1 CONTROLLER CHIP :
+				;---------------------------------------------------------
+ 00A9  B0 11				MOV	AL,11H	; ICW1 - EDGE, MASTER, ICW4
+ 00AB  E6 20				OUT	INTA00,AL
+ 00AD  EB 00				JMP	$+2	; WAIT STATE FOR I/O
+ 00AF  B0 08				MOV	AL,08H	; SETUP ICW2 - INTERRUPT TYPE 8H (8-F)
+ 00B1  E6 21				OUT	INTA01,AL
+ 00B3  EB 00				JMP	$+2	; WAIT STATE FOR I/O
+ 00B5  B0 04				MOV	AL,04H	; SETUP ICW3 - MASTER LEVEL 2
+ 00B7  E6 21				OUT	INTA01,AL
+ 00B9  EB 00				JMP	$+2	; I/O WAIT STATE
+ 00BB  B0 01				MOV	AL,01H	; SETUP ICW4 - MASTER,8086 MODE
+ 00BD  E6 21				OUT	INTA01,AL
+ 00BF  EB 00				JMP	$+2	; WAIT STATE FOR I/O
+ 00C1  B0 FF				MOV	AL,0FFH	; MASK ALL INTERRUPTS OFF
+ 00C3  E6 21				OUT	INTA01,AL	; (VIDEO ROUTINE ENABLES INTERRUPTS)
+				;---------------------------------------------------------
+				;    RE-INITIALIZE THE 8259 INTERRUPT #2 CONTROLLER CHIP  :
+				;---------------------------------------------------------
+ 00C5  B0 11				MOV	AL,11H	; ICW1 - EDGE, SLAVE ICW4
+ 00C7  E6 A0				OUT	INTB00,AL
+ 00C9  EB 00				JMP	$+2	; WAIT STATE FOR I/O
+ 00CB  A0 0000 U			MOV	AL,INT_TYPE	; SETUP ICW2 - INTERRUPT TYPE 70 (70-7F)
+test1.ASM(147): error A2009: Symbol not defined: INT_TYPE
+ 00CE  E6 A1				OUT	INTB01,AL
+ 00D0  B0 02				MOV	AL,02H	; SETUP ICW3 - SLAVE LEVEL 2
+ 00D2  EB 00				JMP	$+2
+ 00D4  E6 A1				OUT	INTB01,AL
+ 00D6  EB 00				JMP	$+2	; I/O DELAY
+ 00D8  B0 01				MOV	AL,01H	; SETUP ICW4 - 8086 MODE, SLAVE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-9
+
+
+ 00DA  E6 A1				OUT	INTB01,AL
+ 00DC  EB 00				JMP	$+2	; WAIT STATE FOR I/O
+ 00DE  B0 FF				MOV	AL,0FFH	; MASK ALL INTERRUPTS OFF
+ 00E0  E6 A1				OUT	INTB01,AL
+				;--------------------------------------------------------------------------------
+				;  SHUTDOWN - RESTART							  :
+				;	RETURN CONTROL AFTER A SHUTDOWN COMMAND IS ISSUED				 
+				 :
+				;  DESCRIPTION								  :
+				;	A TEST IS MADE FOR THE SYSTEM FLAG BEING SET.  IF THE SYSTEM FLAG IS   :
+				;	SET, THE SHUTDOWN BYTE IN CMOS IS USED TO DETERMINE WHERE CONTROL IS	  :
+				;	RETURNED.							  :
+				;									  :
+				;	CMOS = 0   SOFT RESET OR UNEXPECTED SHUTDOWN					 
+				 :
+				;	CMOS = 1   SHUT DOWN AFTER MEMORY SIZE						 
+				 :
+				;	CMOS = 2   SHUT DOWN AFTER MEMORY TEST						 
+				 :
+				;	CMOS = 3   SHUT DOWN WITH MEMORY ERROR						 
+				 :
+				;	CMOS = 4   SHUT DOWN WITH BOOT LOADER REQUEST				  :
+				;	CMOS = 5   JMP DWORD REQUEST - (INTERRUPT CHIPS & 287 ARE INITIALIZED) :
+				;	CMOS = 6   PROTECTED MODE TEST3 PASSED						 
+				 :
+				;	CMOS = 7   PROTECTED MODE TEST3 FAILED						 
+				 :
+				;	CMOS = 8   PROTECTED MODE TEST1 FAILED						 
+				 :
+				;	CMOS = 9   BLOCK MOVE SHUTDOWN REQUEST						 
+				 :
+				;	CMOS = A   JMP DWORD REQUEST - (W/O INTERRUPT CHIPS INITIALIZED)	  :
+				;									  :
+				;	   NOTES:  RETURNS ARE MADE WITH INTERRUPTS AND NMI DISABLED.		  :
+				;		USER MUST RESTORE SS:SP (POST DEFAULT SET = 0000:0400),	  :
+				;		ENABLE NON-MASKABLE INTERRUPTS (NMI) WITH AN OUT TO		  :
+				;		PORT 70H WITH HIGH ORDER BIT OFF, AND THEN ISSUE A		  :
+				;		STI TO ENABLE INTERRUPTS. FOR SHUTDOWN (5) THE USER		  :
+				;		MUST ALSO RESTORE THE INTERRUPT MASK REGISTERS.		  :
+				;--------------------------------------------------------------------------------
+				
+				;-----	CHECK FROM WHERE
+ 00E2				C7C:
+ 00E2  B0 17				MOV	AL,CMOS_SHUT_DOWN+NMI	; CLEAR CMOS BYTE
+test1.ASM(188): error A2029: Division by 0 or overflow
+ 00E4  E6 70				OUT	CMOS_PORT,AL
+ 00E6  90				NOP		; I/0 DELAY
+ 00E7  2A C0				SUB	AL,AL	; SET BYTE TO 0
+ 00E9  E6 71				OUT	CMOS_DATA,AL
+ 00EB  86 E0				XCHG	AH,AL
+ 00ED  3C 0A				CMP	AL,0AH	; COMPARE WITH MAXIMUM TABLE ENTRIES
+ 00EF  77 34				JA	SHUT0	; SKIP TO POST IF GREATER THAN MAXIMUM
+ 00F1  BE 0105 R			MOV	SI,OFFSET BRANCH	; POINT TO THE START OF THE BRANCH T 
+ 00F4  03 F0				ADD	SI,AX
+ 00F6  03 F0				ADD	SI,AX	; POINT TO BRANCH ADDRESS
+ 00F8  2E: 8B 1C			MOV	BX,CS:[SI]	; MOVE BRANCH TO ADDRESS TO BX REGISTER
+				
+				;----- SET TEMPORARY STACK FOR POST
+ 00FB  B8 ---- R			MOV	AX,ABS0	; SET STACK SEGMENT TO ABS0 SEGMENT
+ 00FE  8E D0				MOV	SS,AX
+ 0100  BC 0400 R			MOV	SP,OFFSET @TOS	; SET STACK POINTER TO END OF VECTORS
+ 0103  FF E3				JMP	BX	; JUMP BACK TO RETURN ROUTINE
+				
+ 0105  0125 R			BRANCH:	DW	SHUT0	; NORMAL POWER UP/UNEXPECTED SHUTDOWN
+ 0107  09D1 R				DW	SHUT1	; SHUT DOWN AFTER MEMORY SIZE
+ 0109  0000 E				DW	SHUT2	; SHUT DOWN AFTER MEMORY TEST
+ 010B  0000 E				DW	SHUT3	; SHUT DOWN WITH MEMORY ERROR
+ 010D  0000 E				DW	SHUT4	; SHUT DOWN WITH BOOT LOADER REQUEST
+ 010F  011B R				DW	SHUT5	; JMP DWORD REQUEST WTTH INTERRUPT INIT
+ 0111  0000 E				DW	SHUT6	; PROTECTED MODE TEST7 PASSED
+ 0113  0000 E				DW	SHUT7	; PROTECTED MODE TEST7 FAILED
+ 0115  07CB R				DW	SHUT8	; PROTECTED MODE TEST1 FAILED
+ 0117  0000 E				DW	SHUT9	; BLOCK MOVE SHUTDOWN REQUEST
+ 0119  0121 R				DW	SHUTA	; JMP DWORD REQUEST (W/O INTERRUPT INIT)
+				
+				;----- @IO_ROM_INIT MUST BE INITIALIZED BY THE USER FOR VECTORED REQUESTS
+ 011B				SHUT5:
+ 011B  E4 60				IN	AL,PORT_A	; FLUSH THE KEYBOARD BUFFER
+ 011D  B0 20				MOV	AL,EOI	; FLUSH LAST TIMER REQUEST IF PENDING
+ 011F  E6 20				OUT	INTA00,AL	; TO ALLOW TIMER INTERRUPTS
+ 0121				SHUTA:
+ 0121  FF 2E 0067 R			JMP	DWORD PTR @IO_ROM_INIT	; FAR JUMP TO USER DEFINED LOCATION
+							;  AFTER SHUTDOWN TO REAL MODE CODE
+							;  WITH INTERRUPTS AND NMI DISABLED
+				;----- CHECKPOINT 01
+				
+ 0125				SHUT0:
+ 0125  B0 01				MOV	AL,01H	;	  <><><><><><><><><><><><>
+ 0127  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT	 01 <><>
+				
+				;----- READ/WRITE/TEST THE 80286 REGISTERS WITH ONE'S AND ZERO'S
+ 0129  B8 FFFF				MOV	AX,0FFFFH	; SETUP ONE*S PATTERN IN (AX)
+ 012C  F9				STC		; SET CARRY FLAG
+ 012D  73 20				JNC	ERR01	; GO IF NO CARRY
+ 012F				C8:
+ 012F  8E D8				MOV	DS,AX	; WRITE PATTERN TO ALL REGISTERS
+ 0131  8C DB				MOV	BX,DS
+ 0133  8E C3				MOV	ES,BX
+ 0135  8C C1				MOV	CX,ES
+ 0137  8E D1				MOV	SS,CX
+ 0139  8C D2				MOV	DX,SS
+ 013B  8B E2				MOV	SP,DX
+ 013D  8B EC				MOV	BP,SP
+ 013F  8B F5				MOV	SI,BP
+ 0141  8B FE				MOV	DI,SI
+ 0143  73 05				JNC	C9
+ 0145  33 C7				XOR	AX,DI	; PATTERN MAKE IT THROUGH ALL REGISTERS
+ 0147  75 06				JNZ	ERR01	; NO - GO TO ERROR ROUTINE
+ 0149  F8				CLC		; CLEAR CARRY FLAG
+				
+ 014A				C9:			; TST1A
+ 014A  0D 0001				OR	AX,01	; ZERO PATTERN MAKE IT THROUGH ?
+ 014D  74 01				JZ	C10A	; YES - GO TO NEXT TEST
+ 014F				ERR01:
+ 014F  F4				HLT		; HALT SYSTEM
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-10
+
+
+				
+				;----- INSURE THAT CMOS CLOCK INTERRUPTS ARE DISABLED
+ 0150				C10A:
+ 0150  B8 F413				MOV	AX,X*(CMOS_REG_B+NMI)	; ADDRESS TO BOTH (AH) AND (AL)
+test1.ASM(262): error A2029: Division by 0 or overflow
+ 0153  E6 70				OUT	CMOS_PORT,AL	; ADDRESS CMOS ALARM BYTE WITH NMI=OFF
+ 0155  90				NOP		; I/O DELAY
+ 0156  E4 71				IN	AL,CMOS_DATA	; GET THE CURRENT CONTROL REGISTER
+ 0158  24 07				AND	AL,00000111B	; CLEAR SET,PIE,AIE, AND SQWE BITS
+ 015A  86 C4				XCHG	AL,AH	; SAVE IT
+ 015C  E6 70				OUT	CMOS_PORT,AL
+ 015E  86 C4				XCHG	AL,AH
+ 0160  E6 71				OUT	CMOS_DATA,AL
+				
+ 0162  B0 14				MOV	AL,CMOS_REG_C+NMI	; ADDRESS CMOS FLAGS BYTE WITH NMI=OFF
+test1.ASM(272): error A2029: Division by 0 or overflow
+ 0164  90				NOP		; I/O DELAY
+ 0165  E6 70				OUT	CMOS_PORT,AL
+ 0167  90				NOP		; I/O DELAY
+ 0168  E4 71				IN	AL,CMOS_DATA	; READ STATUS TO CLEAR PENDING INTERRUPT
+				
+				;----- RESET VIDEO
+ 016A  B0 00				MOV	AL,0	; CLEAR DATA BYTE TO DISABLE VIDEO
+ 016C  BA 03D8				MOV	DX,03D8H	; GET COLOR MODE CONTROL PORT ADDRESS
+ 016F  EE				OUT	DX,AL	; DISABLE COLOR VIDEO
+ 0170  FE C0				INC	AL	; MONOCHROME MODE RESET MASK
+ 0172  B2 B8				MOV	DL,0B8H	; GET ADDRESS OF MONOCHROME MODE CONTROL
+ 0174  EE				OUT	DX,AL	; DISABLE B/W VIDEO, ENABLE HIGH RES
+ 0175  B2 BA				MOV	DL,0BAH	; ADDRESS OF MONOCHROME STATUS REGISTER
+ 0177  EC				IN	AL,DX	; READ STATUS TO DISABLE EGA VIDEO
+ 0178  B2 DA				MOV	DL,0DAH	; ADDRESS OF COLOR MODE STATUS REGISTER
+ 017A  EC				IN	AL,DX	; READ STATUS TO DISABLE EGA VIDEO
+ 017B  B0 00				MOV	AL,0	; SELECT ATTRIBUTE PALETTE REGISTER 0
+ 017D  B2 C0				MOV	DL,0C0H	; WRITE 0 TO ATTRIBUTE ADDRESS REGISTER
+ 017F  EE				OUT	DX,AL	; TO DISABLE EGA VIDEO
+ 0180  B0 FC				MOV	AL,11111100B	; DISABLE PARITY CHECKERS
+ 0182  E6 61				OUT	PORT_B,AL
+				
+				;------------------------------------------
+				; TEST.02		:
+				;	ROM CHECKSUM TEST 1	:
+				; DESCRIPTION		:
+				;	A CHECKSUM IS DONE FOR THE 32K	:
+				;	READ ONLY MEMORY MODULES (TWO)	:
+				;	CONTAINING POST, BASIC AND BIOS.	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 02
+ 0184  B0 02				MOV	AL,02H	;	  <><><><><><><><><><><><>
+ 0186  E6 80				OUT	MFG_PORT,AL	;	  <><>  CHECKPOINT 02 <><>
+					
+					ASSUME	SS:CODE
+ 0188  8C C8				MOV	AX,CS	; SETUP SS SEGMENT REGISTER
+ 018A  8E D0				MOV	SS,AX
+ 018C  8E D8				MOV	DS,AX	; SET UP DATA SEGMENT TO POINT TO
+ 018E  33 F6				XOR	SI,SI	; ROM ADDRESS START
+ 0190  33 DB				XOR	BX,BX	; CLEAR CHECK REGISTER
+ 0192  B5 80				MOV	CH,080H	; COUNT FOR 32K WORDS
+ 0194				C11:
+ 0194  AD				LODSW		; MOVE TWO BYTES INTO AX - SI=SI+2
+ 0195  02 DC				ADD	BL,AH	; ADD ODD BYTE AT DS:SI+1 TO CHECKSUM
+ 0197  02 D8				ADD	BL,AL	; ADD EVEN BYTE AT DS:SI TO CHECKSUM
+ 0199  E2 F9				LOOP	C11	; LOOP COUNT FOR 65K BYTES (32K WORDS)
+ 019B  72 02				JC	C11E	;  EXIT IF "LOOP* RESET THE CARRY FLAG
+							;  (NOTE: MODEL BYTE MUST NOT = ZERO)
+ 019D  74 01				JZ	C11A	; CONTINUE IF CHECKSUM VALID (ZERO)
+ 019F				C11E:
+ 019F  F4				HLT		; ELSE HALT IF CHECKSUM PROBLEM
+				
+				;------------------------------------------
+				; TEST.03		:
+				;	VERIFY CMOS SHUTDOWN BYTE	:
+				; DESCRIPTION		:
+				;	ROLLING BIT WRITTEN AND	:
+				;	VERIFIED AT SHUTDOWN ADDRESS.	:
+				;------------------------------------------
+				
+				;-----	VERIFY AND CLEAR SHUTDOWN FLAG
+ 01A0				C11A:
+ 01A0  B0 03				MOV	AL,03H	;	  <><><><><><><><><><><><>
+ 01A2  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  03 <><>
+				
+ 01A4  B9 0009				MOV	CX,09H	; LOOP COUNT
+ 01A7  B4 01				MOV	AH,1	; START WITH BIT 0
+ 01A9				C11B:
+ 01A9  B0 17				MOV	AL,CMOS_SHUT_DOWN+NMI
+test1.ASM(342): error A2029: Division by 0 or overflow
+ 01AB  E6 70				OUT	CMOS_PORT,AL
+ 01AD  8A C4				MOV	AL,AH	; OUTPUT ROLLING BIT
+ 01AF  E6 71				OUT	CMOS_DATA,AL
+ 01B1  B0 17				MOV	AL,CMOS_SHUT_DOWN+NMI	; READ CMOS
+test1.ASM(346): error A2029: Division by 0 or overflow
+ 01B3  90				NOP		; I/O DELAY
+ 01B4  E6 70				OUT	CMOS_PORT,AL
+ 01B6  90				NOP		; I/O DELAY
+ 01B7  E4 71				IN	AL,CMOS_DATA
+ 01B9  3A C4				CMP	AL,AH	; MUST BE THE SAME
+ 01BB  75 92				JNZ	ERR01	; ERROR IF NOT
+ 01BD  D0 D4				RCL	AH,1	; ROLL A BIT THROUGH SHUTDOWN BYTE
+ 01BF  E2 E8				LOOP	C11B	; LOOP TILL DONE
+				
+				;------------------------------------------
+				; TEST.04		:
+				;	8254 CHECK TIMER 1 ALL BITS ON	:
+				; DESCRIPTION		:
+				;	SET TIMER COUNT	:
+				;	CHECK THAT TIMER 1 ALL BITS ON	:
+				;------------------------------------------
+					ASSUME	DS:DATA
+ 01C1  B8 ---- R			MOV	AX,DATA	; SET DATA SEGMENT
+ 01C4  8E D8				MOV	DS,AX
+ 01C6  B0 04				MOV	AL,04H	;	  <><><><><><><><><><><><>
+ 01C8  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  04 <><>
+				
+				;-----	DISABLE DMA CONTROLLER
+							; (AL) ALREADY = 04H
+ 01CA  E6 08				OUT	DMA08,AL	; DISABLE DMA CONTROLLER 1
+ 01CC  E6 00				OUT	DMA18,AL	; DISABLE DMA CONTROLLER 2
+test1.ASM(372): error A2009: Symbol not defined: DMA18
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-11
+
+
+				
+				;-----	VERIFY THAT TIMER 1 FUNCTIONS OK
+				
+ 01CE  8B 16 0073 R			MOV	DX,@RESET_FLAG	; SAVE RESET FLAG WHILE REFRESH IS OFF
+ 01D2  B0 54				MOV	AL,54H	; SELECT TIMER 1,LSB,MODE 2
+ 01D4  E6 43				OUT	TIMER+3,AL
+ 01D6  EB 00				JMP	$+2	; I/O DELAY
+ 01D8  8A C1				MOV	AL,CL	; SET INITIAL TIMER COUNT TO 0
+ 01DA  E6 41				OUT	TIMER+1,AL
+ 01DC  B7 05				MOV	BH,05H	; LOOP COUNT
+ 01DE				C12:			; TIMER1_BITS_ON
+ 01DE  B0 40				MOV	AL,40H	; LATCH TIMER 1 COUNT
+ 01E0  EB 00				JMP	$+2	; I/O DELAY
+ 01E2  E6 43				OUT	TIMER+3,AL
+ 01E4  80 FB FF				CMP	BL,0FFH	; YES - SEE IF ALL BITS GO OFF
+ 01E7  74 0B				JE	C13	; TIMER1_BITS_OFF
+ 01E9  E4 41				IN	AL,TIMER+1	; READ TTMER 1 COUNT
+ 01EB  0A D8				OR	BL,AL	; ALL BITS ON IN TIMER
+ 01ED  E2 EF				LOOP	C12	; TIMER1_BITS_ON
+ 01EF  FE CF				DEC	BH
+ 01F1  75 EB				JNZ	C12	; TRY AGAIN
+ 01F3  F4				HLT		; TIMER 1 FAILURE, HALT SYSTEM
+							; TIMER1_BITS_OFF
+				
+				;------------------------------------------
+				; TEST.05		:
+				;	8254 CHECK TIMER 1 ALL BIT OFF	:
+				; DESCRIPTION		:
+				;	SET TIMER COUNT	:
+				;	CHECK THAT TIMER 1 ALL BITS OFF	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 05
+				
+ 01F4  B0 05			C13:	MOV	AL,05H	;	  <><><><><><><><><><><><>
+ 01F6  E6 80				OUT	MFG_PORT,AL	;	  <><>  CHECKPOINT 05 <><>
+				
+ 01F8  8A C3				MOV	AL,BL	; SET TIMER 1 COUNT
+ 01FA  2B C9				SUB	CX,CX
+ 01FC  E6 41				OUT	TIMER+1,AL
+ 01FE  B7 05				MOV	BH,05H	; SET TRY AGAIN COUNT
+ 0200				C14:			; TIMER_LOOP
+ 0200  B0 40				MOV	AL,40H	; LATCH TIMER 1 COUNT
+ 0202  E6 43				OUT	TIMER+3,AL
+ 0204  EB 00				JMP	$+2	; DELAY FOR TIMER
+ 0206  EB 00				JMP	$+2	; ADDED DELAY FOR TIMER
+ 0208  E4 41				IN	AL,TIMER+1	; READ TIMER 1 COUNT
+ 020A  22 D8				AND	BL,AL
+ 020C  74 07				JZ	C15	; GO TO WRAP DMA REGISTER TESTS
+ 020E  E2 F0				LOOP	C14	; TIMER_LOOP
+ 0210  FE CF				DEC	BH
+ 0212  75 EC				JNZ	C14
+ 0214  F4				HLT		; HALT SYSTEM
+				
+				;------------------------------------------
+				; TEST.06		:
+				;	8237 DMA 0 INITIALIZATION	:
+				;	CHANNEL REGISTER TEST	:
+				; DESCRIPTION		:
+				;	DISABLE THE 8237 DMA CONTROLLER.	:
+				;	WRITE/READ THE CURRENT ADDRESS	:
+				;	AND WORD COUNT REGISTERS FOR	:
+				;	ALL CHANNELS.	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 06
+				
+ 0215				C15:
+ 0215  B8 ---- R			MOV	AX,DATA	; SET DATA SEGMENT
+ 0218  8E D8				MOV 	DS,AX
+ 021A  B0 06				MOV	AL,06H	;	  <><><><><><><><><><><><>
+ 021C  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  06 <><>
+ 021E  89 16 0073 R			MOV	@RESET_FLAG,DX	; RESTORE SOFT RESET FLAG
+ 0222  E6 0D				OUT	DMA+0DH,AL	; SEND MASTER CLEAR TO DMA
+				
+				;-----	WRAP DMA 0 CHANNEL ADDRESS AND COUNT REGISTERS
+				
+ 0224  B0 FF				MOV	AL,0FFH	; WRITE PATTERN *FF* TO ALL REGISTERS
+ 0226  8A D8			C16:	MOV	BL,AL	; SAVE PATTERN FOR COMPARE
+ 0228  8A F8				MOV	BH,AL
+ 022A  B9 0008				MOV	CX,8	; SETUP LOOP COUNT
+ 022D  BA 0000				MOV	DX,DMA	; SETUP I/O PORT ADDRESS OF REGISTER
+ 0230  EE			C17:	OUT	DX,AL	; WRITE PATTERN TO REGISTER, LSB
+ 0231  EB 00				JMP	$+2	; I/O DELAY
+ 0233  EE				OUT	DX,AL	; MSB OF 16 BIT REGISTER
+ 0234  B0 01				MOV	AL,01H	; AL TO ANOTHER PATTERN BEFORE READ
+ 0236  EB 00				JMP	$+2	; I/O DELAY
+ 0238  EC				IN	AL,DX	; READ 16-BIT DMA CH REG, LSB 2ST DMA
+ 0239  EB 00				JMP	$+2	; I/O DELAY
+ 023B  8A E0				MOV	AH,AL	; SAVE LSB OF 16-BIT REGISTER
+ 023D  EC				IN	AL,DX	; READ MSB OF DMA CHANNEL REGISTER
+ 023E  3B C0				CMP	AX,AX	; PATTERN READ AS WRITTEN?
+ 0240  74 01				JE	C18	; YES	- CHECK NEXT REGISTER
+ 0242  F4				HLT		; NO - HALT THE SYSTEM
+ 0243				C18:			; NXT_DMA_CH
+ 0243  42				INC	DX	; SET I/O PORT TO NEXT CHANNEL REGISTER
+ 0244  E2 EA				LOOP	C17	; WRITE PATTERN TO NEXT REGISTER
+ 0246  FE C0				INC	AL	; SET PATTERN TO 0
+ 0248  74 DC				JZ	C16	; YES CONTINUE
+				
+				;-----	WRITE DMA WITH 55 PATTERN
+				
+ 024A  80 FB 55				CMP	BL,055H	; CHECK IF "55" PATTERN DONE
+ 024D  74 09				JZ	C19	; GO IF YES
+ 024F  80 FB AA				CMP	BL,0AAH	; CHECK IF "AA" PATTERN DONE
+ 0252  74 08				JZ	C20	; GO IF YES
+ 0254  B0 55				MOV	AL,055H
+ 0256  EB CE				JMP	C16
+				
+				;-----	WRITE DWA WITH AA PATTERN
+ 0258  B0 AA			C19:	MOV	AL,0AAH
+ 025A  EB CA				JMP	C16
+				
+				;------------------------------------------
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-12
+
+
+				; TEST.07		:
+				;	8237 DMA 1 INITIALIZATION	:
+				;	CHANNEL REGISTER TEST	:
+				; DESCRIPTION		:
+				;	DISABLE 8237 DMA CONTROLLER 1.	:
+				;	WRITE/READ THE CURRENT DMA 1	:
+				;	ADDRESS AND WORD COUNT	:
+				;	REGISTERS FOR ALL CHANNELS.	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 07 - DMA 1
+ 025C  B0 07			C20:	MOV	AL,07H	;	  <><><><><><><><><><><><>
+ 025E  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  07 <><>
+ 0260  E6 C0				OUT	DMA1+0D*2,AL	; SEND MASTER CLEAR TO 2ND DMA
+				
+				;----- 	WRAP DMA 1 CHANNEL ADDRESS AND COUNT REGISTERS
+				
+ 0262  A0 0000 U			MOV	AL,OFFH	; WRITE PATTERN FF TO ALL REGISTERS
+test1.ASM(504): error A2009: Symbol not defined: OFFH
+ 0265  8A D8			C16A:	MOV	BL,AL	; SAVE PATTERN FOR COMPARE
+ 0267  A2 0000 U			MOV	SH,AL
+test1.ASM(506): error A2009: Symbol not defined: SH
+ 026A  B9 0008				MOV	CX,8	; SETUP LOOP COUNT
+ 026D  8B 16 0000 U			MOV	DX,OMAL	; SETUP I/O PORT ADDRESS OF REGISTER
+test1.ASM(508): error A2009: Symbol not defined: OMAL
+ 0271  EE			C17A:	OUT	DX,AL	; WRITE PATTERN TO REGISTER, LSB
+ 0272  EB 00				JMP	$+2	; I/O DELAY
+ 0274  EE				OUT	DX,AL	; MSB OF 16 BIT REGISTER
+ 0275  A0 0000 U			MOV	AL,OIH	; AL TO ANOTHER PAT BEFORE RD
+test1.ASM(512): error A2009: Symbol not defined: OIH
+ 0278  EB 00				JMP	$+2	; I/O DELAY
+ 027A  EC				IN	AL,DX	; READ 16-BIT DMA CH REG, LSB 2ST DMA
+ 027B  EB 00				JMP	$+2	; I/O DELAY
+ 027D  8A E0				MOV	AH,AL	; SAVE LSB OF 16-BIT REGISTER
+ 027F  EC				IN	AL,DX	; READ MSB OF DMA CH REGISTER
+ 0280  39 06 0000 U			CMP	SX,AX	; PATTERN READ AS WRITTEN?
+test1.ASM(518): error A2009: Symbol not defined: SX
+ 0284  74 01				JE	C18A	; YES - CHECK NEXT REGISTER
+ 0286  F4				HLT		; NO - HALT THE SYSTEM
+ 0287				C18A:			; NXT DMA CH
+ 0287  83 C2 02				ADD	DX,2	; SET I/O PORT TO NEXT CHANNEL REGISTER
+ 028A  E2 E5				LOOP	C17A	; WRITE PATTERN TO NEXT REGISTER
+ 028C  FE C0				INC	AL	; SET PATTERN TO 0
+ 028E  74 D5				JZ	C16A	; YES CONTINUE
+				
+				;-----	WRITE DMA WITH 55 PATTERN
+				
+ 0290  80 FB 55				CMP	BL,55H	; CHECK IF 55 PATTERN DONE
+ 0293  74 09				JZ	C20A	; GO IF YES
+ 0295  80 FB AA				CMP	BL,0AAH	; CHECK IF AA PATTERN DONE
+ 0298  74 08				JZ	C21	; GO IF YES
+ 029A  B0 55				MOV	AL,55H
+ 029C  EB C7				JMP	C16A
+				
+				;-----	WRITE DMA WITH AA PATTERN
+ 029E  B0 AA			C20A:	MOV	AL,0AAH
+ 02A0  EB C3				JMP 	C16A
+				
+				;-----	INITIALIZE AND START MEMORY REFRESH
+ 02A2				C21:
+ 02A2  8B 1E 0073 R			MOV	BX,@RESET_FLAG	; GET THE RESET FLAG
+ 02A6  A3 0000 U			MOV	@EQUIP FLAG,AX	; DO A DUMMY MEMORY WRITE BEFORE REFRESH
+test1.ASM(543): error A2009: Symbol not defined: @EQUIP
+ 02A9  B0 12				MOV	AL,18	; START REFRESH TIMER
+ 02AB  E6 41				OUT	TIMER+1,AL
+				
+				;-----	SET DMA COMMAND
+ 02AD  2A C0				SUB	AL,AL	; DACK SENSE LOW,DREQ SENSE HIGH
+ 02AF  E6 08				OUT	DMA+8,AL	; LATE WRITE, FIXED PRIORITY, NORMAL
+							; TIMING, CONTROLLER ENABLE, CH0 ADDRESS
+							; HOLD DISABLE, MEMORY TO MEMORY DISABLE
+ 02B1  E6 00				OUT	DMA18,AL	; SAME TO SECOND CONTROLLER
+test1.ASM(552): error A2009: Symbol not defined: DMA18
+				
+				;-----	MODE SET ALL DMA CHANNELS
+				
+ 02B3  B0 40				MOV	AL,40H	; SET MODE FOR CHANNEL 0
+ 02B5  E6 0B				OUT	DMA+0BH,AL
+ 02B7  B0 C0				MOV	AL,0C0H	; SET CASCADE MODE ON CHANNEL 4
+ 02B9  E6 06				OUT	DMA18+06H,AL
+test1.ASM(559): error A2009: Symbol not defined: DMA18
+ 02BB  EB 00				JMP	$+2	; I/O DELAY
+ 02BD  B0 41				MOV	AL,41H	; SET MODE FOR CHANNEL 1
+ 02BF  E6 0B				OUT	DMA+0BH,AL
+ 02C1  E6 06				OUT	DMA18+06H,AL	; SET MODE FOR CHANNEL 5
+test1.ASM(563): error A2009: Symbol not defined: DMA18
+ 02C3  EB 00				JMP	$+2	; I/O DELAY
+ 02C5  B0 42				MOV	AL,42H	; SET MODE FOR CHANNEL 2
+ 02C7  E6 0B				OUT	DMA+0BH,AL
+ 02C9  E6 06				OUT	DMA18+06H,AL	; SET MODE FOR CHANNEL 6
+test1.ASM(567): error A2009: Symbol not defined: DMA18
+ 02CB  EB 00				JMP	$+2	; I/O DELAY
+ 02CD  B0 43				MOV	AL,43H	; SET MODE FOR CHANNEL 3
+ 02CF  E6 0B				OUT	DMA+0BH,AL
+ 02D1  E6 06				OUT	DMA18+06H,AL	; SET MODE FOR CHANNEL 7
+test1.ASM(571): error A2009: Symbol not defined: DMA18
+				
+				;----- 	RESTORE RESET FLAG
+ 02D3  89 1E 0073 R			MOV 	@RESET_FLAG,BX
+				
+				;------------------------------------------
+				; TEST.08 		:
+				;	DMA PAGE REGISTER TEST	:
+				; DESCRIPTION		:
+				;	WRITE/READ ALL PAGE REGISTERS	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 08
+ 02D7  B0 08				MOV	AL,08H	;	  <><><><><><><><><><><><>
+ 02D9  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  08 <><>
+ 02DB  2A C0				SUB	AL,AL
+ 02DD  8B 16 0000 U			MOV	DX,DMA_ PAGE
+test1.ASM(587): error A2009: Symbol not defined: DMA_
+ 02E1  B9 0985				MOV	CX,0FFA	; DO ALL DATA PATTERNS
+test1.ASM(588): error A2107: Non-digit in number
+ 02E4  EE			C22A:	OUT	DX,AL
+ 02E5  42				INC	DX
+ 02E6  FE C0				INC	AL
+ 02E8  81 FA 008F			CMP	DX,8FH	; TEST DMA PAGES 81 THROUGH 8EH
+ 02EC  75 F6				JNZ	C22A
+ 02EE  86 E0				XCHG	AH,AL	; SAVE CURRENT DATA PATTERN
+ 02F0  FE CC				DEC	AH	; CHECK LAST WRITTEN
+ 02F2  4A				DEC	DX
+ 02F3  2A C0			C22B:	SUB	AL,AL	; CHANGE DATA BEFORE READ
+ 02F5  EC				IN	AL,DX
+ 02F6  3A C4				CMP	AL,AH	; DATA AS WRITTEN?
+ 02F8  75 31				JNZ	C26	; GO ERROR HALT IF NOT
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-13
+
+
+ 02FA  FE CC				DEC	AH
+ 02FC  4A				DEC	DX
+ 02FD  81 FA 0080			CMP	DX,MFG_PORT	; CONTINUE TILL PORT 80
+ 0301  75 F0				JNZ	C22B
+ 0303  FE C4				INC	AH	; NEXT PATTERN TO RIPPLE
+ 0305  8A C4				MOV	AL,AH
+ 0307  E2 DB				LOOP	C22A
+				
+				;-----	TEST LAST DMA PAGE REGISTER (USED FOR ADDRESS LINES DURING REFRESH)
+ 0309  B0 CC				MOV	AL,0CCH	; WRITE AN CC TO PAGE REGISTERS
+ 030B  BA 008F			C22:	MOV	DX,LAST_DMA_PAGE
+ 030E  8A E0				MOV	AH,AL	; SAVE THE DATA PATTERN
+ 0310  EE				OUT	DX,AL	; OUTPUT PAGE REGISTER
+				
+				;-----	VERIFY PAGE REGISTER 8F
+				
+ 0311  2A C0				SUB	AL,AL	; CHANGE DATA PATTERN BEFORE READ
+ 0313  EC				IN	AL,DX	; GET THE DATA FROM PAGE REGISTER
+ 0314  3A C4				CMP	AL,AH
+ 0316  75 13				JNZ	C26	; GO IF ERROR
+ 0318  3A 26 00D1 U			CMP	AH,0CCM
+test1.ASM(621): error A2107: Non-digit in number
+ 031C  75 04				JNZ	C25	; GO IF ERROR
+ 031E  B0 33				MOV	AL,033H	; SET UP DATA PATTERN OF 33
+ 0320  EB E9				JMP	C22	; DO DATA 33
+ 0322				C25:
+ 0322  80 FC 00				CMP	AH,0	; CHECK DONE
+ 0325  74 05				JZ	C27	; GO IF YES
+ 0327  2A C0				SUB	AL,AL	; SET UP FOR DATA PATTERN 00
+ 0329  EB E0				JMP	C22	; DO DATA 0
+				
+				;-----	ERROR HALT
+ 032B				C26:
+ 032B  F4				HLT		; HALT SYSTEM
+				
+				;------------------------------------------
+				; TEST.09		:
+				;	STORAGE REFRESH TEST	:
+				; DESCRIPTION		:
+				;	VERIFY REFRESH IS OCCURRING	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 09 - TEST MEMORY REFRESH
+ 032C				C27:
+ 032C  B0 09				MOV	AL,09H	; 	  <><><><><><><><><><><><>
+ 032E  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  09 <><>
+ 0330  2B C9				SUB	CX,CX
+ 0332				C28:
+ 0332  E4 61				IN	AL,PORT_B	; INSURE REFRESH BIT IS TOGGLING
+ 0334  A8 10				TEST	AL,REFRESH_BIT
+ 0336  E1 FA				LOOPZ	C28	; INSURE REFRESH IS OFF
+ 0338  E3 F1				JCXZ	C26	; ERROR HALT IF TIMEOUT
+ 033A				C29:
+ 033A  E4 61				IN	AL,PORT_B
+ 033C  84 06 0000 U			TEST	AL,REFRFSH_BIT	; INSURE REFRESH IS ON
+test1.ASM(654): error A2009: Symbol not defined: REFRFSH_BIT
+ 0340  E0 F8				LOOPNZ	C29
+ 0342  E3 E7				JCXZ	C26	; ERROR HALT IF NO REFRESH BIT
+				
+				;------------------------------------------
+				; TEST.10		:
+				;	8042 INTERFACE TEST	:
+				;	READ CONFIGURATION JUMPERS	:
+				; DESCRIPTION		:
+				;	ISSUE A SELF TEST TO THE 8042.	:
+				;	INSURE A 55H IS RECEIVED.	:
+				;	READ MANUFACTURING AND DISPLAY	:
+				;	JUMPERS AND SAVE IN MFG_TEST.	:
+				;------------------------------------------
+				
+				;-----	CHECKPOINT 0A
+				
+ 0344  B0 0A				MOV 	AL,0AH	;	  <><><><><><><><><><><><>
+ 0346  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  0A <><>
+				
+				;-----	SOFT RESET (HANDLE ALL POSSIBLE CONDITIONS)
+				
+ 0348  2B C9				SUB	CX,CX	; 100 MILLISECONDS FOR THIS LOOP
+ 034A  E4 64			TST1:	IN	AL,STATUS_PORT	; CHECK FOR INPUT BUFFER FULL
+ 034C  8A E0				MOV	AH,AL
+ 034E  F6 C5 00				TEST	AH OUT_BUF_FULL
+test1.ASM(679): error A2028: Operator expected
+ 0351  74 02				JZ	TST2	; GO IF NOT
+ 0353  E4 60				IN	AL,PORT_A	; FLUSH
+ 0355  F6 C4 02			TST2:	TEST	AH,INPT_BUF_FULL	; IS THE OUTPUT BUFFER ALSO FULL?
+ 0358  E0 F0				LOOPNZ	TST1	; TRY AGAIN
+ 035A  74 01				JZ	TST4	; CONTINUE IF OK
+				
+ 035C  F4			ERR0:	HLT		; HALT SYSTEM IF BUFFER FULL
+				
+				;-----	ISSUE A RESET TO THE 8042
+				
+ 035D  B0 0B			TST4:	MOV	AL,0BH	;	  <><><><><><><><><><><><>
+ 035F  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  0B <><>
+ 0361  B0 AA				MOV	AL,SELF_TEST	; SELF TEST COMMAND
+ 0363  BC 0402 R			MOV	SP,OFFSET C8042A	; SET RETURN ADDRESS
+ 0366  EB 40				JMP	SHORT C8042
+ 0368  A8 01			TST4_B:	TEST	AL,OUT_BUF_FULL	; IS THE OUTPUT BUFFER FULL?
+ 036A  74 02				JZ	TST4_A	; GO IF NOT
+ 036C  E4 60				IN	AL,PORT_A	; FLUSH
+ 036E  BC 0404 R		TST4_A:	MOV	SP,OFFSET OBF_42A	; SET RETURN ADDRESS
+ 0371  EB 41				JMP	SHORT OBF_42	; GO WAIT FOR BUFFER
+ 0373  E4 60			TST4_C:	IN	AL,PORT_A	; GET THE ENDING RESPONSE
+ 0375  3C 55				CMP	AL,55H
+				
+ 0377  B0 0C				MOV	AL,0CH	;	  <><><><><><><><><><><><>
+ 0379  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  OC <><>
+				
+ 037B  75 DF				JNZ	ERR0	; GO IF NOT OK
+				
+				;-----	GET THE SWITCH SETTINGS
+ 037D  B0 C0				MOV	AL,READ_8042_INPUT	; READ INPUT COMMAND
+					MOV	SP:OFFSET C8042C	; SET RETURN ADDRESS
+test1.ASM(710): error A2027: Operand expected
+ 037F  EB 27				JMP	SHORT C8042	; ISSUE COMMAND
+ 0387  BC 040A R		E30B:	MOV	SP,OFFSET OBF_42B	; SET RETURN ADDRESS
+test1.ASM(712): error A2006: Phase error between passes
+ 038A  EB 28				JMP	SHORT OBF_42	; GO WAIT FOR RESPONSE
+ 038C  E4 60			E30C:	IN	AL,PORT_A	; GET THE SWITCH
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-14
+
+
+ 038E  E6 82				OUT	DMA_PAGE+1,AL	; SAVE TEMPORARY
+				
+				;-----	WRITE BYTE 0 OF 8042 MEMORY
+				
+ 0390  B0 60				MOV	AL,WRITE_8042_LOC	; WRITE BYTE COMMAND
+					MOV	OFFSET C8042B	; SET RETURN ADDRESS
+test1.ASM(720): error A2056: Immediate mode illegal
+ 0392  EB 14				JMP	SHORT C8042	; ISSUE THE COMMAND
+ 039A  74 06			TST4_D:	JZ	TST4_D1	; CONTINUE IF COMMAND ACCEPTED
+test1.ASM(722): error A2006: Phase error between passes
+				
+ 039C  A0 0000 U			MOV	AL,ODH	;	  <><><><><><><><><><><><>
+test1.ASM(724): error A2009: Symbol not defined: ODH
+ 039F  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  0D <><>
+ 03A1  F4				HLT
+ 03A2				TST4_D1:
+ 03A2  B0 5D				MOV	AL,5DH	; ENABLE OUTPUT BUFFER FULL INTERRUPT,
+ 03A4  E6 60				OUT	PORT_A,AL	; DISABLE KEYBOARD, SET SYSTEM FLAG,
+ 03A6  EB 1F				JMP	SHORT E30A	; PC 1 COMPATIBILITY, INHIBIT OVERRIDE
+				
+				;-----	ISSUE THE COMMAND TO THE 8042
+				
+ 03A8  FA			C8042:	CLI		; NO INTERRUPTS ALLOWED
+ 03A9  E6 64				OUT	STATUS_PORT,AL	; SEND COMMAND IN AL REGISTER
+				
+ 03AB  2B C9				SUB	CX,CX	; LOOP COUNT
+ 03AD  E4 64			C42_1:	IN	AL,STATUS_PORT	; WAIT FOR THE COMMAND ACCEPTED
+ 03AF  A8 02				TEST	AL,INPT_BUF_FULL
+ 03B1  E0 FA				LOOPNZ	C42_1
+ 03B3  C3				RET
+				
+				;-----	WAIT FOR 8042 RESPONSE
+				
+ 03B4  2B C9			OBF_42: 	SUB	CX,CX
+ 03B6  B3 06				MOV	BL,6	; 200MS/PER LOOP * 6 =1200 MS +
+ 03B8  E4 64			C42_2:	IN	AL,STATUS_PORT	; CHECK FOR RESPONSE
+ 03BA  84 06 0000 U			TEST	AL,OUT_BUP_FULL
+test1.ASM(748): error A2009: Symbol not defined: OUT_BUP_FULL
+ 03BE  75 06				JNZ	C42_3	; GO IF RESPONSE
+ 03C0  E2 F6				LOOP	C42_2	; TRY AGAIN
+ 03C2  FE CB				DEC	BL	; DECREMENT LOOP COUNT
+ 03C4  75 F2				JNZ	C42_2
+ 03C6  C3			C42_3:	RET		; RETURN TO CALLER
+				
+				;------------------------------------------
+				; TEST.11 		:
+				;	BASE 64K READ/WRITE MEMORY TEST	:
+				; DESCRIPTION 		:
+				;	WRITE/READ/VERIFY DATA PATTERNS	:
+				;	AA,55,FF,01, AND 00 TO 1 ST 64K	:
+				;	OF STORAGE, VERIFY STORAGE 	:
+				;	ADDRESSABILITY.	;
+				;------------------------------------------
+				
+				;----- FILL MEMORY WITH DATA
+				
+ 03C7  B0 0E			E30A:	MOV	AL,0EH	;	  <><><><><><><><><><><><>
+ 03C9  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT	 0E <><>
+				
+ 03CB  B8 ---- R			MOV	AX,DATA	; GET THE SYSTEM SEGMENT
+ 03CE  8E D8				MOV	DS,AX	;  OF DATA
+ 03D0  8B 16 0073 R			MOV	DX,@RESET_FLAG	; SAVE @RESET FLAG IN BX
+ 03D4  FC				CLD		; SET DIRECTION FLAG TO INCREMENT
+ 03D5  B9 8000				MOV	CX,2000H*4	; SET FOR 32K WORDS
+ 03D8  2B FF				SUB	DI,DI	; FIRST 16K
+ 03DA  2B F6				SUB	SI,SI
+ 03DC  2B C0				SUB	AX,AX
+ 03DE  8E D8				MOV	DS,AX
+ 03E0  8E C0				MOV	ES,AX
+ 03E2  81 FB 1234			CMP	BX,1234H	; WARM START?
+ 03E6  75 03				JNZ	E30A_0	; GO IF NOT
+ 03E8  E9 05A6 R			JMP	CLR_STG
+				
+				;-----	GET THE INPUT BUFFER (SWITCH SETTINGS)
+				
+ 03EB  B0 0F			E30A_0:	MOV	AL,0FH	;	  <><><><><><><><><><><><>
+ 03ED  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  0F <><>
+ 03EF  B0 80				MOV	AL,PARITY_CHECK	; SET BASE MEMORY PARITY
+ 03F1  E6 87				OUT	DMA_PAGE+6,AL	; USE AS TEMPORARY SAVE
+ 03F3  BC 0400 R			MOV	SP,OFFSET C2	; SET RETURN ADDRESS
+ 03F6  E9 0000 E			JMP	STGTST_CNT
+ 03F9  8B D8			C30:	MOV	BX,AX	; SAVE FAILING BIT PATTERN
+ 03FB  75 0F				JNZ	C31
+ 03FD  E9 05B1 R			JMP	C33	; STORAGE OK, CONTINUE
+				
+				;-----	TEMPORARY STACK FOR POST ROUTINES
+				
+ 0400  03F9 R			C2	DW	C30
+ 0402  0368 R			C8042A	DW	TST4_B
+ 0404  0373 R			OBF_42A	DW	TST4_C
+ 0406  039A R			C8042B	DW	TST4_D
+ 0408  0387 R			C8042C	DW	E30B
+ 040A  038C R			OBF_42B	DW	E30C
+				
+				;------------------------------------------
+				; BASE 64K STORAGE FAILURE	
+				;   DISPLAY THE CHECKPOINT IMFG CHECKPOINT)
+				;     AND XOR EXPECTED WITH READ IN MFG_PORT
+				;   DISPLAY CHECKPOINT IN MFG_PORT+3
+				;   DISPLAY XOR'D DATA HIGH BYTE MFG_PORT+1
+				;     LOW BYTE IN MFG_PORT+2
+				;   A READ/WRITE SCOPE LOOP OF THE FIRST
+				;   WORD FOR POSSIBLE ADDRESS LINE FAILURES
+				;-------------------------------------------
+				
+ 040C				C31:
+ 040C  8A C4				MOV	AL,AH	; SAVE HIGH BYTE
+ 040E  E6 7F				OUT	MFG_PORT-1,AL
+ 0410  B0 51				MOV	AL,81-	; SavE LOW BYTE
+test1.ASM(819): error A2027: Operand expected
+ 0412  E6 02				OUT	MFC_PCRT-2,AL
+test1.ASM(820): error A2009: Symbol not defined: MFC_PCRT
+				
+				;-----	CHECK FOR VIDEO ROM
+ 0414  B9 C000				MOV	CX,0C000H	; START OF I/O ROM
+ 0417  BC 0000			M1:	MOV	DS'CX	; POINT TO SEGMENT
+test1.ASM(824): error A2112: Unexpected end of line
+ 041A  2B DB				SUB	BX,BX	; GET THE FIRST 2 LOCATIONS
+ 041C  A1 0002 U			MOV	AX'[BX]
+test1.ASM(826): error A2112: Unexpected end of line
+ 041F  EB 00				JMP	$+2	; BUS SETTLE
+ 0421  3D AA55				CMP	AX,0AA55H	; IS THE VIDEO ROM PRESENT?
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-15
+
+
+ 0424  6A 0000				POP
+test1.ASM(829): warning A4101: Missing data; zero assumed
+ 0427  74 0C				JZ	Z5	; GO IF YES
+ 0429  81 C1 0080			ADD	CX,080H	; POINT TO NEXT 2K BLOCK
+ 042D  81 F9 C800			CMP	CX,0C800H	; TOP OF VIDEO ROM AREA YET?
+ 0431  7C E4				JL	M1	; TRY AGAIN
+ 0433  23 C9				AND	CX,CX	; SET NON ZERO FLAG
+ 0435				Z5:
+ 0435  75 03				JNZ	C32	; GO IF NOT
+ 0437  E9 0532 R			JMP	C31_0	; BYPASS ERROR DISPLAY IF VIDEO ROM
+				
+				;-------------------------------------------------------
+				; SET VIDEO MODE TO DISPLAY MEMORY ERROR
+				;	THIS ROUTINE INITIALIZES THE ATTACHMENT TO
+				;	TO DISPLAY FIRST 64K STORAGE ERRORS.
+				; BOTH COLOR AND MONOCHROME ATTACHMENTS ARE INITIALIZED.
+				;-------------------------------------------------------
+				
+				;-----	INITIALIZE COLOR/MONOCHROME
+				
+ 043A  BA 03D8			C32:	MOV	DX,3D8H	; CONTROL REGISTER ADDRESS OF COLOR CARD
+ 043D  2A C0				SUB	AL,AL	; MODE SET
+ 043F  EE				OUT	DX,AL
+				
+ 0440  BA 03B8				MOV	DX,03B8H	; CONTROL REGISTER ADDRESS OF B/W CARD
+ 0443  B0 01				MOV	AL,1	; MODE SET FOR CARD
+ 0445  EE				OUT	DX,AL	; RESET VIDEO
+ 0446  83 EA 04				SUB	DX,4	; BACK TO BASE REGISTER
+				
+ = 0010				M4	EQU	10H
+				
+ 0449  BB 0030 E			MOV	BX,OFFSET VIDEO_PARMS+M4*3  ; POINT TO VIDEO PARAMETERS
+					ASSUME	DS:COOE
+test1.ASM(860): error A2009: Symbol not defined: COOE
+ 044C  B9 0010			Z_2:	MOV	CX,M4	; COUNT OF MONOCHROME VIDEO PARAMETERS
+				
+				;-----	BX POINTS TO CORRECT ROW OF INITIALIZATION TABLE
+				
+ 044F  32 E4				XOR	AH,AH 	; AH IS REGISTER NUMBER DURING LOOP
+				
+				;-----	LOOP THROUGH TABLE, OUTPUTTING REGISTER ADDRESS, THEN VALUE FROM TABLE
+				
+ 0451  8A C4			M10:	MOV	AL,AH	; GET 6845 REGISTER NUMBER
+ 0453  EE				OUT	DX,AL
+ 0454  42				INC	DX	; POINT TO DATA PORT
+ 0455  FE C4				INC	AH	; NEXT REGISTER VALUE
+ 0457  2E: 8A 07			MOV	AL,CS:[BX]	; GET TABLE VALUE
+ 045A  EE				OUT	DX,AL	; OUT TO CHIP
+ 045B  43				INC	BX	; NEXT IN TABLE
+ 045C  4A				DEC	DX	; BACK TO POINTER REGISTER
+ 045D  E2 F2				LOOP	M10	; DO THE WHOLE TABLE
+ 045F  8A E2				MOV	AH,DL	; CHECK IF COLOR CARD DONE
+ 0461  80 E4 F0				AND	AH,0F0H	; STRIP UNWANTED BITS
+ 0464  80 FC D0				CMP	AH,0D0H	; IS IT THE COLOR CARD7
+ 0467  74 08				JZ	Z_3	; CONTINUE IF COLOR
+ 0469  BB 0000 E			MOV	BX,OFFSET VIDEO_PARMS	; POINT TO VIDEO PARAMETERS
+ 046C  BA 03D4				MOV	DX,3D4H	; COLOR BASE
+ 046F  EB DB				JMP	Z_2	; CONTINUE
+				
+				;-----	FILL REGEN AREA WITH BLANK
+				
+ 0471  33 FF			Z_3:	XOR	DI,DI	; SET UP POINTER FOR REGEN
+ 0473  B8 B000				MOV	AX,0B000H	; SET UP ES TO VIDEO REGEN
+ 0476  8E C0				MOV	ES,AX
+				
+ 0478  B9 0800				MOV	CX,2048	; NUMBER OF WORDS IN MONOCHROME CARD
+ 047B  B8 0720				MOV	AX,' '+7*H	; FILL CHARACTER FOR ALPHA - ATTRIBUTE
+ 047E  F3/ AB				REP	STOSW	; FILL THE REGEN BUFFER WITH BLANKS
+				
+ 0480  33 FF				XOR	DI,DI	; CLEAR COLOR VIDEO BUFFER MEMORY
+ 0482  B8 B800				MOV	AX,0B800H	; SET LIP ES TO COLOR VIDEO MEMORY
+ 0485  8E C3				MOV	ES,BX
+ 0487  B9 2000				MOV	CX,8192
+ 048A  F3/ AB				REP	STOSW	; FILL WITH BLANKS
+				
+				;-----	ENABLE VIDEO AND CORRECT PORT SETTING
+				
+ 048C  BA 03B8				MOV	DX,3B8H
+ 048F  B0 29				MOV	AL,29H
+ 0491  EE				OUT	DX,AL	; SET VIDEO ENABLE PORT
+				
+				;-----	SET UP OVERSCAN REGISTER
+				
+ 0492  42				INC	DX	; SET OVERSCAN PORT TO A DEFAULT
+ 0493  B0 30				MOV	AL,30H	; VALUE 30H FOR ALL MODES EXCEPT 640X200
+ 0495  EE				OUT	DX,AL	; OUTPUT THE CORRECT VALUE TO 3D9 PORT
+				
+				;-----	ENABLE COLOR VIDEO AND CORRECT PORT SETTING
+ 0496  BA 03D8				MOV	DX,3D8H
+ 0499  B0 28				MOV	AL,28H
+ 049B  EE				OUT	DX,AL	; SET VIDEO ENABLE PORT
+				
+				;-----	SET UP OVERSCAN REGISTER
+				
+ 049C  42				INC	DX	; SET OYERSCAN PORT TO A DEFAULT
+ 049D  B0 30				MOV	AL,30H	; VALUE 30H FOR ALL MODES EXCEPT 640X200
+ 049F  EE				OUT	DX,AL	; OUTPUT THE CORRECT VALUE TO 3D9 PORT
+				
+				;-----	DISPLAY FAILING CHECKPOINT AND
+				
+ 04A0  8C C8				MOV	AX,CS	; SET STACK SEGMENT TO CODE SEGMENT
+ 04A2  8E D0				MOV	SS,AX
+				
+ 04A4  C7 06 0000 U B000		MOV 	EX,0B000H
+test1.ASM(930): error A2009: Symbol not defined: EX
+ 04AA  8E 1E 0000 U			MOV	DS,EX	; SET DS TO 8/W DISPLAY BUFFER
+test1.ASM(931): error A2009: Symbol not defined: EX
+				
+ 04AE  B0 30			Z_0:	MOV	AL,'0'	; DISPLAY BANK 000000
+ 04B0  B9 0006				MOV	CX,6
+ 04B3  2B FF				SUB	DI,DI	; START AT 0
+ 04B5  88 05			Z:	MOV	[DI],AL	; WRITE TO DISPLAY REGEN BUFFER
+ 04B7  47				INC	DI	; POINT TO NEXT POSITION
+ 04B8  47				INC	DI
+ 04B9  E2 FA				LOOP	Z
+				
+ 04BB  80 FF B8				CMP	BH,0B8H	; CHECK THAT COLOR BUFFER WRITTEN
+ 04BE  74 10				JZ	Z_1
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-16
+
+
+ 04C0  2B FF				SUB	DI,DI	; POINT TO START OF BUFFER
+				
+ 04C2  B7 B0				MOV	BH,0B0H
+ 04C4  8E C3				MOV	ES,BX	; ES = MONOCHROME
+ 04C6  C7 06 0000 U 00B8		MOV	SH,0B8H	; SET SEGMENT TO COLOR
+test1.ASM(947): error A2009: Symbol not defined: SH
+ 04CC  8E DB				MOV	DS,BX	; DS = COLOR
+ 04CE  EB DE				JMP	Z_0
+				
+				;-----	PRINT FAILING BIT PATTERN
+ 04D0  B0 20			Z_1:	MOV	AL,' '	; DISPLAY A BLANK
+ 04D2  88 05				MOV	[DI], AL	; WRITE TO COLOR BUFFER
+ 04D4  26: 88 05			MOV	ES:[DI],AL	; WRITE TO MONOCHROME REGEN BUFFER
+ 04D7  47				INC	DI	; POINT TO NEXT POSITION
+ 04D8  47				INC	DI
+ 04D9  E4 81				IN	AL,MFG_PORT+1	; GET THE HIGH BYTE OF FAILING PATTERN
+ 04DB  B1 04				MOV	CL,4	; SHIFT COUNT
+ 04DD  D2 E8				SHR	AL,CL	; NIBBLE SWAP
+ 04DF  BC 0000 U			MOV	SP,OFFSET Z1_O
+test1.ASM(960): error A2009: Symbol not defined: Z1_O
+ 04E2  EB 1B				JMP	SHORT PR
+				
+ 04E4  E4 81			Z1:	IN	AL,MFG_PORT+1
+ 04E6  22 06 0000 U			AND	AL,OFH	; ISOLATE TO LOW NIBBLE
+test1.ASM(964): error A2009: Symbol not defined: OFH
+ 04EA  BC 0000 U			MOV	SP,OFFSET Z2_O
+test1.ASM(965): error A2009: Symbol not defined: Z2_O
+ 04ED  EB 10				JMP	SHORT PR
+ 04EF  E4 82			Z2:	IN	AL,MFG_PORT+2	; GET THE HIGH BYTE OF FAILING PATTERN
+ 04F1  B1 04				MOV	CL,4	; SHIFT COUNT
+ 04F3  D2 E8				SHR	AL,CL	; NIBBLE SWAP
+ 04F5  BC 05A2 R			MOV	SP,OFFSET Z3_0
+ 04F8  EB 05				JMP	SHORT PR
+				Z31	IN	AL,MFG_PORT+2
+test1.ASM(972): error A2105: Expected: instruction, directive, or label
+ 04FA  24 0F				AND	AL,0FH	; ISOLATE TO LOW NIBBLE
+ 04FC  BC 05A4 R			MOV	SP,OFFSET Z4_0	; RETURN TO Z4:
+				
+				; -----	CONVERT AND PRINT	; CONVERT 00-OF TO ASCII CHARACTER
+ 04FF  02 06 005A U		PR:	ADD	AL,090M	; ADD FIRST CONVERSION FACTOR
+test1.ASM(977): error A2009: Symbol not defined: M
+ 0503  27				DAA		; ADJUST FOR NUMERIC AND ALPHA RANGE
+ 0504  14 40				ADC	AL,040H	; ADD CONVERSION AND ADJUST LOW NIBBLE
+ 0506  27				DAA		; ADJUST HIGH NIBBLE TO ASCII RANGE
+				
+ 0507  88 05				MOV	[DI],AL	; WRITE TO COLOR BUFFER
+ 0509  26: 88 05			MOV	ES:[DI],AL	; WRITE TO MONOCHROME BUFFER
+ 050C  47				INC	DI	; POINT TO NEXT POSITION
+ 050D  47				INC	DI
+ 050E  C3				RET
+				
+				;-----	DISPLAY 201 ERROR
+				
+ 050F  B0 20			Z4:	MOV	AL,' '	; DISPLAY A BLANK
+ 0511  88 05				MOV	[DI],AL	; WRITE TO DISPLAY REGEN BUFFER
+ 0513  26: A2 03F3			MOV	ES:1011,AL	; WRITE TO MONOCHROME BUFFER
+ 0517  47				INC	DI	; POINT TO NEXT POSITION
+ 0518  47				INC	DI
+ 0519  B0 32				MOV	AL,'2'	; DISPLAY 201 ERROR
+ 051B  88 05				MOV	[DI],AL	; WRITE TO DISPLAY REGEN BUFFER
+ 051D  26: 88 05			MOV	ES:[DI],AL	; WRITE TO MONOCHROME BUFFER
+ 0520  47				INC	DI	; POINT TO NEXT POSITION
+				
+ 0521  47				INC	DI
+ 0522  B0 30				MOV	AL,'0'
+ 0524  88 05				MOV	[DI],AL	; WRITE TO DISPLAY REGEN BUFFER
+ 0526  26: 88 05			MOV	ES:[DI],AL	; WRITE TO MONOCHROME BUFFER
+ 0529  47				INC	DI	; POINT TO NEXT POSITION
+ 052A  47				INC	DI
+ 052B  B0 31				MOV	AL,'1'
+ 052D  88 05				MOV	[DI],AL	; WRITE TO DISPLAY REGEN BUFFER
+ 052F  26: 88 05			MOV	ES:[DI],AL	; WRITE TO MONOCHROME BUFFER
+				
+				;-----	ROLL ERROR CODE IN MFG_PORT --> FIRST THE CHECKPOINT
+ 0532  A0 0000 U		C31_0:	MOV	AL,ODDH	;	 <><><><><><><><><><><><>
+test1.ASM(1011): error A2009: Symbol not defined: ODDH
+ 0535  E6 80				OUT	MFG_PORT,AL	;	 <><> CHECKPOINT  DD <><>
+ 0537  E6 83				OUT	MFG_PORT+3,AL	; ALSO DISPLAY CHECK POINT IN PORT 83
+ 0539  2B C9				SUB	CX,CX
+ 053B				C31_A:
+				
+ 053B  2B C0				SUB	AX,AX	; SETUP SEGMENT
+ 053D  8E D8				MOV	DS,AX
+ 053F  B8 AA55				MOV	AX,0AA55H	; WRITE AN AA55
+ 0542  2B FF				SUB	DI,DI
+ 0544  89 05				MOV	[DI],AX
+ 0546  8B 05				MOV	AX,[DI]	; READ THE FIRST WORD
+ 0548  E2 F1				LOOP	C31_A	; DISPLAY CHECKPOINT LONGER
+ 054A				C31_B:	
+ 054A  89 05				MOV	[DI],AX
+ 054C  8B 05				MOV	AX,[DI]
+ 054E  E2 FA				LOOP	C31_B
+ 0550				C31_C:	
+ 0550  89 05				MOV	[DI],AX
+ 0552  8B 05				MOV	AX,[DI]
+ 0554  E2 FA				LOOP	C31_C
+ 0556				C31_D:	
+ 0556  89 05				MOV	[DI],AX
+ 0558  8B 05				MOV	AX,[DI]
+ 055A  E2 FA				LOOP	C31_D
+ 055C				C31_E:
+ 055C  89 05				MOV	[DI],AX
+ 055E  8B 05				MOV	AX,[DI]
+ 0560  E2 FA				LOOP	C31_E
+				
+				;-----	ROLL ERROR CODE IN MFG_PORT --> NEXT THE HIGH BYTE
+				
+ 0562  E4 81				IN	AL,MFG_PORT+1	; XOR OF FAILING BIT PATTERN
+ 0564  E6 80				OUT	MFG_PORT,AL	; HIGH BYTE
+ 0566				C31_G:
+ 0566  B8 AA55				MOV	AX,0AA55H	; WRITE AN AA55
+ 0569  89 05				MOV	[DI],AX
+ 056B  8B 05				MOV	AX,[DI]	; READ THE FIRST WORD
+ 056D  E2 F7				LOOP	C31_G
+ 056F				C31_H:
+ 056F  89 05				MOV	[DI],AX
+ 0571  8B 05				MOV	AX,[DI]
+ 0573  E2 FA				LOOP	C31_H
+ 0575				C31_I:	
+ 0575  89 05				MOV	[DI],AX
+ 0577  8B 05				MOV	AX,[DI]
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-17
+
+
+ 0579  E2 00				LOOP	C31_1
+test1.ASM(1057): error A2009: Symbol not defined: C31_1
+				
+				;-----	ROLL ERROR CODE IN MFG_PORT --> THEN THE LOW BYTE
+				
+ 057B  E4 82				IN	AL,MFG_PORT+2	; LOW BYTE
+ 057D  E6 80				OUT	MFG_PORT,AL
+ 057F  B8 AA55				MOV	AX,0AA55H	; WRITE AN AA55
+ 0582  2B FF			C31_K:	SUB	DI,DI
+ 0584  89 05				MOV	[DI],AX
+ 0586  8B 05				MOV	AX,[DI]	; READ THE FIRST WORD
+ 0588  E2 F8				LOOP	C31_K
+ 058A				C31_L:
+ 058A  89 05				MOV	[DI],AX
+ 058C  8B 05				Mov	AX,[DI]
+ 058E  E2 FA				LOOP	C31_L
+ 0590				C31_M:
+ 0590  89 05				MOV	[DI],AX
+ 0592  8B 05				Mov	AX,[DI]
+ 0594  E2 FA				LOOP	C31_M
+ 0596				C31_N:
+ 0596  89 05				MOV	[DI],AX
+ 0598  8B 05				MOV	AX,[DI]
+ 059A  E2 FA				LOOP	C31_N
+ 059C  EB 94				JMP	C31_0	; DO AGAIN
+				
+ 059E  04E4 R			Z1_0	DW	Z1	; TEMPORARY STACK
+test1.ASM(1082): error A2024: Segment parameters are changed
+ 05A0  04EF R			Z2_0	DW	Z2	; TEMPORARY STACK
+test1.ASM(1083): error A2024: Segment parameters are changed
+ 05A2  0000			Z3_0	DW	Z3	; TEMPORARY STACK
+test1.ASM(1084): error A2024: Segment parameters are changed
+ 05A4  050F R			Z4_0	DW	Z4	; TEMPORARY STACK
+test1.ASM(1085): error A2024: Segment parameters are changed
+				
+				;-----	CLEAR STORAGE ENTRY
+				
+ 05A6				CLR_STG:
+					ASSUME	DS:DATA
+ 05A6  F3/ AB				REP	STOSW	; STORE 32K WORDS OF 0000
+ 05A8  B8 ---- R			MOV	AX,DATA	; RESTORE DATA SEGMENT
+ 05AB  8E D8				MOV	DS,AX
+ 05AD  89 1E 0073 R			MOV	@RESET_FLAG,BX	; RESTORE RESET FLAG
+				
+				;-----	SETUP STACK SEGMENT AND SP
+				
+ 05B1				C33:
+ 05B1  B8 ---- R			MOV	AX,DATA	; SET DATA SEGMENT
+ 05B4  8E D8				MOV	DS,AX
+ 05B6  BC 0000				MOV	SP,POST_SS	; GET STACK VALUE
+ 05B9  8E D4				MOV	SS,SP	; SET THE STACK UP
+ 05BB  BC 8000				MOV	SP,POST_SP	; STACK IS READY TO GO
+				
+				;-----	INITIALIZE DISPLAY ROW COUNT
+				
+ 05BE  C6 06 0084 R 18			MOV	@ROWS,25-1	; SET ROWS FOR PRINT SCREEN DEFAULT
+				
+ 05C3  B0 11				MOV 	AL,11H	;	  <><><><><><><><><><><><>
+ 05C5  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  11 <><>
+				
+				;-----	VERIFY SPEED/REFRESH CLOCK RATES   ( ERROR = 1 LONG AND 1 SHORT BEEP )
+ 05C7  32 DB				XOR	BL,BL	; CLEAR REFRESH CYCLE REPEAT COUNT
+ 05C9  33 C9				XOR	CX,CX	; INITIALIZE SPEED RATE REGISTER
+ 05CB  90				EVEN		; PLACE ON EVEN WORD BOUNDARY
+ 05CC				C34:
+ 05CC  E4 61				IN	AL,PORT_B	; READ REFRESH BIT REGISTER
+ 05CE  84 06 0000 U			TEST	AL,REFRFSH_BIT	; MASK FOR BIT
+test1.ASM(1118): error A2009: Symbol not defined: REFRFSH_BIT
+ 05D2  E1 F8				LOOPZ	C34	; DECREMENT LOOP COUNTER TILL ON
+ 05D4				C35:
+ 05D4  E4 61				IN	AL,PORT_B	; READ REFRESH BIT REGISTER
+ 05D6  84 06 0000 U			TEST	AL,REFRFESH_BIT	; MASK FOR BIT
+test1.ASM(1122): error A2009: Symbol not defined: REFRFESH_BIT
+ 05DA  E0 F8				LOOPNZ	C35	; DECREMENT LOOP COUNTER TILL OFF
+				
+ 05DC  FE CB				DEC	BL	; DECREMENT REFRESH CYCLE REPEAT COUNT
+ 05DE  75 EC				JNZ	C34	; REPEAT TILL CYCLE COUNT DONE
+				
+ 05E0  81 F9 F8A7			CMP	CX,RATE_UPPER	; CHECK FOR RATE BELOW UPPER LIMIT
+ 05E4  73 00				JAE	C36	; SKIP ERROR BEEP IF BELOW MAXIMUM
+test1.ASM(1129): error A2009: Symbol not defined: C36
+ 05E6				C36E:
+ 05E6  BA 0101				MOV	DX,0101H	; GET BEEP COUNTS FOR REFRESH ERROR
+ 05E9  E8 0000 E			CALL	ERR_BEEP	; CALL TO POST ERROR BEEP ROUTINES
+ 05EC  F4				HLT		; HALT SYSTEM - BAD REFRESH RATE
+				C36I
+test1.ASM(1134): error A2105: Expected: instruction, directive, or label
+ 05ED  81 F9 F9F0			CMP	CX,RATE_LOWER	; CHECK FOR RATE ABOVE LOWER LIMIT
+ 05F1  77 F3				JA	C36E	; GO TO ERROR BEEP IF BELOW MINIMUM
+				
+				;-----	GET THE INPUT BUFFER (SWITCH SETTINGS)
+ 05F3  E4 82				IN	AL,DMA_PAGE+1	; GET THE SWITCH SETTINGS
+ 05F5  24 F8				AND	AL,KEY_BD_INHIB+DSP_JMP+MFG_LOOP+BASE_MEM+BASE_MEM8 ; STRIP BITS
+ 05F7  A2 0012 R			MOV	@MFG_TST,AL	; SAVE SETTINDS
+ 05FA  2A C0				SUB	AL,AL	; RESET DMA_PAGE
+ 05FC  E6 82				OUT	DMA_PAGE+1,AL
+				
+				;------------------------------------------
+				; TEST.11A		:
+				;       VERIFY 286 LGDT/SGDT LIDT/SIDT	:
+				;       INSTRUCTIONS	:
+				; DESCRIPTION 		:
+				;       LOAD GOT AND IDT REGISTERS WITH	:
+				;       AA,55,00 AND VERIFY CORRECT.	:
+				;------------------------------------------
+				
+				;-----	VERIFY STATUS INDICATE COMPATIBILITY (REAL) MODE
+				
+					SMSW	AX	; GET THE CURRENT STATUS WORD
+test1.ASM(1156): error A2105: Expected: instruction, directive, or label
+ 05FE  0000000F 00000001		DD	00FH,001H,0E0H
+       000000E0			
+ 060A  A9 000F				TEST	AX,0FH	; PE/MP/EM/TS BITS SHOULD BE ZERO
+ 060D  75 35				JNZ	ERR_PROT	; GO IF STATUS NOT REAL MODE
+				
+				;-----	TEST PROTECTED MODE REGISTERS
+ 060F  B0 12				MOV	AL,12H	;	  <><><><><><><><><><><><>
+ 0611  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  12 <><>
+				
+ 0613  1E				PUSH	DS	; SET ES TO SAME SEGMENT AS DS
+ 0614  07				POP	ES
+ 0615  BF D0A0				MOV	DI,SYS_IDT_LOC	; USE THIS AREA TO BUILD TEST PATTERN
+ 0618  B9 0003				MOV	CX,3
+ 061B  B8 AAAA				MOV	AX,0AAAAH	; FIRST PATTERN
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-18
+
+
+ 061E  E8 0647 R			CALL	WRT_PAT
+ 0621  B8 5555				MOV	AX,05555H
+ 0624  E8 0647 R			CALL	WRT_PAT	; WRITE NEXT PATTERN
+ 0627  2B C0				SUB	AX,AX	; WRITE 0
+ 0629  E8 0647 R			CALL	WRT_PAT
+				
+				;-----	TEST 286 CONTROL FLAGS
+ 062C  FD				STD		; SET DIRECTION FLAG FOR DECREMENT
+ 062D  9C				PUSHF		; GET THE FLAGS
+ 062E  58				POP	AX
+ 062F  A9 0200				TEST	AX,0200H	; INTERRUPT FLAG SHOULD BE OFF
+ 0632  75 00				JNZ	ERR PROT	; GO IF NOT
+test1.ASM(1181): error A2009: Symbol not defined: ERR
+ 0634  85 06 0000 U			TEST	AX,Z400H	; CHECK DIRECTION FLAG
+test1.ASM(1182): error A2009: Symbol not defined: Z400H
+ 0638  74 0A				JZ	ERR_PROT	; GO IF NOT SET
+ 063A  FC				CLD		; CLEAR DIRECTION FLAG
+ 063B  9C				PUSHF		; INSURE DIRECTION FLAG IS RESET
+ 063C  58				POP	AX
+ 063D  A9 0400				TEST	AX,0400H
+ 0640  75 02				JNZ	ERR_PROT	; GO IF NOT
+				
+ 0642  EB 3D				JMP	SHORT C37A	; TEST OK CONTINUE
+ 0644				ERR_PROT:
+ 0644  F4				HLT		; PROTECTED MODE REGISTER FAILURE
+ 0645  EB FD				JMP	SHORT ERR_PROT	; INSURE NO BREAKOUT OF HALT
+				
+				;----- 	WRITE TO 286 REGISTERS
+ 0647  B9 0003			WRT_PAT:	MOV	CX,3
+ 064A  F3/ AB				REP	STOSW	; STORE 6 BYTES OF PATTERN
+ 064C  BD D0A0				MOV	BP,SYS_IDT_LOC
+					SEGOV	ES	; LOAD THE IDT
+test1.ASM(1199): error A2105: Expected: instruction, directive, or label
+ 064F  26				DB	026H
+					LIDT	[BP]	; REGISTER FROM THIS AREA
+test1.ASM(1201): error A2105: Expected: instruction, directive, or label
+ 0650  0F				DB	00FH
+ 0651				??0001	LABEL 	BYTE
+ 0651  8B 5E 00				MOV	BX,WORD PTR [BP]
+ 0654				??0002	LABEL	BYTE
+ 0651					ORG	OFFSET CS:??0001
+ 0651  01				DB	001H
+ 0654					ORG	OFFSET CS:??0002
+ 0654  BD D0A0				MOV	BP,SYS_IDT_LOC
+					SEGOV	ES	; LOAD THE GDT
+test1.ASM(1210): error A2105: Expected: instruction, directive, or label
+ 0657  26				DB	026H
+					LGDT	[BP]	; FROM THE SAME AREA
+test1.ASM(1212): error A2105: Expected: instruction, directive, or label
+ 0658  0F				DB	00FH
+ 0659				??0004	LABEL	BYTE
+ 0659  8B 56 00				MOV	DX,WORD PTR [BP]
+ 065C				??0005	LABEL 	BYTE
+ 0659					ORG	OFFSET CS:??0004
+ 0659  01				DB	001H
+ 065C					ORG	OFFSET CS:??0005
+				
+				;-----	READ AND VERIFY 286 REGISTERS
+ 065C  BD D8A0				MOV	BP,GDT_LOC	; STORE THE REGISTERS HERE
+					SEGOV	ES
+test1.ASM(1223): error A2105: Expected: instruction, directive, or label
+ 065F  26				DB	026H
+					SIDT	[BP]	; GET THE IDT REGISTERS
+test1.ASM(1225): error A2105: Expected: instruction, directive, or label
+ 0660  0F				DB	00FH
+ 0661				??0007	LABEL	BYTE
+ 0661  8B 4E 00				MOV	CX,[BP]
+ 0664				??0008	LABEL	BYTE
+ 0661					ORG	OFFSET CS:??0007
+ 0661  01				DB	001H
+ 0664					ORG	OFFSET CS:??0008
+ 0664  BD D8A5				MOV	BP,GDT_LOC+5
+					SEGOV	ES
+test1.ASM(1234): error A2105: Expected: instruction, directive, or label
+ 0667  26				DB	026H
+					SGDT	[BP]	; GET THE GDT REGISTERS
+test1.ASM(1236): error A2105: Expected: instruction, directive, or label
+ 0668  0F				DB	00FH
+ 0669				??000A	LABEL	BYTE
+ 0669  03 46 00				ADD	AX,[BP]
+ 066C				??000B	LABEL	BYTE
+ 0669					ORG	OFFSET CS:??000A
+ 0669  01				DB	001H
+ 066C					ORG	OFFSET CS:??000B
+ 066C  BF D0A0				MOV	DI,SYS_IDT_LOC
+ 066F  8B 05				MOV	AX,[DI]	; GET THE PATTERN WRITTEN
+ 0671  B9 0005				MOV	CX,5	; CHECK ALL REGISTERS
+ 0674  BE D8A0				MOV	SI,GDT_LOC	; POINT TO THE BEGINNING
+ 0677  26: 3B 04		C37B:	CMP	AX,ES:[SI]
+ 067A  75 C8				JNZ	ERR_PROT	; HALT IF ERROR
+ 067C  46				INC	SI	; POINT TO NEXT WORD
+ 067D  46				INC	SI
+ 067E  E2 F7				LOOP	C37B	; CONTINUE TILL DONE
+ 0680  C3				RET
+				
+				;----------------------------------------------------------
+				;	INITIALIZE THE 6259 INTERRUPT #1 CONTROLLER CHIP  :
+				;----------------------------------------------------------
+ 0681				C37A:
+ 0681  2A C0				SUB	AL,AL	; RESET MATH PROCESSOR
+ 0683  E6 F1				OUT	X287+1,AL
+ 0685  B0 11				MOV	AL,11H	; ICWI - EDGE, MASTER, ICW4
+ 0687  E6 20				OUT	INTA00,AL
+ 0689  EB 00				JMP	$+2	; I/O DELAY
+ 068B  B0 08				MOV	AL,8	; SETUP ICW2 INTERRUPT TYPE 8 (8-FL
+ 068D  E6 21				OUT	INTA01,AL
+ 068F  EB 00				JMP	$+2	; I/O DELAY
+				
+ 0691  B0 04				MOV	AL,04H	; SETUP ICW3 MASTER LEVEL 2
+ 0693  E6 21				OUT	INTA01,AL
+ 0695  EB 00				JMP	$+2	; I/O DELAY
+ 0697  B0 01				MOV	AL,01H	; SETUP ICW4 MASTER,8086 MODE
+ 0699  E6 21				OUT	INTA01,AL
+ 069B  EB 00				JMP	$+2	; I/O DELAY
+ 069D  B0 FF				MOV	AL,0FFH	; MASK ALL INTERRUPTS OFF
+ 069F  E6 21				OUT	INTA01,AL	; (VIDEO ROUTINE ENABLES INTERRUPTS)
+				
+				;-----------------------------------------------------------
+				;	INITIALIZE THE 8259 INTERRUPT #2 CONTROLLER CHIP  :
+				;-----------------------------------------------------------
+				
+ 06A1  B0 13				MOV	AL,13H	;	  <><><><><><><><><><><><>
+ 06A3  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  13 <><>
+				
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-19
+
+
+ 06A5  B0 11				MOV	AL,11H	; ICWI - EDGE, SLAVE ICW4
+ 06A7  E6 A0				OUT	INTB00,AL
+ 06A9  EB 00				JMP	$+2	; I/O DELAY
+ 06AB  A0 0000 U			MOV	AL,INT_TYPE	; SETUP ICW2 - INTERRUPT TYPE 70 170-7F)
+test1.ASM(1287): error A2009: Symbol not defined: INT_TYPE
+ 06AE  E6 A1				OUT	INTB01,AL
+ 06B0  B0 02				MOV	AL,02H	; SETUP ICW3 - SLAVE LEVEL 2
+ 06B2  EB 00				JMP	$+2
+ 06B4  E6 A1				OUT	INTB01,AL
+ 06B6  EB 00				JMP	$+2	; I/O DELAY
+ 06B8  B0 01				MOV	AL,01H	; SETUP ICW4 - 8086 MODE, SLAVE
+ 06BA  E6 A1				OUT	INTB01,AL
+ 06BC  EB 00				JMP	$+2	; I/O DELAY
+ 06BE  B0 FF				MOV	AL,0FFH	; MASK ALL INTERRUPTS OFF
+ 06C0  E6 A1				OUT	INTB01,AL
+				
+				;-----	SET UP THE INTERRUPT VECTORS TO TEMPORARY INTERRUPT
+				
+ 06C2  B0 14				MOV	AL,14H	;	  <><><><><><><><><><><><>
+ 06C4  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  14 <><>
+				
+ 06C6  B9 0078				MOV	CX,78H	; FILL ALL INTERRUPT LOCATIONS
+ 06C9  2B FF				SUB	DI,DI	; FIRST INTERRUPT LOCATION
+ 06CB  8E C7				MOV	ES,DI	; SET (ES) ALSO
+ 06CD  B8 0007 R		D3:	MOV	AX,OFFSET DI	; GET ADDRESS OF INTERRUPT OFFSET
+test1.ASM(1307): error A2049: Illegal use of register
+ 06D0  AB				STOSW		; PLACE IN INTERRUPT VECTOR LOCATION
+ 06D1  8C C8				MOV	AX,CS	; GET THE CURRENT CODE SEGMENT
+ 06D3  AB				STOSW		; PLACE CODE SEGMENT IN VECTOR LOCATION
+ 06D4  E2 F7				LOOP	D3
+				
+				;-----	ESTABLISH BIOS SUBROUTINE CALL INTERRUPT VECTORS
+				
+ 06D6  B0 15				MOV	AL,15H	;	  <><><><><><><><><><><><>
+ 06D8  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  15 <><>
+				
+ 06DA  BF 0040 R			MOV	DI,OFFSET @VIDEO_INT	; SET VIDEO INTERRUPT AREA
+ 06DD  0E				PUSH	CS
+ 06DE  1F				POP	DS	; SET UP ADDRESS OF VECTOR TABLE
+ 06DF  8C D8				MOV	AX,DS	; SET AX=SEGMENT
+ 06E1  BE 0010 E			MOV	SI,OFFSET VECTOR_TABLE+16  ; START WITH VIDEO ENTRY
+ 06E4  B9 0010				MOV	CX,16
+				
+ 06E7  A5			D3A:	MOVSW		; MOVE VECTOR TABLE TO LOW MEMORY
+ 06E8  47				INC	DI
+ 06E9  47				INC	DI	; SKIP SEGMENT POINTER
+ 06EA  E2 FB				LOOP	D3A
+				
+				;------------------------------------------
+				; TEST.12		:
+				;       VERIFY CMOS CHECKSUM/BATTERY OK	:
+				; DESCRIPTION		:
+				;       DETERMINE IF CONFIG RECORD	:
+				;       CAN BE USED FOR INITIALIZATION.	:
+				;------------------------------------------
+					ASSUME	DS:DATA
+ 06EC  E8 0000 E			CALL	DDS	;SET THE DATA SEGMENT
+				
+ 06EF  B0 16				MOV 	AL,16H	;	  <><><><><><><><><><><><>
+ 06F1  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  16 <><>
+				
+				;-----	IS THE BATTERY LOW THIS POWER UP?
+				
+ 06F3  A0 E108 U			MOV	AL,CMCS_REG_D+NMI	; CHECK BATTERY CONDITION
+test1.ASM(1345): error A2009: Symbol not defined: CMCS_REG_D
+ 06F6  E8 0000 E			CALL	CMOS_READ	; READ THE BATTERY STATUS
+ 06F9  A8 80				TEST	AL,10000000B	; IS THE BATTERY LOW?
+ 06FB  74 0B				JZ	CMOS1A	; ERROR IF YES
+					
+ 06FD  B0 16				MOV	AL,CMOS_DIAG+NMI	; GET THE OLD STATUS
+test1.ASM(1350): error A2029: Division by 0 or overflow
+ 06FF  E8 0000 E			CALL	CMOS_READ	; FROM DIAGNOSTIC STATUS BYTE
+ 0702  A8 80				TEST	AL,BAD_BAT	; HAS CUSTOMER SETUP BEEN EXFCUTE07
+ 0704  74 17				JZ	CMOS1	; GO CHECK CHECKSUM IF YES
+				
+ 0706  EB 68				JMP	SHORT CMOS4	; CONTINUE WITHOUT CONFIGURATION
+				
+				;-----	SET DEFECTIVE BATTERY FLAG
+				
+ 0708  B0 17			CMOS1A:	MOV	AL,17H	;	  <><><><><><><><><><><><>
+ 070A  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  17 <><>
+				
+ 070C  B8 444E				MOV	AX,X'!CMCS OIAG-NMIL	; CMOS DIAGNOSTIC STATUS BYTE
+test1.ASM(1362): error A2112: Unexpected end of line
+ 070F  E8 0000 E			CALL	CMOS_READ	; GET THE CURRENT STATUS
+ 0712  0A 06 0051 U			OR	AL,8AO_BAT	; SET THE DEAD BATTERY FLAG
+test1.ASM(1364): error A2107: Non-digit in number
+ 0716  86 C4				XCHG	AL,AH	; SAVE
+ 0718  E8 0000 U			CALL	CMOS WRITE	; OUTPUT THE STATUS
+test1.ASM(1366): error A2009: Symbol not defined: CMOS
+ 071B  EB 53				JMP	SHORT CMOS4	; GO TO MINIMUM CONFIGURATION
+				
+				;-----	VERIFY CHECKSUM
+				
+ 071D  B8 F716			CMOS1:	MOV	AX,X*(CMOS_DIAG+NMI)	; CLEAR OLD STATUS
+test1.ASM(1371): error A2029: Division by 0 or overflow
+ 0720  E8 0000 E			CALL	CMOS_READ	; GET THE CURRENT STATUS
+ 0723  81 3E 0073 R 1234		CMP	@RESET_FLAG,1234H	; IS THIS A SOFT RESET
+ 0729  75 04				JNZ	CMOS1_A	; GO IF NOT
+				
+ 072B  24 10				AND	AL,W_MEM_SIZE	; CLEAR ALL BUT THE CMOS/POR MEMORY SIZE
+ 072D  EB 02				JMP	SHORT CMOS1_B
+ 072F				CMOS1_A:
+ 072F  2A C0				SUB	AL,AL	; CLEAR STATUS IF POWER ON RESET
+ 0731				CMOS1_B:
+ 0731  86 C4				XCHG	AL,AH	; SAVE THE CURRENT STATUS
+ 0733  E8 0000 E			CALL	CMOS_WRITE
+				
+ 0736  2B DB				SUB	BX,BX
+ 0738  2B C9				SUB	CX,CX
+ 073A  B1 18				MOV	CL,CMOS_DISKETTE+NMI	; SET START OF CMCS CHECKSUMED AREA
+test1.ASM(1386): error A2029: Division by 0 or overflow
+ 073C  B5 36				MOV	CH,CMOS_CKSUM_HI+NMI	; SET END OF CMCS CHECKSUMED AREA +1
+test1.ASM(1387): error A2029: Division by 0 or overflow
+							; (FIRST BYTE OF CHECKSUM)
+ 073E  8A C1			CMOS2:	MOV	AL,CL
+ 0740  E8 0000 E			CALL	CMOS_READ	; ADDRESS THE BEGINNING
+ 0743  2A E4				SUB	AH,AH	; INSURE AH=0
+ 0745  03 D8				ADD	BX,AX	; ADD TO CURRENT VALUE
+ 0747  FE C1				INC	CL	; POINT TO NEXT BYTE ADDRESS IN CMOS
+ 0749  3A E9				CMP	CH,CL	; FINISHED?	 (AT CHECKSUM BYTE HIGH)
+ 074B  75 F1				JNZ	CMOS2	; GO IF NOT
+ 074D  0B DB				OR	BX,BX	; BX MUST NOT BE 0
+ 074F  74 10				JZ	CMOS3	; CMOS BAD IF CMECKSUM=0
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-20
+
+
+ 0751  B0 36				MOV	AL,CMOS_CKSUM_HI+NMI	; GET THE CHECK SUM HIGH BYTE
+test1.ASM(1398): error A2029: Division by 0 or overflow
+ 0753  E8 0000 E			CALL	CMOS_READ	; FIRST BYTE OF CHECKSUM
+ 0756  8A E0				MOV	AH,AL	; SAVE IT
+ 0758  B0 37				MOV	AL,CMOS_CKSUM_LO+NMI	; SECOND BYTE OF CHECKSUM
+test1.ASM(1401): error A2029: Division by 0 or overflow
+ 075A  E8 0000 E			CALL	CMOS_READ
+ 075D  3B C3				CMP	AX,BX	; IS THE CHECKSUM OK
+ 075F  74 0F				JZ	CMOS4	; GO IF YES
+				
+				;-----	SET CMOS CHECKSUM ERROR
+				
+ 0761  A1 1EF8 U		CMOS3:	MOV	AX,XLFCMOS-OIAG-NMI)	; ADDRESS DIAGNOSTIC STATUS
+test1.ASM(1408): error A2009: Symbol not defined: XLFCMOS
+ 0764  E8 0000 U			CALL	CMOS_REAO	; GET THE CURRENT STATUS
+test1.ASM(1409): error A2009: Symbol not defined: CMOS_REAO
+ 0767  0A 06 0069 U			OR	AL,13AO_CKSUM	; SET BAD CHECKSUM FLAG
+test1.ASM(1410): error A2107: Non-digit in number
+ 076B  86 C4				XCHG	AL,AH	; SAVE IT
+ 076D  E8 0000 E			CALL	CMOS_WRITE	; SET FLAG
+				
+				;----	INSURE CMOS DIVIDERS SET
+				
+ 0770				CMOS4:
+ 0770  B8 E908 U			MOV	AX,X*(CMOS_REG_A+NMI)	; ADDRESS CMOS REGISTER A
+test1.ASM(1417): error A2009: Symbol not defined: CMOS_REG_A
+ 0773  E8 0000 E			CALL	CMOS_READ	; GET CURRENT DIVISORS
+ 0776  24 0F				AND	AL,00FH	; LOOK AT PERIODIC RATE BITS
+ 0778  75 07				JNZ	CMOS9	; EXIT IF SET TO SOMETHING USEFUL
+				
+ 077A  B0 26				MOV	AL,26H	; ELSE SET THE STANDARD DEFAULT USED BY
+ 077C  86 C4				XCHG	AL,AH	;  BIOS FOR THE 976.56 US RATE
+ 077E  E8 0000 E			CALL	CMOS_WRITE	;  FOR THE PERIODIC CLOCK
+ 0781				CMOS9:
+ 0781  B0 18				MOV	AL,18H	;	  <><><><><><><><><><><><>
+ 0783  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  18 <><>
+				
+				;-----	ENABLE PROTECTED MODE
+				
+ 0785  E4 61				IN	AL,PORT_B	; DISABLE MEMORY AND I/O PARITY CHECKS
+ 0787  0C 0C				OR	AL,RAM_PAR_OFF
+ 0789  E6 61				OUT	PORT_B,AL
+				
+				;-----	SET RETURN ADDRESS BYTE IN CMOS
+				
+ 078B  B0 19				MOV	AL,19H	;	  <><><><><><><><><><><><>
+ 078D  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  19 <><>
+				
+ 078F  B8 E217				MOV	AX,1*H+(CMOS_SHUT_DOWN+NMI)	; SET THE RETURN ADDRESS FOR
+test1.ASM(1440): error A2029: Division by 0 or overflow
+ 0792  E8 0000 E			CALL	CMOS_WRITE	; THE FIRST SHUTDOWN RETURN ADDRESS
+				
+ 0795  BC 0000				MOV	SP,POST_SS	; SET STACK FOR SYSINIT1
+ 0798  8E D4				MOV	SS,SP
+ 079A  BC 8000				MOV	SP,POST_SP
+ 079D  E8 0000 E			CALL	SYSINIT1	; CALL THE DESCRIPTOR TABLE BUILDER
+							; AND REAL-TO-PROTECTEO MODE SWTTCHER
+				
+ 07A0  B0 1A				MOV	AL,1AH	;	  <><><><><><><><><><><><>
+ 07A2  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1A <><>
+				
+				;-----	SET TEMPORARY STACK
+				
+ 07A4  6A 08				PUSH	BYTE PTR GDT_PTR	; SET (DS:) SELECTOR TO GDT SEGMENT
+ 07A6  1F				POP	DS
+ 07A7  C7 06 005A 0000			MOV	DS:SS_TEMP.BASE_LO_WORD,0
+ 07AD  C6 06 005C 00			MOV	BYTE PTR DS:(SS_TEMP.BASE_HI_BYTE),0
+ 07B2  BE 0058				MOV	SI,SS_TEMP
+ 07B5  8E D6				MOV	SS,SI
+ 07B7  BC FFFD				MOV	SP,MAX_SEG_LEN-2
+				
+				;-------------------------------------------------------------------------------
+				; TEST.13								 :
+				;  PROTECTED MODE TEST AND MEMORY SIZE DETERMINE ( 0 --> 640K )			 :
+				;									 :
+				; DESCRIPTION:								 :
+				;     THIS ROUTINE RUNS IN PROTECTED MODE IN ORDER TO ADDRESS ALL OF STORAGE.  :
+				;     IT CHECKS THE MACHINE STATUS WORD (MSW) FOR PROTECTED MODE AND THE BASE  :
+				;     MEMORY SIZE IS DETERMINED AND SAVED.  BIT 4 OF THE CMOS DIAGNOSTIC	 :
+				;     STATUS BYTE IS SET IF 512K --> 640K MEMORY IS INSTALLED.			 :
+				;     DURING A POWER UP SEQUENCE THE MEMORY SIZE DETERMINE IS DONE WITH		 :
+				;     PLANAR AND I/O PARITY CHECKS DISABLED.  DURING A SOFT RESET THE MEMORY	 :
+				;     SIZE DETERMINE WILL CHECK FOR PARITY ERRORS.					 
+				:
+				;-------------------------------------------------------------------------------
+				
+				;-----	INSURE PROTECTED MODE
+				
+					SMSW	AX	; GET THE MACHINE STATUS WORD
+test1.ASM(1478): error A2105: Expected: instruction, directive, or label
+ 07BA  0F 01 E0				DB	00FH,001H,0E0H
+ 07BD  A9 0001				TEST	AX,VIRTUAL_ENABLE	; ARE WE IN PROTECTED MODE
+ 07C0  75 0C				JNZ	VIR_OK
+				
+ 07C2  B8 E917			SHUT_8: 	MOV	AX,8*H+(CMOS_SHUT_DOWN+NMI)	; SET THE RETURN ADDRESS
+test1.ASM(1483): error A2029: Division by 0 or overflow
+ 07C5  E8 0000 E			CALL	CMOS_WRITE	; AND SET SHUTDOWN 8
+ 07C8  E9 0000 E			JMP	PROC_SHUTDOWN	; CAUSE A SHUTDOWN
+				
+				;-----	VIRTUAL MODE ERROR HALT
+ 07CB  F4			SHUT8:	HLT
+ 07CC  EB FD				JMP	SHUT8	; ERROR HALT
+				
+				;-----	64K SEGMENT LIMIT
+				
+ 07CE  C7 06 0048 FFFF		VIR_OK: 	MOV 	DS:ES_TEMP.SEG_LIMIT,MAX_SEG_LEN
+				
+				;-----	CPL0, DATA ACCESS RIGHTS
+				
+ 07D4  C6 06 0050 R 93			MOV	BYTE PTR DS(ES_TEMP.DATA_ACC_RIGHTS),CPL0_DATA_ACCESS
+test1.ASM(1497): error A2049: Illegal use of register
+				
+				;-----	START WITH SEGMENT ADDRESS 01-0000 (SECOND 64K)
+				
+ 07D9  C6 06 004C 01			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),01H
+ 07DE  C7 06 0048 0002			MOV	DS:ES_TEMP,BASE_LO_WORD,0H
+test1.ASM(1502): warning A4057: Illegal size for operand
+				
+ 07E4  B0 1B				MOV	AL,1BH	;	  <><><><><><><><><><><><>
+ 07E6  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1B <><>
+				
+ 07E8  BB 0040				MOV	BX,16*4	; SET THE FIRST 64K DONE
+				
+				;-----	START STORAGE SIZE/CLEAR
+				
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-21
+
+
+ 07EB				NOT_DONE:
+ 07EB  6A 48				PUSH	BYTE PTR ES_TEMP	; POINT ES TO DATA
+ 07ED  07				POP	ES	; POINT TO SEGMENT TO TEST
+ 07EE  E8 0000 U			CALL	HOW-BIG	; DO THE FIRST 64K
+test1.ASM(1514): error A2009: Symbol not defined: HOW
+ 07F1  74 00				JZ	NCT_FIN	; CHECK IF TOP OF MEMORY
+test1.ASM(1515): error A2009: Symbol not defined: NCT_FIN
+ 07F3  E9 08AD R			JMP	DONE
+				
+ 07F6  83 C3 40			NOT_FIN:	ADD	BX,16*4	; BUMP MEMORY COUNT BY 64K
+				
+				;-----	DO NEXT 64K (0X0000) BLOCK
+				
+ 07F9  FE 06 004C			INC	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE)
+				
+				;-----	CHECK FOR END OF FIRST 640K (END OF BASE MEMORY)
+				
+ 07FD  80 3E 004C 0A			CMP	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),0AH
+ 0802  75 E7				JNZ	NOT_DONE	; GO IF NOT
+ 0804  E8 0888 R			CALL	HOW_BIG_END	; GO SET MEMORY SIZE
+ 0807  E9 08AD R			JMP	DONE
+				
+				;-----	FILL/CHECK LOOP
+				
+ 080A  2B FF				SUB	DI,DI
+ 080C  B8 AA55				MOV	AX,0AA55H	; TEST PATTERN
+ 080F  8B C8				MOV	CX,AX	; SAVE PATTERN
+ 0811  26: 89 05			MOV	ES:[DI],AX	; WRITE PATTERN TO MEMORY
+ 0814  B0 0F				MOV	AL,0FH	; PUT SOMETHING IN AL
+ 0816  26: 8B 05			MOV	AX,ES:[DI]	; GET PATTERN
+ 0819  26: 89 05			MOV	ES:[DI],AX	; INSURE NO PARITY I/O CHECK
+ 081C  33 C1				XOR	AX,CX	; COMPARE PATTERNS
+ 081E  75 68				JNZ	HOW_BIG_END	; GO END IF NO COMPARE
+				
+ 0820  1E				PUSH	DS	
+ 0821  6A 18				PUSH	BYTE PTR RSDA_PTR	; POINT TO SYSTEM DATA AREA
+ 0823  1F				POP	DS	; GET (DS:)
+				
+				;-----	IS THIS A SOFT RESET
+ 0824  81 3E 0073 R 1234		CMP	@RESET_FLAG,1234H	; SOFT RESET
+ 082A  1F				POP	DS	; RESTORE DS
+ 082B  75 39				JNZ	HOW_BIG_2	; GO IF NOT SOFT RESET
+				
+				;-----	INSURE NO PARITY WITH PARITY BITS OFF
+				
+ 082D  26: C7 05 0101			MOV	WORD PTR ES:[DI],0101H	; TURN OFF BOTH PARITY BITS
+ 0832  E4 61				IN	AL,PORT_B
+ 0834  0C 0C				OR	AL,RAM_PAR_OFF	; TOGGLE PARITY CHECK ENABLES
+ 0836  E6 61				OUT	PORT_B,AL
+ 0838  24 F3				AND	AL,RAM_PAR_ON
+ 083A  E6 61				OUT	PORT_B,AL
+ 083C  6A FF				PUSH	BYTE PTR 0FFH	; PLACE 0FFFFH IN STACK (BUS BITS ON)
+test1.ASM(1560): error A2050: Value out of range
+ 083E  58				POP	AX	; DELAY - CAUSING BUS BITS ON
+ 083F  26: 8B 05			MOV	AX,ES:[DI]	; CHECK PARITY
+				
+ 0842  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+					AND	AL:PARITY_ERR
+test1.ASM(1565): error A2038: Left operand must have segment
+ 0844  8E 05				MOV	ES,[DI],AX	; CLEAR POSSIBLE PARITY ERROR
+test1.ASM(1566): warning A4001: Extra characters on line
+ 0846  75 40				JNZ	HOW_BIG_END	; GO IF PLANAR OR I/O PARITY CHECK
+				
+				;-----	CHECK ALL BITS WRITE OK
+				
+ 0848  26: C7 05 FFFF			MOV	WORD PTR ES:[DI],0FFFFH 	; TURN ON ALL BITS
+ 084D  26: 8B 05			MOV	AX,ES:[DI]	; CHECK FOR FFFFH
+ 0850  50				PUSH	AX	; SAVE RESULTS
+ 0851  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+ 0853  24 C0				AND	AL,PARITY_ERR
+ 0855  26: 89 05			MOV	ES:[DI],AX	; CLEAR POSSIBLE PARITY ERROR
+ 0858  58				POP	AX	; GET RESULTS
+ 0859  75 2D				JNZ	HOW_BIG_END	; GO IF PARITY CHECK
+ 085B  3D FFFF				CMP	AX,0FFFFH
+ 085E  75 28				JNZ	HOW_BIG_END
+				
+				;-----	CHECK 64K BLOCK FOR PARITY CHECK
+				
+				HOW_BIG_2:
+test1.ASM(1584): error A2006: Phase error between passes
+ 0866  2B C0				SUB	AX,AX	; WRITE ZEROS
+ 0868  B9 8000				MOV	CX,2000H*4	; SET COUNT FOR 32K WORDS
+ 086B  F3/ AB				REP	STOSW	; FILL 32K WORDS
+				
+ 086D  1E				PUSH	DS
+ 086E  06				PUSH	ES
+ 086F  06				PUSH	ES	; GET ES TO DS
+ 0870  1F				POP	DS
+ 0871  B9 8000				MOV	CX,2000H*4	; SET COUNT FOR 32K WORDS
+ 0874  2B F7				SUB	SI,DI
+ 0876  F3/ AD				REP	LODSW
+ 0878  2B FF				SUB	DI,DI	; SET TO BEGINNING OF BLOCK
+ 087A  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+ 087C  24 C0				AND	AL,PARITY_ERR
+ 087E  26: C7 05 0000			MOV	WORD PTR ES:[DI],0	; CLEAR POSSIBLE PARITY ERROR
+ 0883  07				POP	ES	; RESTORE SEGMENTS
+ 0884  1F				POP	DS
+ 0885  75 01				JNZ	HOW_BIG_END	; GO IF PLANAR OR I/O PARITY CHECK
+				
+ 0887  C3				RET
+				
+ 0888				HOW_BIG_END:
+ 0888  9C				PUSHF		; SAVE THE CURRENT FLAGS
+ 0889  B0 1C				MOV	AL,1CH	;	  <><><><><><><><><><><><>
+ 088B  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1C <><>
+				
+				;-----	SET OR RESET 512 TO 640 INSTALLED FLAG
+				
+ 088D  B8 1C3B				MOV	AX,X*(CMOS_INFO128+NMI)	; SET/RESET 640K STATUS FLAG
+test1.ASM(1613): error A2029: Division by 0 or overflow
+ 0890  E8 0000 E			CALL	CMOS_READ	; GET THE DIAGNOSTIC STATUS
+ 0893  0A 06 0000 U			OR	AL,M64OK
+test1.ASM(1615): error A2009: Symbol not defined: M64OK
+ 0897  81 FB 0200			CMP	BX,512	; CHECK MEMORY SIZE
+ 089B  77 02				JA	K640	; SET FLAG FOR 512 - 640 INSTALLED
+ 089D  24 7F				AND	AL,NOT M640K
+ 089F				K640:	
+ 089F  86 C4				XCHG	AL,AH	; SAVE THE SUTUS
+ 08A1  E8 0000 E			CALL	CMOS_WRITE	; RESTORE THE STATUS
+				
+ 08A4  6A 18				PUSH	BYTE PTR RSDA_PTR	; RESTORE THE DATA SEGMENT
+ 08A6  1F				POP	DS
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-22
+
+
+ 08A7  89 1E 0013 R			MOV	@MEMORY_SIZE,BX	; SAVE MEMORY SIZE
+ 08AB  9D				POPF		; RESTORE THE FLAG REGISTER
+ 08AC  C3				RET
+				;------------------------------------------------------------------------------
+				; TEST.13A								:
+				;  PROTECTED MODE TEST AND MEMORY SIZE DETERMINE ( ABOVE 1024K )			:
+				
+				; DESCRIPTION:								:
+				;     THIS ROUTINE RUNS IN PROTECTED MODE IN ORDER TO ADDRESS ABOVE 1 MEG.	:
+				;     THE MEMORY SIZE IS DETERMINED AND SAVED IN CMOS.				:
+				;     DURING A POWER UP SEQUENCE THE MEMORY SIZE DETERMINE IS DONE WITH 	:
+				;     PLANAR AND I/O PARITY CHECKS DISABLED.  DURING A SOFT RESET THE MEMORY 	:
+				;     SIZE DETERMINE WILL CHECK FOR PARITY ERRORS.					:
+				;------------------------------------------------------------------------------
+				
+ 08AD  6A 08			DONE:	PUSH	BYTE PTR GDT_PTR	; POINT DS TO THE DESCRIPTOR TABLE
+ 08AF  6A 0005				POP	05
+test1.ASM(1641): error A2056: Immediate mode illegal
+				
+				;-----	START WITH SEGMENT ADDRESS 10-0000 (ONE MEG AND ABOVE)
+				
+ 08B2  2E: C6 06 0048 04		MOV	BYTE PTR CS:(ES_TEMP,BASE_HI_BYTE),10H
+test1.ASM(1645): error A2110: Open parenthesis or bracket
+ 08B8  C7 06 004A 0000			MOV	DS:ES_TEMP.BASE_LO_WORD,0H
+				
+ 08BE  B0 1D				MOV	AL,1DH	;	  <><><><><><><><><><><><>
+ 08C0  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1D <><>
+ 08C2  2B DB				SUB	BX,BX	; START WITH COUNT 0
+				
+				;-----	START STORAGE SIZE/CLEAR
+				
+ 08C4				NOT_DONE1:
+ 08C4  6A 48				PUSH	BYTE PTR ES_TEMP	; POINT ES TO DATA
+ 08C6  07				POP	ES	; POINT TO SEGMENT TO TEST
+ 08C7  E8 08E3 R			CALL	HOW_BIG1	; DO THE FIRST 64K
+ 08CA  74 03				JZ	DONEA	; CHECK IF TOP
+				
+ 08CC  E9 0000 U			JMP	DONE1	; GO IF TOP
+test1.ASM(1660): error A2009: Symbol not defined: DONE1
+				
+ 08CF  83 C3 40			DONEA:	ADD	BX,16*4	; BUMP MEMORY COUNT BY 64K
+				
+				;-----	DO NEXT 64K (XX0000) BLOCK
+				
+ 08D2  FE 06 004C			INC	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE)
+				
+				;-----	CHECK FOR TOP OF MEMORY (FE0000)
+				
+ 08D6  80 3E 004C FE			CMP	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),0FEH	; LAST OF MEMORY?
+ 08DB  75 E7				JNZ	NOT_DONE1				; GO IF NOT
+ 08DD  E8 0958 R			CALL	HOW_BIG_END1				; GO SET MEMORY SIZE
+ 08E0  E9 0000 U			JMP	DONE1
+test1.ASM(1673): error A2009: Symbol not defined: DONE1
+				
+				;-----	FILL/CHECK LOOP
+				
+ 08E3				HOW_BIG1:
+ 08E3  2B FF				SUB	DI,DI
+ 08E5  B8 AA55				MOV	AX,0AA55H	; TEST PATTERN
+ 08E8  8B C8				MOV	CX,AX	; SAVE PATTERN
+ 08EA  26: 89 05			MOV	ES:[DI],AX	; SEND PATTERN TO MEMORY
+ 08ED  B0 0F				MOV	AL,0FH	; PUT SOMETHING IN AL
+ 08EF  26: 8B 05			MOV	AX,ES:[DI]	; GET PATTERN
+ 08F2  26: 89 05			MOV	ES:[DI],AX	; INSURE NO PARITY I/O CHECK
+ 08F5  33 C1				XOR	AX,CX	; COMPARE PATTERNS
+ 08F7  75 5F				JNZ	HOW_BIG_END1	; GO END IF NO COMPARE
+				
+				;-----	IS THIS A SOFT RESET
+				
+ 08F9  1E				PUSH	DS
+ 08FA  6A 18				PUSH	BYTE PTR RSDA_PTR	; POINT TO SYSTEM DATA AREA
+ 08FC  1F				POP	DS
+ 08FD  81 3E 0073 R 1234		CMP	@RESET_FLAG,1234H	; SOFT RESET
+ 0903  1F				POP	DS	; RESTORE DS
+ 0904  75 30				JNZ	HOW_BIG_2A	; GO IF NOT SOFT RESET
+				
+				;-----	CHECK PARITY WITH PARITY BITS OFF
+				
+ 0906  26: C7 85 0002 U 0101		MOV	WORD PYR ES:[DI],0101H	; TURN OFF BOTH PARITY BITS
+test1.ASM(1699): error A2009: Symbol not defined: PYR
+ 090D  6A FF				PUSH	BYTE PTR 0FFH	; PLACE 0FFFFH IN STACK (BUS BITS ON)
+test1.ASM(1700): error A2050: Value out of range
+ 090F  58				POP	AX	; DELAY - CAUSING BUS BITS ON
+ 0910  26: 8B 05			MOV	AX,ES:[DI]	; CHECK PARITY
+				
+ 0913  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+ 0915  24 C0				AND	AL,PARITY_ERR
+ 0917  8E 05				MOV	ES,[DI],AX	; CLEAR POSSIBLE PARITY ERROR
+test1.ASM(1706): warning A4001: Extra characters on line
+ 0919  75 3D				JNZ	HOW_BIG_END1	; GO IF PLANAR OR I/O PARITY CHECK
+				
+				;-----	CHECK ALL BITS
+ 091B  26: C7 05 FFFF			MOV	WORD PTR ES:[DI],0FFFFH	; TURN ON ALL BITS
+ 0920  6A 00				PUSH	BYTE PTR 0	; PLACE 00000H IN STACK (BUS BITS OFF)
+ 0922  58				POP	AX	; DELAY - CAUSING BUS BITS OFF
+ 0923  26: 8B 05			MOV	AX,ES:[DI]	; CHECK FOR FFPFH
+ 0926  50				PUSH	AX	; SAVE RESULTS
+ 0927  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+ 0929  24 C0				AND	AL,PARITY_ERR
+ 092B  26: 89 05			MOV	ES:[DI],AX	; CLEAR POSSIBLE PARITY ERROR
+ 092E  58				POP	AX	; GET RESULTS
+ 092F  75 27				JNZ	HOW_BIG_END1	; GO IF PLANAR OR I/O PARITY CHECK
+ 0931  3D FFFF				CMP	AX,0FFFFH
+ 0934  75 22				JNZ	HOW_BIG_END1
+				
+				;-----	CLEAR 64K BLOCK OF MEMORY
+				
+ 0936				HOW_BIG_2A:
+ 0936  2B C0				SUB	AX,AX	; WRITE ZEROS
+ 0938  B9 8000				MOV	CX,2000H*4	; SET COUNT FOR 32K WORDS
+ 093B  F3/ AB				REP	STOSW	; FILL 32K WORDS
+				
+				;-----	CHECK 64K BLOCK FOR PARITY CHECK (VALID TEST DURING SOFT RESET ONLY)
+				
+ 093D  1E				PUSH	DS
+ 093E  06				PUSH	ES
+ 093F  06				PUSH	ES	; GET ES TO DS
+ 0940  1F				POP	DS
+ 0941  B9 8000				MOV	CX,2000H*4	; SET COUNT FOR 32K WORDS
+ 0944  2B F6				SUB	SI,SI
+ 0946  F3/ AD				REP	LODSW
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-23
+
+
+ 0948  2B FF				SUB	DI,DI	; SET TO BEGINNING OF BLOCK
+ 094A  E4 61				IN	AL,PORT_B	; CHECK FOR PLANAR OR I/O PARITY CHECK
+ 094C  24 C0				AND	AL,PARITY_ERR
+ 094E  26: C7 05 0000			MOV	WORD PTR ES:[DI],0	; CLEAR POSSABLE PARITY ERROR
+ 0953  07				POP	ES	; RESTORE SEGMENT
+ 0954  1F				POP	DS
+ 0955  75 01				JNZ	HOW_BIG_END1	; GO IF PLANAR OR I/O PARITY CHECK
+				
+ 0957  C3				RET
+				
+ 0958				HOW_BIG_END1:
+ 0958  B0 1E				MOV	AL,1EH	;	  <><><><><><><><><><><><>
+ 095A  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1E <><>
+				
+				;-----	SET EXPANSION MEMORY SIZE DETERMINED IN CMOS
+				
+ 095C  B0 38				MOV	AL,CMOS_U_M_S_LO+NMI	; ADDRESS LOW BYTE
+test1.ASM(1755): error A2029: Division by 0 or overflow
+ 095E  8A E3				MOV	AH,BL	; GET LOW MEMORY SIZE
+ 0960  E8 0000 E			CALL	CMOS_WRITE	; SET LOW BYTE
+ 0963  B0 39				MOV	AL,CMOS_U_M_S_HI+NMI	; ADDRESS HI BYTE
+test1.ASM(1758): error A2029: Division by 0 or overflow
+ 0965  8A E7				MOV	AH,BH	; GET THE HIGH MEMORY SIZE
+ 0967  E8 0000 E			CALL	CMOS_WRITE	; PLACE IN CMOS
+ 096A  C3				RET
+				;-----	TEST ADDRESS LINES 19 - 23
+				
+ 096B  B0 1F			OONE1:	MOV	AL,1FH	;	  <><><><><><><><><><><><>
+ 096D  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  1F <><>
+ 096F  C6 06 004C 00			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),00H
+ 0974  2B FF				SUB	DI,DI	; SET LOCATION POINTER TO ZERO
+ 0976  BA FFFF				MOV	DX,0FFFFH	; WRITE FFFF AT ADDRESS 0
+ 0979  E8 09A8 R			CALL	SD0
+ 097C  2B D2				SUB	DX,DX	; WRITE 0
+					
+ 097E  C6 06 004C 08			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),08H
+ 0983  E8 09A8 R			CALL	SD0
+ 0986  C6 06 004C 10			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),10H
+ 098B  E8 09A8 R			CALL	SD0
+ 098E  C6 06 004C 20			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),20H
+ 0993  E8 09A8 R			CALL	SD0
+ 0996  C6 06 004C 40			MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),40H
+ 099B  E8 09A8 R		CALL	SD0
+ 099E  C6 06 004C 80		MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),80H
+ 09A3  E8 09A8 R		CALL	SD0
+				
+ 09A6  EB 18			JMP	SHORT SD2	; TEST PASSED CONTINUE
+				
+ 09A8				SD0:
+ 09A8  6A 48			PUSH	BYTE PTR ES_TEMP	; POINT ES TO DATA
+ 09AA  07			POP	ES	; POINT TO SEGMENT TO TEST
+ 09AB  26: 89 15		MOV	ES:[DI],DX	; WRITE THE PATTERN
+				
+ 09AE  C6 06 004C 00		MOV	BYTE PTR DS:(ES_TEMP.BASE_HI_BYTE),00H
+				
+ 09B3  6A 48			PUSH	BYTE PTR ES_TEMP	; POINT ES TO DATA
+ 09B5  07			POP	ES	; POINT TO SEGMENT TO TEST
+ 09B6  26: 83 3D FF		CMP	WORD PTR ES:[DI],0FFFFH] 	; LOCAT10N 0 CHANGE?
+test1.ASM(1794): error A2110: Open parenthesis or bracket
+ 09BA  74 03			JZ	SD1	; CONTINUE IF NOT
+ 09BC  E9 07C2 R		JMP	SHUT_8	; GO HALT IF YES
+ 09BF				SD1:
+ 09BF  C3			RET
+				
+				;-----	CAUSE A SHUTDOWN
+				
+ 09C0  B0 20			SD2:	MOV	AL,20H	;	  <><><><><><><><><><><><>
+ 09C2  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  20 <><>
+ 09C4  E4 61				IN	AL,PORT_B
+ 09C6  0C 0C				OR	AL,RAM_PAR_OFF	; TOGGLE PARITY CHECK ENABLES
+ 09C8  E6 61				OUT	PORT_B,AL
+ 09CA  24 F3				AND	AL,RAM_PAR_ON
+ 09CC  E6 61				OUT	PORT_B,AL
+ 09CE  E9 0000 E			JMP	PRoC_SHUTDOWN	; CAUSE A SHUTDOWN (RETURN VIA JUMP)
+				
+				;------------------------------------------
+				;	RETURN 1 FROM SHUTDOWN	:
+				;------------------------------------------
+				
+ 09D1  B0 21			SHUT1:	MOV	AL,21H	;	  <><><><><><><><><><><><>
+ 09D3  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  21 <><>
+ 09D5  BC ---- R			MOV	SP,ABS0	; SET REAL MODE STACK
+ 09D8  8E D4				MOV	SS,SP
+ 09DA  BC 0400 R			MOV	SP,OFFSET @TOS
+				
+				;-----	SET DIVIDE 0 VECTOR OFFSET
+ 09DD  2B FF				SUB	DI,DI	; POINT TO FIRST INTERRUPT LOCATION
+ 09DF  8E C7				MOV	ES,DI	; SET ES TO ABS0 SEGMENT
+ 09E1  B8 0000 E			MOV	AX,OFFSET D11	; GET ADDRESS OF INTERRUPT OFFSET
+ 09E4  AB				STOSW		; PLACE OFFSET IF NULL HANDLER IN VECTOR
+				
+ 09E5  E8 0000 E			CALL	DDS	; SET UP THE REAL DATA AREA
+				
+				;-----	GET THE CONFIGURATION FROM CMOS
+				
+ 09E8  B8 F716				MOV	AX,X*(CMOS_DIAG+NMI)	; CHECK CMOS GOOD
+test1.ASM(1831): error A2029: Division by 0 or overflow
+ 09EB  E8 0000 E			CALL	CMOS_READ	; GET THE STATUS
+ 09EE  A8 C0				TEST	AL,BAD_BAT+BAD_CKSUM	; VALID CMOS ?
+ 09F0  74 03				JZ	M_OK	; GO IF YES
+ 09F2  E9 0A7B R			JMP	BAD_MOS	; GO IF NOT
+ 09F5				M_OK:
+ 09F5  24 DF				AND	AL,0DFH	; CLEAR THE MINIMUM CONFIG BIT
+ 09F7  86 C4				XCHG	AL,AH	; SAVE THE STATUS BYTE
+ 09F9  E8 0000 E			CALL	CMOS_WRITE	; BACK INTO CMOS
+				
+				;-----	CHECK FOR CM0S RUN IN MODE
+				
+ 09FC  81 3E 0073 R 1234		CMP	@RESET_FLAG,1234H	; CHECK FOR SOFT RESET
+ 0A02  74 10				JE	M_OK_64	; BYPASS IF SOFT RESET
+				
+ 0A04  B0 1E				MOV	AL,CMOS_B_M_S_HI+NMI	; GET THE BASE MEMORY SIZE HIGH BYTE
+test1.ASM(1846): error A2029: Division by 0 or overflow
+ 0A06  E8 0000 E			CALL	CMOS_READ
+ 0A09  24 C0				AND	AL,0C0H	; MASK FOR MANUFACTURING TEST BITS
+ 0A0B  3C C0				CMP	AL,0C0H	; CHECK FOR MANUFACTURING TEST MODE SET
+ 0A0D  75 05				JNE	M_OK_64	; SKIP IF NOT MANUFACTURING LINE TEST
+				
+ 0A0F  C6 06 0073 R 64			MOV	BYTE PTR @RESET_FLAG,64H	; ELSE SET THE MFG TEST FLAG
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-24
+
+
+				
+				;----	INSURE CONFIGURATION HAS CORRECT VIDEO TYPE
+				
+ 0A14				M_OK_64:
+ 0A14  B0 1C				MOV	AL,CMOS_EQUIP+NMI	; GET THE EQUIPMENT BYTE
+test1.ASM(1857): error A2029: Division by 0 or overflow
+ 0A16  E8 0000 E			CALL	CMOS_READ
+ 0A19  8A E0				MOV	AH,AL	; SAVE VIDEO TYPE
+ 0A1B  A8 30				TEST	AL,030H	; ANY VIDEO?
+ 0A1D  75 31				JNZ	MOS_OK_1	; CONTINUE
+ 0A1F  E8 0A2D R			CALL	CHK_VIDEO	; INSURE VIDEO ROM PRESENT
+ 0A22  74 4C				JZ	MOS_OK	; CONTINUE
+				
+ 0A24  F6 06 0012 R 20			TEST	@MFG_TST,MFG_LOOP	; EXCEPT IF MFG JUMPER IS INSTALLED
+ 0A29  74 6F				JZ	NORMAL_CONFIG	; GO IF INSTALLED
+ 0A2B  EB 4E				JMP	SHORT BAD_MOS	; GO DEFAULT
+				
+				;-----	ROUTINE CHECK FOR VIDEO FEATURE ROM PRESENT
+				
+ 0A2D				CHK_VIDEO:
+ 0A2D  B9 C000				MOV	CX,0C000H	; START OF FEATURE I/O ROM
+ 0A30				CHK_VIDEO1:
+ 0A30  50				PUSH	AX	; SAVE THE CONFIGURATION
+ 0A31  1E				PUSH	DS	; SAVE THE DATA SEGMENT
+ 0A32  57				PUSH	DI	; SAVE COMPARE REGISTER
+ 0A33  8E D9				MOV	DS,CX	; GET ROM SEGMENT
+ 0A35  BF AA55				MOV	DI,0AA55H	; GET THE PRESENCE SIGNATURE
+ 0A38  2B DB				SUB	BX,BX	; CLEAR INDEX POINTER
+ 0A3A  8B 07				MOV	AX,[BX]	; GET THE FIRST 2 LOCATIONS
+ 0A3C  3B C7				CMP	AX,DI	; IS THE VIDEO FEATURE ROM PRESENT?
+ 0A3E  5F				POP	DI	; RESTORE WORK REGISTER
+ 0A3F  1F				POP	DS	; RESTORE DATA SEGMENT
+ 0A40  58				POP	AX	; GET THE CONFIGURATION
+ 0A41  74 0C				JZ	CHK_VIDEO2	; GO IF VIDEO ROM INSTALLED
+				
+ 0A43  81 C1 0080			ADD	CX,080H	; POINT TO NEXT 2K BLOCK
+ 0A47  81 F9 C800			CMP	CX,0C800H	; TOP OF VIDEO ROM AREA YET?
+ 0A4B  7C E3				JL	CHK_VIDEO1	; TRY AGAIN
+ 0A4D  23 C9				AND	CX,CX	; SET NON ZERO FLAG
+ 0A4F				CHK_VIDEO2:
+ 0A4F  C3				RET		; RETURN TO CALLER
+				
+				;-----	CMOS VIDEO BITS NON ZERO (CHECK FOR PRIMARY DISPLAY AND NO VIDEO ROM)
+				
+ 0A50				MOS_OK_1:
+ 0A50  E8 0A2D R			CALL	CHK_VIDEO	; IS THE VIDEO ROM INSTALLED?
+ 0A53  74 26				JZ	BAD_MOS	; WRONG CONFIGURATION IN CONFIG BYTE
+				
+ 0A55  8A C4				MOV	AL,AH	; RESTORE CONFIGURATION
+ 0A57  F6 06 0012 R 40			TEST	@MFG_TST,DSP_JMP	; CHECK FOR DISPLAY JUMPER
+ 0A5C  74 0A				JZ	MOS_OK_2	; GO IF COLOR CARD IS PRIMARY DISPLAY
+				
+				;-----	MONOCHROME CARD 15 PRIMARY DISPLAY IND JUMPER INSTALLED)
+				
+ 0A5E  24 30				AND	AL,30H	; INSURE MONOCHROME IS PRIMARY
+ 0A60  3C 30				CMP	AL,30H	; CONFIGURATION OK?
+ 0A62  75 17				JNZ	BAD_MOS	; GO IF NOT
+ 0A64  8A C4				MOV	AL,AH	; RESTORE CONFIGURATION
+ 0A66  EB 08				JMP	SHORT MOS_OK	; USE THE CONFIGURATION BYTE FOR DISPLAY
+				
+				;-----	COLOR CARD
+				
+ 0A68				MOS_OK_2:
+ 0A68  24 30				AND	AL,30H	; STRIP UNWANTED BITS
+ 0A6A  3C 30				CMP	AL,30H	; MUST NOT BE MONO WITH JUMPER INSTALLED
+ 0A6C  8A C4				MOV	AL,AH	; RESTORE CONFIGURATION
+ 0A6E  74 0B				JZ	BAD_MOS	; GO IF YES
+				
+				;-----	CONFIGURATION MUST HAVE AT LEAST ONE DISKETTE
+				
+ 0A70  A8 01			MOS_OK:	TEST	AL,01H	; MUST HAVE AT LEAST ONE DISKETTE
+ 0A72  75 26				JNZ	NORMAL_CONFIG	; GO SET CONFIGURATION IF OK
+ 0A74  F6 06 0012 R 20			TEST	@MFG_TST,MFG_LOOP	; EXCEPT IF MFG JUMPER IS INSTALLED
+ 0A79  74 1F				JZ	NORMAL_CONFIG	; GO IF INSTALLED
+				
+				;-----	MINIMUM CONFIGURATION WITH BAD CMOS OR NON VALID VIDEO
+				
+ 0A7B				BAD_MOS:
+ 0A7B  B8 E116				MOV	AX,CMOS_DIAG+NMI	; GET THE DIAGNOSTIC STATUS
+test1.ASM(1930): error A2029: Division by 0 or overflow
+ 0A7E  E8 0000 E			CALL	CMOS_READ
+ 0A81  A8 C0				TEST	AL,BAD_BAT+BAD_CKSUM	; WAS BATTERY DEFECTIVE OR BAD CHECKSUM
+ 0A83  75 03				JNZ	BAD_MOS1	; GO IF YES
+				
+ 0A85  E8 0000 E			CALL	CONFIG_BAD	; SET THE MINIMUM CONFIGURATION FLAG
+ 0A88				BAD_MOS1:
+ 0A88  E8 0A2D R			CALL	CHK_VIDEO	; CHECK FOR VIDEO ROM
+ 0A8B  B0 01				MOV	AL,01H	; DISKETTE ONLY
+ 0A8D  74 0B				JZ	NORMAL_CONFIG	; GO IF VIDEO ROM PRESENT
+				
+ 0A8F  F6 06 0012 R 40			TEST	@MFG_TST,DSP_JMP	; CHECK FOR DISPLAY JUMPER
+ 0A94  B0 11				MOV	AL,11H	; DEFAULT TO 4OX25 COLOR
+ 0A96  74 02				JZ	NORMAL_CONFIG	; GO IF JUMPER IS INSTALLED
+				
+ 0A98  B0 31				MOV	AL,31H	; DISKETTE / B/W DISPLAY 80X25
+				
+				;------------------------------------------
+				;	CONFIGURATION AND MFG MODE	:
+				;------------------------------------------
+				
+ 0A9A				NORMAL_CONFIG:
+ 0A9A  F6 06 0012 R 20			TEST	@MFG_TST,MFG_LOOP	; IS THE MANUFACTURING JUMPER INSTALLED
+ 0A9F  75 02				JNZ	NORM1	; GO IF NOT
+ 0AA1  24 3E				AND	AL,03EH	; STRIP DISKETTE FOR MFG TEST
+				
+ 0AA3  2A E4			NORM1:	SUB	AH,AH
+ 0AA5  A3 0010 R			MOV	@EQUIP_FLAG,AX	; SAVE SWITCH INFORMATION
+ 0AA8  81 3E 0073 R 1234		CMP	@RESET_FLAG,1234H	; BYPASS IF SOFT RESET
+ 0AAE  74 2C				JZ	E6
+				
+				;-----	GET THE FIRST SELF TEST RESULTS FROM KEYBOARD
+ 0AB0  B0 60				MOV	AL,WRITE_8042_LOC	; ENABLE KEYBOARD
+ 0AB2  E8 03A8 R			CALL	C8042	; ISSUE WRITE BYTE COMMAND
+ 0AB5  B0 4D				MOV	AL,4DH	; ENABLE OUTPUT BUFFER FULL INTERRUPT,
+							; SET SYSTEM FLAG, PC 1 COMPATIBILITY,
+ 0AB7  E6 60				OUT	PORT_A,AL	; INHIBIT OVERRIDE, ENABLE KEYBOARD
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-25
+
+
+				
+ 0AB9  2B C9				SUB	CX,CX	; WAIT FOR COMMAND ACCEPTED
+ 0ABB  E8 03AD R			CALL	C42_1
+ 0ABE  B9 7FFF				MOV	CX,07FFFH	; SET LOOP COUNT FOR APPROXIMATELY 100MS
+							; TO RESPOND
+ 0AC1  E4 64			TST6:	IN	AL,STATUS_PORT	; WAIT FOR OUTPUT BUFFER FULL
+ 0AC3  A8 01				TEST	AL,OUT_BUF_FULL
+ 0AC5  E1 FA				LOOPZ	TST6	; TRY AGAIN IF NOT
+				
+ 0AC7  9C				PUSHF		; SAVE FLAGS
+ 0AC8  B0 AD				MOV	AL,DIS_KBD	; DISABLE KEYBOARD
+ 0ACA  E8 03A8 R			CALL	C8042	; ISSUE THE COMMAND
+ 0ACD  9D				POPF		; RESTORE FLAGS
+ 0ACE  74 0C				JZ	E6	; CONTINUE WITHOUT RESULTS
+				
+ 0AD0  E4 60				IN	AL,PORT_A	; GET INPUT FROM KEYBOARD
+ 0AD2  A2 0073 R			MOV	BYTE PTR @RESET_FLAG,AL 	; TEMPORARY SAVE FOR AA RECEIVED
+				
+				;-----	CHECK FOR MFG REQUEST
+				
+ 0AD5  3C 65				CMP	AL,065H	; LOAD MANUFACTURING TEST REQUEST?
+ 0AD7  75 03				JNE	E6	; CONTINUE IF NOT
+ 0AD9  E9 0C65 R			JMP	MFG_BOOT	; ELSE GO TO MANUFACTURING BOOTSTRAP
+					
+				;--------------------------------------------------------
+				; TEST.14				  :
+				;       INITIALIZE AND START CRT CONTROLLER (6845)      :
+				;       TEST VIDEO READ/WRITE STORAGE.			  :
+				; DESCRIPTION				  :
+				;       RESET THE VIDEO ENABLE SIGNAL.			  :
+				;       SELECT ALPHANUMERIC MODE, 40 * 25, B & W. 	  :
+				;       READ/WRITE DATA PATTERNS TO MEMORY, CHECK 	  :
+				;       STORAGE ADDRESSABILITY.			  :
+				; ERROR = 1 LONG AND 2 SHORT BEEPS			  :
+				;--------------------------------------------------------
+				
+ 0ADC				E6:
+ 0ADC  A1 0010 R			MOV	AX,@EQUIP_FLAG	; GET SENSE INFORMATION
+ 0ADF  50				PUSH	AX	; SAVE IT
+ 0AE0  B0 30				MOV	AL,30H	; FORCE MONOCHROME TYPE
+ 0AE2  A3 0010 R			MOV	@EQUIP_FLAG,AX	; INTO EQUIPMENT FLAG
+ 0AE5  2B C0				SUB	AX,AX	; MODE SET COMMAND FOR DEFAULT MODE
+ 0AE7  CD 10				INT	INT_VIDEO	; SEND INITIALIZATION TO B/W CARD
+ 0AE9  B0 20				MOV	AL,20H	; FORCE COLOR AT 80 BY 25
+ 0AEB  A3 0010 R			MOV	@EQUIP_FLAG,AX	; INTO EQUIPMENT FLAG TO CLEAR BUFFERS
+ 0AEE  B8 0003				MOV	AX,0003H	; AND INITIALIZATION COLOR CARD 80X25
+ 0AF1  CD 10				INT	INT_VIDEO	; MODE SET 80 X 25
+ 0AF3  B8 0001				MOV	AX,0001H	; SET COLOR 40 X 25 MODE
+ 0AF6  CD 10				INT	INT_VIDEO	; SET DEFAULT COLOR MODE
+ 0AF8  58				POP	AX	; RECOVER REAL SWITCH INFORMATION
+ 0AF9  A3 0010 R			MOV	@EQUIP_FLAG,AX	; RESTORE IT
+ 0AFC  24 30				AND	AL,30H	; ISOLATE VIDEO SWITCHES
+ 0AFE  75 11				JNZ	E7	; VIDEO SWITCHES SET TO 0?
+ 0B00  1E				PUSH	DS	; SAVE THE DATA SEGMENT
+ 0B01  50				PUSH	AX
+ 0B02  2B C0				SUB	AX,AX	; SET DATA SEGMENT TO 0
+ 0B04  8E D8				MOV	DS,AX
+ 0B06  BF 0040 R			MOV	DI,OFFSET @VIDEO_INT	; SET INTERRUPT 10H TO DUMMY
+ 0B09  C7 05 0000 E			MOV	WORD PTR [DI],OFFSET DUMMY_RETURN	; RETURN IF NO VIDEO CARD
+ 0B0D  58				POP	AX	; RESTORE REGISTERS
+ 0B0E  1F				POP	DS
+ 0B0F  EB 7F				JMP	SHORT E18_1	; BYPASS VIDEO TEST
+				
+ 0B11				E7:
+ 0B11  3C 30				CMP	AL,30H	; B/W CARD ATTACHED?
+ 0B13  74 08				JE	E8	; YES - SET MODE FOR B/W CARD
+ 0B15  FE C4				INC	AH	;jrc:	INC	AM	; SET COLOR MODE FOR COLOR CARD
+ 0B17  3C 20				CMP	AL,20H	; 80X25 MODE SELECTED7
+ 0B19  75 02				JNE	E8	; NO - SET MODE FOR 40X25
+ 0B1B  B4 03				MOV	AH,3	; SET MODE FOR 8OX25
+				
+ 0B1D  86 E0			E8:	XCHG	AH,AL
+ 0B1F  50				PUSH	AX	; SAVE VIDEO MODE ON STACK
+ 0B20  2A E4				SUB	AH,AH	; INITIALIZE TO ALPHANUMERIC MD
+ 0B22  CD 10				INT	INT_VIDEO	; CALL VIDEO_IO
+ 0B24  58				POP	AX	; RESTORE VIDEO SENSE SWITCHES IN AH
+ 0B25  50				PUSH	AX	; SAVE VALUE
+ 0B26  BB B000				MOV	BX,0B000H	; STARTING VIDEO MEMORY ADDRESS B/W CARD
+ 0B29  BA 03B8				MOV	DX,3B8H	; MODE REGISTER FOR B/W
+ 0B2C  B9 0800				MOV	CX,2048	; MEMORY WORD COUNT FOR B/W CARD
+ 0B2F  80 FC 30				CMP	AH,30H	; B/W VIDEO CARD ATTACHED?
+ 0B32  74 07				JE	E9	; YES - GO TEST VIDEO STORAGE
+ 0B34  B7 B8				MOV	BH,0B8H	; STARTING MEMORY ADDRESS FOR COLOR CARD
+ 0B36  BA 03D8				MOV	DX,3D8H	; MODE REGISTER FOR COLOR CARD
+ 0B39  B5 20				MOV	CH,20H	; MEMORY WORD COUNT FOR COLOR CARD
+ 0B3B				E9:
+ 0B3B  A0 0065 R			MOV	AL,@CRT_MODE_SET	; GET CURRENT MODE SET VALUE
+ 0B3E  24 37				AND	AL,037H	; SET VIDEO BIT OFF
+ 0B40  EE				OUT	DX,AL	; DISABLE VIDEO FOR COLOR CARD
+ 0B41  8E C3				MOV	ES,BX	; POINT ES TO VIDEO MEMORY
+ 0B43  8E DB				MOV	DS,BX	; POINT DS TO VIDEO MEMORY
+ 0B45  D1 C9				ROR	CX,1	; DIVIDE BY 2 FOR WORD COUNT
+ 0B47  E8 0000 E			CALL	STGTST_CNT	; GO TEST VIDEO READ/WRITE STORAGE
+ 0B4A  75 70				JNE	E17	; R/W MEMORY FAILURE - BEEP SPEAKER
+				
+				;------------------------------------------------
+				; TEST.15			:
+				;       SETUP VIDEO DATA ON SCREEN FOR VIDEO    :
+				;       LINE TEST.		:
+				; DESCRIPTION			:
+				;       ENABLE VIDEO SIGNAL AND SET MODE.		:
+				;       DISPLAY A HORIZONTAL BAR ON SCREEN.	:
+				;------------------------------------------------
+				
+ 0B4C  B0 22				MOV	AL,22H	;	  <><><><><><><><><><><><>
+ 0B4E  E6 80				OUT	MFG_PORT,AL	; 	  <><> CHECKPOINT  22 <><>
+				
+ 0B50  58				POP	AX	; GET VIDEO SENSE SWITCHES (AH)
+ 0B51  50				PUSH	AX	; SAVE IT
+ 0B52  B4 00				MOV	AH,0	; ENABLE VIDEO AND SET MODE
+ 0B54  CD 10				INT	INT_VIDEO	; VIDEO
+ 0B56  B8 7020				MOV	AX,7020H	; WRITE BLANKS IN REVERSE VIDEO
+ 0B59  2B FF				SUB	DI,DI	; SETUP STARTING LOCATION
+ 0B5B  B9 0028				MOV	CX,40	; NUMBER OF BLANKS TO DISPLAY
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-26
+
+
+ 0B5E  F3/ AB				REP	STOSW	; WRITE VIDEO STORAGE
+				
+				;------------------------------------------
+				; TEST.16		:
+				;	CRT INTERFACE LINES TEST	:
+				; DESCRIPTION		:
+				;	SENSE ON/OFF TRANSITION OF THE	:
+				;	VIDEO ENABLE AND HORIZONTAL	:
+				;	SYNC LINES	:
+				;------------------------------------------
+				
+ 0B60  58				POP	AX	; GET VIDEO SENSE SWITCH INFORMATION
+ 0B61  50				PUSH	AX	; SAVE IT
+ 0B62  80 FC 30				CMP	AH,30H	; B/W CARD ATTACHED7
+ 0B65  BA 03BA				MOV	DX,03BAH	; SETUP ADDRESS OF B/W STATUS PORT
+ 0B68  74 03				JE	E11	; YES - GO TEST LINES
+ 0B6A  BA 03DA				MOV	DX,03DAH	; COLOR CARD IS ATTACHED
+ 0B6D				E11:
+ 0B6D  B4 08				MOV	AH,8
+ 0B6F				E12:
+ 0B6F  2B C9				SUB	CX,CX
+ 0B71				E13:
+ 0B71  EC				IN	AL,DX	; READ CRT STATUS PORT
+ 0B72  22 C4				AND	AL,AH	; CHECK VIDEO/HORIZONTAL LINE
+ 0B74  75 04				JNZ	E14	; ITS ON - CHECK IF IT GOES OFF
+ 0B76  E2 F9				LOOP	E13	; LOOP UNTIL ON OR TIMEOUT
+ 0B78  EB 42				JMP	SHORT E17	; GO PRINT ERROR MESSAGE
+ 0B7A				E14:
+ 0B7A  2B C9				SUB	CX,CX
+ 0B7C				E15:
+ 0B7C  EC				IN	AL,DX	; READ CRT STATUS PORT
+ 0B7D  22 C4				AND	AL,AH	; CHECK VIDEO/HORIZONTAL LINE
+ 0B7F  74 04				JZ	E16	; ITS ON - CHECK NEXT LINE
+ 0B81  E2 F9				LOOP	E15	; LOOP IF ON UNTIL IT GOES OFF
+ 0B83  EB 37				JMP	SHORT E17	; GO ERROR BEEP
+				
+				
+				;-----	CHECK HORIZONTAL LINE
+ 0B85  B1 03			E16:	MOV	CL,3	; GET NEXT BIT TO CHECK
+ 0B87  D2 EC				SHR	AH,CL
+ 0B89  75 E4				JNZ	E12	; CONTINUE
+ 0B8B				E18:
+ 0B8B  58				POP	AX	; GET VIDEO SENSE SWITCHES (AH)
+ 0B8C  B4 00				MOV	AH,0	; SET MODE AND DISPLAY CURSOR
+ 0B8E  CD 10				INT	INT_VIDEO	; CALL VIDEO I/O PROCEDURE
+				
+				;-----	CHECK FOR THE ADVANCED VIDEO CARD
+				
+ 0B90  BA C000			E18_1:	MOV	DX,0C000H	; SET THE LOW SEGMENT VALUE
+ 0B93				E18A:
+ 0B93  B0 23				MOV	AL,23H	;	  <><><><><><><><><><><><>
+ 0B95  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  23 <><>
+ 0B97  8E DA				MOV	DS,DX
+ 0B99  57				PUSH	DI	; SAVE WORK REGISTER
+ 0B9A  BF AA55				MOV	DI,0AA55H	; PRESENCE SIGNATURE
+ 0B9D  2B DB				SUB	BX,BX	; CLEAR POINTER
+ 0B9F  8B 07				MOV	AX,[BX]	; GET FIRST 2 LOCATIONS
+ 0BA1  3B C7				CMP	AX,DI	; PRESENT?
+ 0BA3  5F				POP	DI	; RECOVER REGISTER
+ 0BA4  75 05				JNZ	E18B	; N0? GO LOOK FOR OTHER MODULES
+				
+ 0BA6  E8 0000 E			CALL	ROM_CHECK	; GO SCAN MODULE
+ 0BA9  EB 04				JMP	SHORT E18C
+ 0BAB				E18B:
+ 0BAB  81 C2 0080			ADD	DX,0080H	; POINT TO NEXT 2K BLOCK
+ 0BAF				E18C:
+ 0BAF  81 FA C800			CMP	DX,0C800H	; TOP OF VIDEO ROM AREA YET?
+ 0BB3  7C DE				JL	E18A	; GO SCAN FOR ANOTHER MODULE
+				
+ 0BB5  B0 24				MOV	AL,24H	;	  <><><><><><><><><><><><>
+ 0BB7  E6 80				OUT	MFG_PORT,AL	;	  <><> CHECKPOINT  24 <><>
+ 0BB9  E9 0000 E			JMP	POST2	; GO TO NEXT TEST
+				
+				;-----	CRT ERROR SET MFG CHECKPOINT AND ERROR BEEP
+				
+ 0BBC  E8 0000 E		E17:	CALL	DDS	; POINT TO DATA
+				
+				;-----	CHECKPOINT OC = MONOCHROME FAILED
+					
+ 0BBF  C6 06 0015 R 0C			MOV	@MFG_ERR_FLAG,0CH	; CRT ERROR CHECKPOINT OC
+ 0BC4  80 3E 0073 R 64			CMP	BYTE PTR @RESET_FLAG,064H	 ; IS THIS A MFG REQUEST?
+ 0BC9  74 0D				JZ	E19	; BY PASS ERROR BEEP IF YES
+ 0BCB  F6 06 0012 R 20			TEST	@MFG_TST,MFG_LOOP	; IS THE MFG LOOP JUMPER INSTALLED?
+ 0BD0  74 06				JZ	E19	; BY PASS ERROR BEEP IF YES
+ 0BD2  BA 0102				MOV	DX,102H
+ 0BD5  E8 0000 E			CALL	ERR_BEEP	; GO BEEP SPEAKER
+ 0BD8				E19:
+ 0BD8  1E				PUSH	DS
+ 0BD9  A1 0010 R			MOV	AX,@EQUIP_FLAG	; GET THE CURRENT VIDEO
+ 0BDC  24 30				AND	AL,30H	; STRIP OTHER BITS
+ 0BDE  3C 30				CMP	AL,30H	; IS IT MONOCHROME
+ 0BE0  74 2F				JZ	TRY_COLOR	; GO IF YES
+				
+				;-----	COLOR FAILED TRY MONOCHROME	; CHECKPOINT 0D = COLOR FAILED
+				
+ 0BE2  C6 06 0015 R 0D			MOV	@MFG_ERR_FLAG,0DH	; <><> CRT ERROR CHECKPOINT 0D <><>
+				
+ 0BE7  BA 03B8				MOV	DX,3B8H	; DISABLE B/W
+ 0BEA  B0 01				MOV	AL,1
+ 0BEC  EE				OUT	DX,AL	; OUTPUT THE DISABLE
+ 0BED  BB B000				MOV	BX,0B000H	; CHECK FOR MONOCHROME VIDEO MEMORY
+ 0BF0  8E DB				MOV	DS,BX
+ 0BF2  B8 AA55				MOV	AX,0AA55H	; WRITE AN AA55
+ 0BF5  2B DB				SUB	BX,BX	; TO THE FIRST LOCATION
+ 0BF7  89 07				MOV	[BX],AX
+ 0BF9  EB 00				JMP	$+2	; ALLOW BUS TO SETTLE
+ 0BFB  8B 07				MOV	AX,[BX]	; READ THE FIRST LOCATION
+ 0BFD  3D AA55				CMP	AX,0AA55H	; IS THE MONOCHROME VIDEO CARD THERE?
+ 0C00  1F				POP	DS	; RESTORE THE DATA SEGMENT
+ 0C01  75 52				JNZ	E17_3	; GO IF NOT
+ 0C03  83 0E 0010 R 30			OR	@EQUIP_FLAG,30H	; TURN ON MONOCHROME BITS IN EQUIP FLAG
+ 0C08  A1 0010 R			MOV	AX,@EQUIP_FLAG	; ENABLE VIDEO
+ 0C0B  2A E4				SUB	AH,AH
+ 0C0D  CD 10				INT	INT_VIDEO
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-27
+
+
+ 0C0F  EB 32				JMP	SHORT E17_1	; CONTINUE
+				
+				;-----	MONOCHROME FAILED TRY COLOR
+ 0C11				TRY_COLOR:
+ 0C11  B0 01				MOV	AL,01H	; SET MODE COLOR 40X25
+ 0C13  2A E4				SUB	AH,AH
+ 0C15  CD 10				INT	INT_VIDEO
+ 0C17  BA 03D8				MOV	DX,3D8H	; DISABLE COLOR
+ 0C1A  B0 00				MOV	AL,0
+ 0C1C  EE				OUT	DX,AL	; OUTPUT THE DISABLE
+ 0C1D  BB B800				MOV	BX,0B800H	; CHECK FOR COLOR VIDEO MEMORY
+ 0C20  8E DB				MOV	DS,BX
+ 0C22  B8 AA55				MOV	AX,0AA55H	; WRITE AN AA55
+ 0C25  2B DB				SUB	BX,BX	; TO THE FIRST LOCATION
+ 0C27  89 07				MOV	[BX],AX
+ 0C29  EB 00				JMP	$+2	; ALLOW BUS TO SETTLE
+ 0C2B  8B 07				MOV	AX,[BX]	; READ THE FIRST LOCATION
+ 0C2D  3D AA55				CMP	AX,0AA55H	; IS THE COLOR VIDEO CARD THERE?
+ 0C30  1F				POP	DS	; RESTORE THE DATA SEGMENT
+ 0C31  75 22				JNZ	E17_3	; GO IF NOT
+ 0C33  83 26 0010 R CF			AND	@EQUIP_FLAG,0FFCFH	; TURN OFF VIDEO BITS
+ 0C38  83 0E 0010 R 10			OR	@EQUIP_FLAG,10H	; SET COLOR 40X24
+ 0C3D  B0 01				MOV	AL,01H
+ 0C3F  2A E4				SUB	AH,AH
+ 0C41  CD 10				INT	INT_VIDEO
+ 0C43				E17_1:
+ 0C43  58				POP	AX	; SET NEW VIDEO TYPE ON STACK
+ 0C44  A1 0010 R			MOV	AX,@EQUIP_FLAG
+ 0C47  24 30				AND	AL,30H
+ 0C49  3C 30				CMP	AL,30H	; IS IT THE B/W?
+ 0C4B  2A C0				SUB	AL,AL
+ 0C4D  74 02				JZ	E17_2	; GO IF YES
+				
+ 0C4F  FE C0				INC	AL	; INITIALIZE FOR 40X25
+ 0C51				E17_2:
+ 0C51  50				PUSH	AX
+ 0C52				E17_4:
+ 0C52  E9 0B8B R			JMP	E18
+				
+				;-----	BOTH VIDEO CARDS FAILED SET DUMMY RETURN IF RETRACE FAILURE
+ 0C55				E17_3:
+ 0C55  1E				PUSH	DS
+ 0C56  2B C0				SUB	AX,AX	; SET DS SEGMENT TO 0
+ 0C58  8E D8				MOV	DS,AX
+ 0C5A  BF 0040 R			MOV	DI,OFFSET @VIDEO_INT	; SET INTERRUPT 10H TO DUMMY
+ 0C5D  C7 05 0000 E			MOV	WORD PTR [DI],OFFSET DUMMY_RETURN ; RETURN IF NO VIDEO CARD
+ 0C61  1F				POP	DS
+ 0C62  E9 0B90 R			JMP	E18_1	; BYPASS REST OF VIDEO TEST
+				
+				;-------------------------------------------------------------------------------
+				; MANUFACTURING BOOT TEST CODE ROUTINE							 
+				:
+				;       LOAD A BLOCK OF TEST CODE THROUGH THE KEYBOARD PORT FOR MANUFACTURING  :
+				;       TESTS.								 :
+				;       THIS ROUTINE WILL LOAD A TEST (MAX LENGTH,FAFFH) THROUGH THE KEYBOARD  :
+				;       PORT. CODE WILL BE LOADED AT LOCATION 0000:0500.   AFTER LOADING,	 :
+				;       CONTROL WILL BE TRANSFERRED TO LOCATION 0000:0500.  THE STACK WILL	 :
+				;       BE LOCATED AT 0000:0400.  THIS ROUTINE ASSUMES THAT THE FIRST 2 BYTES  :
+				;       TRANSFERRED CONTAIN THE COUNT OF BYTES TO BE LOADED 			 :
+				;       (BYTE 1=COUNT LOW, BYTE 2=COUNT HI.)						 
+				:
+				--------------------------------------------------------------------------------
+test1.ASM(2254): warning A4001: Extra characters on line
+				
+				;-----	DEGATE ADDRESS LINE 20
+				
+ 0C65				MFG_BOOT:
+ 0C65  B4 DD				MOV	AH,DISABLE_BIT20	; DEGATE COMMAND FOR ADDRESS LINE 20
+ 0C67  E8 0000 E			CALL	GATE_A20	; ISSUE TO KEYBOARD ADAPTER AND CLI
+				
+				;-----	SETUP HARDWARE INTERRUPT VECTOR TABLE LEVEL 0-7 AND SOFTWARE INTERRUPTS
+ 0C6A  68 ---- R			PUSH	ABS0	; SET ES SEGMENT REGISTER TO ABS0
+ 0C6D  07				POP	ES
+ 0C6E  B9 0018				MOV	CX,24	; GET VECTOR COUNT
+ 0C71  8C C8				MOV	AX,CS	; GET THE CURRENT CODE SEGMENT VALUE
+ 0C73  8E D8				MOV	DS,AX	; SETUP DS SEGMENT REGISTER TO
+ 0C75  BE 0000 E			MOV	SI,OFFSET VECTOR_TABLE	; POINT TO THE ROUTINE ADDRESS TABLE
+ 0C78  BF 0020 R			MOV	DI,OFFSET @INT_PTR	; SET DESTINATION TO FIRST USED VECTOR
+ 0C7B				MFG_B1:
+ 0C7B  A5				MOVSW		; MOVE ONE ROUTINE OFFSET ADDRESS
+ 0C7C  AB				STOSW		; INSERT CODE SEGMENT VALUE
+ 0C7D  E2 FC				LOOP	MFG_B1	; MOVE THE NUMBER OF ENTRIES REQUIRED
+				
+				;-----	SETUP HARDWARE INTERRUPT VECTORS LEVEL 8-15 (VECTORS START AT INT 70 H)
+				
+ 0C7F  B9 0008				MOV	CX,08	; GET VECTOR COUNT
+ 0C82  BE 0000 E			MOV	SI,OFFSET SLAVE_VECTOR_TABLE
+ 0C85  BF 01C0 R			MOV	DI,OFFSET @SLAVE_INT_PTR
+ 0C88				MFG_B2:
+ 0C88  A5				MOVSW		; MOVE ONE ROUTINE OFFSET ADDRESS
+ 0C89  AB				STOSW		; INSERT CODE SEGMENT VALUE
+ 0C8A  E2 FC				LOOP	MFG_B2
+				
+				;-----	SET UP OTHER INTERRUPTS AS NECESSARY
+				
+					ASSUME	DS:ABS0,ES:ABS0
+ 0C8C  06				PUSH	ES				; ES= ABS0
+ 0C8D  1F				POP	DS				; SET DS TO ABS0
+ 0C8E  C7 06 0008 R 0000 E		MOV	WORD PTR @NMI_PTR,OFFSET NMI_INT 		; NMI INTERRUPT
+ 0C94  C7 06 0014 R 0000 E		MOV	WORD PTR @INT5_PTR,OFFSET PRINT_SCREEN	; PRINT SCREEN
+ 0C9A  C7 06 0062 R F600		MOV	WORD PTR @BASIC_PTR+2,0F600H			; CASSETTE BASIC SEGMENT
+				
+				;-----	ENABLE KEYBOARD PORT
+ 0CA0  B0 60				MOV	AL,60H	; WRITE 8042 MEMORY LOCATION 0
+ 0CA2  E8 03A8 R			CALL	C8042	; ISSUE THE COMMAND
+ 0CA5  B0 09				MOV	AL,00001001B	; SET INHIBIT OVERRIDE/ENABLE OBF
+ 0CA7  E6 60				OUT	PORT_A,AL	; INTERRUPT AND NOT PC COMPATIBLE
+				
+ 0CA9  E8 0CCB R			CALL	MFG_B4	; GET COUNT LOW
+ 0CAC  8A F8				MOV	BH,AL	; SAVE IT
+ 0CAE  E8 0CCB R			CALL	MFG_B4	; GET COUNT HI
+ 0CB1  8A E8				MOV	CH,AL
+ 0CB3  8A CF				MOV	CL,BH	; CX NOW HAS COUNT
+ 0CB5  FC				CLD		; SET DIRECTION FLAG TO INCREMENT
+ 0CB6  BF 0500 R			MOV	DI,OFFSET @MFG_TEST_RTN	; SET TARGET OFFSET (DS=0000)
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Page     1-28
+
+
+ 0CB9				MFG_B3:
+ 0CB9  E4 64				IN	AL,STATUS_PORT	; GET 8042 STATUS PORT
+ 0CBB  A8 01				TEST	AL,OUT_BUF_FULL	; KEYBOARD REQUEST PENDING?
+ 0CBD  74 FA				JZ	MFG_B3	; LOOP TILL DATA PRESENT
+ 0CBF  E4 60				IN	AL,PORT_A	; GET DATA
+ 0CC1  AA				STOSB		; STORE IT
+ 0CC2  E6 80				OUT	MFG_PORT,AL	; DISPLAY CHARACTER AT MFG PORT
+ 0CC4  E2 F3				LOOP	MFG_B3	; LOOP TILL ALL BYTES READ
+				
+ 0CC6  EA 0500 ---- R			JMP	@MFG_TEST_RTN	; FAR JUMP TO CODE THAT WAS JUST LOADED
+				
+ 0CCB  E4 64			MFG_B4:	IN	AL,STATUS_PORT	; CHECK FOR OUTPUT BUFFER FULL
+ 0CCD  A8 01				TEST	AL,OUT_BUF_FULL	; HANG HERE IF NO DATA AVAILABLE
+ 0CCF  E1 FA				LOOPZ 	MFG_B4
+				
+ 0CD1  E4 60				IN	AL,PORT_A	; GET THE COUNT
+ 0CD3  C3				RET
+				
+ 0CD4				POST1	ENDP
+ 0CD4				CODE	ENDS
+					END
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-1
+
+
+Structures and Records:
+
+                N a m e                 Width   # fields
+                                        Shift   Width   Mask    Initial
+
+DATA_DESC  . . . . . . . . . . .  	0008	0005
+  SEG_LIMIT  . . . . . . . . . .  	0000
+  BASE_LO_WORD . . . . . . . . .  	0002
+  BASE_HI_BYTE . . . . . . . . .  	0004
+  DATA_ACC_RIGHTS  . . . . . . .  	0005
+  DATA_RESERVED  . . . . . . . .  	0006
+GATE_DESC  . . . . . . . . . . .  	0008	0005
+  ENTRY_POINT  . . . . . . . . .  	0000
+  CS_SECECTOR  . . . . . . . . .  	0002
+  WORD_COUNT . . . . . . . . . .  	0004
+  GATE_ACC_RIGHTS  . . . . . . .  	0005
+  GATE_RESERVED  . . . . . . . .  	0006
+GDT_DEF  . . . . . . . . . . . .  	0088	0011
+  GDT_PTR  . . . . . . . . . . .  	0008
+  SYS_IDT_PTR  . . . . . . . . .  	0010
+  RSDA_PTR . . . . . . . . . . .  	0018
+  C_BWCRT_PTR  . . . . . . . . .  	0020
+  C_CCRT_PTR . . . . . . . . . .  	0028
+  E_CCRT_PTR . . . . . . . . . .  	0030
+  E_CCRT_PTR2  . . . . . . . . .  	0038
+  SYS_ROM_CS . . . . . . . . . .  	0040
+  ES_TEMP  . . . . . . . . . . .  	0048
+  CS_TEMP  . . . . . . . . . . .  	0050
+  SS_TEMP  . . . . . . . . . . .  	0058
+  DS_TEMP  . . . . . . . . . . .  	0060
+  POST_TR  . . . . . . . . . . .  	0068
+  POST_TSS_PTR . . . . . . . . .  	0070
+  POST_LDTR  . . . . . . . . . .  	0078
+  POST_LDT_PTR . . . . . . . . .  	0080
+
+Segments and Groups:
+
+                N a m e         	Length	 Align	Combine Class
+
+ABS0 . . . . . . . . . . . . . .  	7C00	AT	0000	
+CODE . . . . . . . . . . . . . .  	0CD4	WORD	PUBLIC	
+COOE . . . . . . . . . . . . . .  	0000	FAR	NONE	
+DATA . . . . . . . . . . . . . .  	0101	AT	0040	
+
+Symbols:            
+
+                N a m e         	Type	 Value	 Attr
+
+ALT_KEY  . . . . . . . . . . . .  	NUMBER	0038	
+ALT_SHIFT  . . . . . . . . . . .  	NUMBER	0008	
+
+BAD_ADDR_MARK  . . . . . . . . .  	NUMBER	0002	
+BAD_BAT  . . . . . . . . . . . .  	NUMBER	0080	
+BAD_CKSUM  . . . . . . . . . . .  	NUMBER	0040	
+BAD_CMD  . . . . . . . . . . . .  	NUMBER	0001	
+BAD_CONFIG . . . . . . . . . . .  	NUMBER	0020	
+BAD_CRC  . . . . . . . . . . . .  	NUMBER	0010	
+BAD_DMA  . . . . . . . . . . . .  	NUMBER	0008	
+BAD_MOS  . . . . . . . . . . . .  	L NEAR	0A7B	CODE
+BAD_MOS1 . . . . . . . . . . . .  	L NEAR	0A88	CODE
+BAD_NEC  . . . . . . . . . . . .  	NUMBER	0020	
+BAD_SEEK . . . . . . . . . . . .  	NUMBER	0040	
+BASE_MEM . . . . . . . . . . . .  	NUMBER	0010	
+BASE_MEM8  . . . . . . . . . . .  	NUMBER	0008	
+BEGIN  . . . . . . . . . . . . .  	NEAR	0000	CODE
+BIOS_LEVEL . . . . . . . . . . .  	NUMBER	0001	
+BRANCH . . . . . . . . . . . . .  	L NEAR	0105	CODE
+
+C10A . . . . . . . . . . . . . .  	L NEAR	0150	CODE
+C11  . . . . . . . . . . . . . .  	L NEAR	0194	CODE
+C11A . . . . . . . . . . . . . .  	L NEAR	01A0	CODE
+C11B . . . . . . . . . . . . . .  	L NEAR	01A9	CODE
+C11E . . . . . . . . . . . . . .  	L NEAR	019F	CODE
+C12  . . . . . . . . . . . . . .  	L NEAR	01DE	CODE
+C13  . . . . . . . . . . . . . .  	L NEAR	01F4	CODE
+C14  . . . . . . . . . . . . . .  	L NEAR	0200	CODE
+C15  . . . . . . . . . . . . . .  	L NEAR	0215	CODE
+C16  . . . . . . . . . . . . . .  	L NEAR	0226	CODE
+C16A . . . . . . . . . . . . . .  	L NEAR	0265	CODE
+C17  . . . . . . . . . . . . . .  	L NEAR	0230	CODE
+C17A . . . . . . . . . . . . . .  	L NEAR	0271	CODE
+C18  . . . . . . . . . . . . . .  	L NEAR	0243	CODE
+C18A . . . . . . . . . . . . . .  	L NEAR	0287	CODE
+C19  . . . . . . . . . . . . . .  	L NEAR	0258	CODE
+C2 . . . . . . . . . . . . . . .  	L 0002	0400	CODE
+C20  . . . . . . . . . . . . . .  	L NEAR	025C	CODE
+C20A . . . . . . . . . . . . . .  	L NEAR	029E	CODE
+C21  . . . . . . . . . . . . . .  	L NEAR	02A2	CODE
+C22  . . . . . . . . . . . . . .  	L NEAR	030B	CODE
+C22A . . . . . . . . . . . . . .  	L NEAR	02E4	CODE
+C22B . . . . . . . . . . . . . .  	L NEAR	02F3	CODE
+C25  . . . . . . . . . . . . . .  	L NEAR	0322	CODE
+C26  . . . . . . . . . . . . . .  	L NEAR	032B	CODE
+C27  . . . . . . . . . . . . . .  	L NEAR	032C	CODE
+C28  . . . . . . . . . . . . . .  	L NEAR	0332	CODE
+C29  . . . . . . . . . . . . . .  	L NEAR	033A	CODE
+C30  . . . . . . . . . . . . . .  	L NEAR	03F9	CODE
+C31  . . . . . . . . . . . . . .  	L NEAR	040C	CODE
+C31_0  . . . . . . . . . . . . .  	L NEAR	0532	CODE
+C31_A  . . . . . . . . . . . . .  	L NEAR	053B	CODE
+C31_B  . . . . . . . . . . . . .  	L NEAR	054A	CODE
+C31_C  . . . . . . . . . . . . .  	L NEAR	0550	CODE
+C31_D  . . . . . . . . . . . . .  	L NEAR	0556	CODE
+C31_E  . . . . . . . . . . . . .  	L NEAR	055C	CODE
+C31_G  . . . . . . . . . . . . .  	L NEAR	0566	CODE
+C31_H  . . . . . . . . . . . . .  	L NEAR	056F	CODE
+C31_I  . . . . . . . . . . . . .  	L NEAR	0575	CODE
+C31_K  . . . . . . . . . . . . .  	L NEAR	0582	CODE
+C31_L  . . . . . . . . . . . . .  	L NEAR	058A	CODE
+C31_M  . . . . . . . . . . . . .  	L NEAR	0590	CODE
+C31_N  . . . . . . . . . . . . .  	L NEAR	0596	CODE
+C32  . . . . . . . . . . . . . .  	L NEAR	043A	CODE
+C33  . . . . . . . . . . . . . .  	L NEAR	05B1	CODE
+C34  . . . . . . . . . . . . . .  	L NEAR	05CC	CODE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-2
+
+
+C35  . . . . . . . . . . . . . .  	L NEAR	05D4	CODE
+C36E . . . . . . . . . . . . . .  	L NEAR	05E6	CODE
+C37A . . . . . . . . . . . . . .  	L NEAR	0681	CODE
+C37B . . . . . . . . . . . . . .  	L NEAR	0677	CODE
+C42_1  . . . . . . . . . . . . .  	L NEAR	03AD	CODE
+C42_2  . . . . . . . . . . . . .  	L NEAR	03B8	CODE
+C42_3  . . . . . . . . . . . . .  	L NEAR	03C6	CODE
+C7A  . . . . . . . . . . . . . .  	L NEAR	0083	CODE
+C7B  . . . . . . . . . . . . . .  	L NEAR	0091	CODE
+C7C  . . . . . . . . . . . . . .  	L NEAR	00E2	CODE
+C8 . . . . . . . . . . . . . . .  	L NEAR	012F	CODE
+C8042  . . . . . . . . . . . . .  	L NEAR	03A8	CODE	Global
+C8042A . . . . . . . . . . . . .  	L 0002	0402	CODE
+C8042B . . . . . . . . . . . . .  	L 0002	0406	CODE
+C8042C . . . . . . . . . . . . .  	L 0002	0408	CODE
+C9 . . . . . . . . . . . . . . .  	L NEAR	014A	CODE
+CAPS_KEY . . . . . . . . . . . .  	NUMBER	003A	
+CAPS_SHIFT . . . . . . . . . . .  	NUMBER	0040	
+CAPS_STATE . . . . . . . . . . .  	NUMBER	0040	
+CCRT@_HI . . . . . . . . . . . .  	NUMBER	000B	
+CCRT@_LO . . . . . . . . . . . .  	NUMBER	8000	
+CCRT_SIZE  . . . . . . . . . . .  	NUMBER	4000	
+CHGLN  . . . . . . . . . . . . .  	NUMBER	0002	
+CHK_VIDEO  . . . . . . . . . . .  	L NEAR	0A2D	CODE
+CHK_VIDEO1 . . . . . . . . . . .  	L NEAR	0A30	CODE
+CHK_VIDEO2 . . . . . . . . . . .  	L NEAR	0A4F	CODE
+CLR_STG  . . . . . . . . . . . .  	L NEAR	05A6	CODE
+CMCS_REG_A . . . . . . . . . . .  	NUMBER	000A	
+CMD_DATA . . . . . . . . . . . .  	NUMBER	0008	
+CMOS1  . . . . . . . . . . . . .  	L NEAR	071D	CODE
+CMOS1A . . . . . . . . . . . . .  	L NEAR	0708	CODE
+CMOS1_A  . . . . . . . . . . . .  	L NEAR	072F	CODE
+CMOS1_B  . . . . . . . . . . . .  	L NEAR	0731	CODE
+CMOS2  . . . . . . . . . . . . .  	L NEAR	073E	CODE
+CMOS3  . . . . . . . . . . . . .  	L NEAR	0761	CODE
+CMOS4  . . . . . . . . . . . . .  	L NEAR	0770	CODE
+CMOS9  . . . . . . . . . . . . .  	L NEAR	0781	CODE
+CMOS_B_M_S_HI  . . . . . . . . .  	NUMBER	0016	
+CMOS_B_M_S_LO  . . . . . . . . .  	NUMBER	0015	
+CMOS_CENTURY . . . . . . . . . .  	NUMBER	0032	
+CMOS_CKSUM_HI  . . . . . . . . .  	NUMBER	002E	
+CMOS_CKSUM_LO  . . . . . . . . .  	NUMBER	002F	
+CMOS_CLK_FAIL  . . . . . . . . .  	NUMBER	0004	
+CMOS_DATA  . . . . . . . . . . .  	NUMBER	0071	
+CMOS_DAY_MONTH . . . . . . . . .  	NUMBER	0007	
+CMOS_DAY_WEEK  . . . . . . . . .  	NUMBER	0006	
+CMOS_DIAG  . . . . . . . . . . .  	NUMBER	000E	
+CMOS_DISK  . . . . . . . . . . .  	NUMBER	0012	
+CMOS_DISKETTE  . . . . . . . . .  	NUMBER	0010	
+CMOS_DISK_1  . . . . . . . . . .  	NUMBER	0019	
+CMOS_DISK_2  . . . . . . . . . .  	NUMBER	001A	
+CMOS_EQUIP . . . . . . . . . . .  	NUMBER	0014	
+CMOS_E_M_S_HI  . . . . . . . . .  	NUMBER	0018	
+CMOS_E_M_S_LO  . . . . . . . . .  	NUMBER	0017	
+CMOS_HOURS . . . . . . . . . . .  	NUMBER	0004	
+CMOS_HR_ALARM  . . . . . . . . .  	NUMBER	0005	
+CMOS_INFO128 . . . . . . . . . .  	NUMBER	0033	
+CMOS_MINUTES . . . . . . . . . .  	NUMBER	0002	
+CMOS_MIN_ALARM . . . . . . . . .  	NUMBER	0003	
+CMOS_MONTH . . . . . . . . . . .  	NUMBER	0008	
+CMOS_PORT  . . . . . . . . . . .  	NUMBER	0070	
+CMOS_READ  . . . . . . . . . . .  	L NEAR	0000	CODE	External
+CMOS_REG_B . . . . . . . . . . .  	NUMBER	000B	
+CMOS_REG_C . . . . . . . . . . .  	NUMBER	000C	
+CMOS_REG_D . . . . . . . . . . .  	NUMBER	000D	
+CMOS_SECONDS . . . . . . . . . .  	NUMBER	0000	
+CMOS_SEC_ALARM . . . . . . . . .  	NUMBER	0001	
+CMOS_SHUT_DOWN . . . . . . . . .  	NUMBER	000F	
+CMOS_U_M_S_HI  . . . . . . . . .  	NUMBER	0031	
+CMOS_U_M_S_LO  . . . . . . . . .  	NUMBER	0030	
+CMOS_WRITE . . . . . . . . . . .  	L NEAR	0000	CODE	External
+CMOS_YEAR  . . . . . . . . . . .  	NUMBER	0009	
+CONFIG_BAD . . . . . . . . . . .  	L NEAR	0000	CODE	External
+CPL0_CODE_ACCESS . . . . . . . .  	NUMBER	009B	
+CPL0_DATA_ACCESS . . . . . . . .  	NUMBER	0093	
+CPL3_DATA_ACCESS . . . . . . . .  	NUMBER	00F3	
+CR . . . . . . . . . . . . . . .  	NUMBER	000D	
+CSEG@_HI . . . . . . . . . . . .  	NUMBER	000F	
+CSEG@_LO . . . . . . . . . . . .  	NUMBER	0000	
+CTL_KEY  . . . . . . . . . . . .  	NUMBER	001D	
+CTL_SHIFT  . . . . . . . . . . .  	NUMBER	0004	
+
+D11  . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+D3 . . . . . . . . . . . . . . .  	L NEAR	06CD	CODE
+D3A  . . . . . . . . . . . . . .  	L NEAR	06E7	CODE
+DBL_STEP . . . . . . . . . . . .  	NUMBER	0020	
+DDS  . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+DEL_KEY  . . . . . . . . . . . .  	NUMBER	0053	
+DESC_LEN . . . . . . . . . . . .  	NUMBER	0008	
+DETERMINED . . . . . . . . . . .  	NUMBER	0010	
+DISABLE_BIT20  . . . . . . . . .  	NUMBER	00DD	
+DIS_KBD  . . . . . . . . . . . .  	NUMBER	00AD	
+DMA  . . . . . . . . . . . . . .  	NUMBER	0000	
+DMA08  . . . . . . . . . . . . .  	NUMBER	0008	
+DMA1 . . . . . . . . . . . . . .  	NUMBER	00C0	
+DMA15  . . . . . . . . . . . . .  	NUMBER	00D0	
+DMA_BOUNDARY . . . . . . . . . .  	NUMBER	0009	
+DMA_PAGE . . . . . . . . . . . .  	NUMBER	0081	
+DONE . . . . . . . . . . . . . .  	L NEAR	08AD	CODE
+DONEA  . . . . . . . . . . . . .  	L NEAR	08CF	CODE
+DRV_DET  . . . . . . . . . . . .  	NUMBER	0004	
+DSK_CHG  . . . . . . . . . . . .  	NUMBER	0080	
+DSK_FAIL . . . . . . . . . . . .  	NUMBER	0040	
+DSP_JMP  . . . . . . . . . . . .  	NUMBER	0040	
+DUAL . . . . . . . . . . . . . .  	NUMBER	0001	
+DUMMY_RETURN . . . . . . . . . .  	L NEAR	0000	CODE	External
+
+E11  . . . . . . . . . . . . . .  	L NEAR	0B6D	CODE
+E12  . . . . . . . . . . . . . .  	L NEAR	0B6F	CODE
+E13  . . . . . . . . . . . . . .  	L NEAR	0B71	CODE
+E14  . . . . . . . . . . . . . .  	L NEAR	0B7A	CODE
+E15  . . . . . . . . . . . . . .  	L NEAR	0B7C	CODE
+E16  . . . . . . . . . . . . . .  	L NEAR	0B85	CODE
+E17  . . . . . . . . . . . . . .  	L NEAR	0BBC	CODE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-3
+
+
+E17_1  . . . . . . . . . . . . .  	L NEAR	0C43	CODE
+E17_2  . . . . . . . . . . . . .  	L NEAR	0C51	CODE
+E17_3  . . . . . . . . . . . . .  	L NEAR	0C55	CODE
+E17_4  . . . . . . . . . . . . .  	L NEAR	0C52	CODE
+E18  . . . . . . . . . . . . . .  	L NEAR	0B8B	CODE
+E18A . . . . . . . . . . . . . .  	L NEAR	0B93	CODE
+E18B . . . . . . . . . . . . . .  	L NEAR	0BAB	CODE
+E18C . . . . . . . . . . . . . .  	L NEAR	0BAF	CODE
+E18_1  . . . . . . . . . . . . .  	L NEAR	0B90	CODE
+E19  . . . . . . . . . . . . . .  	L NEAR	0BD8	CODE
+E30A . . . . . . . . . . . . . .  	L NEAR	03C7	CODE
+E30A_0 . . . . . . . . . . . . .  	L NEAR	03EB	CODE
+E30B . . . . . . . . . . . . . .  	L NEAR	0387	CODE
+E30C . . . . . . . . . . . . . .  	L NEAR	038C	CODE
+E6 . . . . . . . . . . . . . . .  	L NEAR	0ADC	CODE
+E7 . . . . . . . . . . . . . . .  	L NEAR	0B11	CODE
+E8 . . . . . . . . . . . . . . .  	L NEAR	0B1D	CODE
+E9 . . . . . . . . . . . . . . .  	L NEAR	0B3B	CODE
+ECCRT@_HI_HI . . . . . . . . . .  	NUMBER	000B	
+ECCRT@_HI_LO . . . . . . . . . .  	NUMBER	0000	
+ECCRT@_LO_HI . . . . . . . . . .  	NUMBER	000A	
+ECCRT@_LO_LO . . . . . . . . . .  	NUMBER	0000	
+ECCRT_SIZE . . . . . . . . . . .  	NUMBER	FFFF	
+ENABLE_BIT20 . . . . . . . . . .  	NUMBER	00DF	
+ENA_KBD  . . . . . . . . . . . .  	NUMBER	00AE	
+EOI  . . . . . . . . . . . . . .  	NUMBER	0020	
+ERR0 . . . . . . . . . . . . . .  	L NEAR	035C	CODE
+ERR01  . . . . . . . . . . . . .  	L NEAR	014F	CODE
+ERR02  . . . . . . . . . . . . .  	L NEAR	0080	CODE
+ERR_BEEP . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+ERR_PROT . . . . . . . . . . . .  	L NEAR	0644	CODE
+
+FMT_CAPA . . . . . . . . . . . .  	NUMBER	0002	
+FREE_TSS . . . . . . . . . . . .  	NUMBER	0081	
+
+GATE2  . . . . . . . . . . . . .  	NUMBER	0001	
+GATE_A20 . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+GDT_LEN  . . . . . . . . . . . .  	NUMBER	0088	
+GDT_LOC  . . . . . . . . . . . .  	NUMBER	D8A0	
+GRAPH_ON . . . . . . . . . . . .  	NUMBER	0004	
+
+H  . . . . . . . . . . . . . . .  	NUMBER	0100	
+HD12_SETTLE  . . . . . . . . . .  	NUMBER	000F	
+HD320_SETTLE . . . . . . . . . .  	NUMBER	0014	
+HF_FAIL  . . . . . . . . . . . .  	NUMBER	0008	
+HOLD_STATE . . . . . . . . . . .  	NUMBER	0008	
+HOME . . . . . . . . . . . . . .  	NUMBER	0010	
+HOW_BIG1 . . . . . . . . . . . .  	L NEAR	08E3	CODE
+HOW_BIG_2  . . . . . . . . . . .  	L NEAR	0866	CODE
+HOW_BIG_2A . . . . . . . . . . .  	L NEAR	0936	CODE
+HOW_BIG_END  . . . . . . . . . .  	L NEAR	0888	CODE
+HOW_BIG_END1 . . . . . . . . . .  	L NEAR	0958	CODE
+
+ID_1 . . . . . . . . . . . . . .  	NUMBER	00AB	
+ID_2 . . . . . . . . . . . . . .  	NUMBER	0041	
+INPT_BUF_FULL  . . . . . . . . .  	NUMBER	0002	
+INS_KEY  . . . . . . . . . . . .  	NUMBER	0052	
+INS_SHIFT  . . . . . . . . . . .  	NUMBER	0080	
+INS_STATE  . . . . . . . . . . .  	NUMBER	0080	
+INTA00 . . . . . . . . . . . . .  	NUMBER	0020	
+INTA01 . . . . . . . . . . . . .  	NUMBER	0021	
+INTB00 . . . . . . . . . . . . .  	NUMBER	00A0	
+INTB01 . . . . . . . . . . . . .  	NUMBER	00A1	
+INTR_FACE_CK . . . . . . . . . .  	NUMBER	00AB	
+INT_FLAG . . . . . . . . . . . .  	NUMBER	0080	
+INT_GATE . . . . . . . . . . . .  	NUMBER	0086	
+INT_VIDEO  . . . . . . . . . . .  	NUMBER	0010	
+IO_CHECK . . . . . . . . . . . .  	NUMBER	0040	
+
+K640 . . . . . . . . . . . . . .  	L NEAR	089F	CODE
+K8_ENABLE  . . . . . . . . . . .  	NUMBER	00F4	
+KBD_RESET  . . . . . . . . . . .  	L NEAR	0000	CODE	External
+KBX  . . . . . . . . . . . . . .  	NUMBER	0001	
+KB_ACK . . . . . . . . . . . . .  	NUMBER	00FA	
+KB_ERR . . . . . . . . . . . . .  	NUMBER	0080	
+KB_FA  . . . . . . . . . . . . .  	NUMBER	0010	
+KB_LEDS  . . . . . . . . . . . .  	NUMBER	0007	
+KB_OK  . . . . . . . . . . . . .  	NUMBER	00AA	
+KB_OVER_RUN  . . . . . . . . . .  	NUMBER	00FF	
+KB_PR_LED  . . . . . . . . . . .  	NUMBER	0040	
+KB_READ_ID . . . . . . . . . . .  	NUMBER	00F2	
+KB_RESEND  . . . . . . . . . . .  	NUMBER	00FE	
+KEY_BD_INHIB . . . . . . . . . .  	NUMBER	0080	
+KEY_FAIL . . . . . . . . . . . .  	NUMBER	0080	
+KS_FE  . . . . . . . . . . . . .  	NUMBER	0020	
+KYBD_CLK . . . . . . . . . . . .  	NUMBER	0001	
+KYBD_CLK_DATA  . . . . . . . . .  	NUMBER	00E0	
+KYBD_FAIL  . . . . . . . . . . .  	NUMBER	0020	
+KYBD_INH . . . . . . . . . . . .  	NUMBER	0010	
+KYCLK_FAIL . . . . . . . . . . .  	NUMBER	0008	
+KY_SYS_FAIL  . . . . . . . . . .  	NUMBER	0010	
+
+LAST_DMA_PAGE  . . . . . . . . .  	NUMBER	008F	
+LC_AB  . . . . . . . . . . . . .  	NUMBER	0040	
+LC_HC  . . . . . . . . . . . . .  	NUMBER	0002	
+LDT_DESC . . . . . . . . . . . .  	NUMBER	00E2	
+LED_CMD  . . . . . . . . . . . .  	NUMBER	00ED	
+LEFT_KEY . . . . . . . . . . . .  	NUMBER	002A	
+LEFT_SHIFT . . . . . . . . . . .  	NUMBER	0002	
+LF . . . . . . . . . . . . . . .  	NUMBER	000A	
+LMCS_FAIL  . . . . . . . . . . .  	NUMBER	0004	
+
+M1 . . . . . . . . . . . . . . .  	L NEAR	0417	CODE
+M10  . . . . . . . . . . . . . .  	L NEAR	0451	CODE
+M1D1U  . . . . . . . . . . . . .  	NUMBER	0002	
+M3D1U  . . . . . . . . . . . . .  	NUMBER	0001	
+M3D3U  . . . . . . . . . . . . .  	NUMBER	0000	
+M4 . . . . . . . . . . . . . . .  	NUMBER	0010	
+M640K  . . . . . . . . . . . . .  	NUMBER	0080	
+MAX_DRV  . . . . . . . . . . . .  	NUMBER	0002	
+MAX_SEG_LEN  . . . . . . . . . .  	NUMBER	FFFF	
+MCRT@_HI . . . . . . . . . . . .  	NUMBER	000B	
+MCRT@_LO . . . . . . . . . . . .  	NUMBER	0000	
+MCRT_SIZE  . . . . . . . . . . .  	NUMBER	1000	
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-4
+
+
+MEDIA_CHANCE . . . . . . . . . .  	NUMBER	0006	
+MED_DET  . . . . . . . . . . . .  	NUMBER	0010	
+MED_UNK  . . . . . . . . . . . .  	NUMBER	0007	
+MEM_FAIL . . . . . . . . . . . .  	NUMBER	0001	
+MFG_B1 . . . . . . . . . . . . .  	L NEAR	0C7B	CODE
+MFG_B2 . . . . . . . . . . . . .  	L NEAR	0C88	CODE
+MFG_B3 . . . . . . . . . . . . .  	L NEAR	0CB9	CODE
+MFG_B4 . . . . . . . . . . . . .  	L NEAR	0CCB	CODE
+MFG_BOOT . . . . . . . . . . . .  	L NEAR	0C65	CODE
+MFG_LOOP . . . . . . . . . . . .  	NUMBER	0020	
+MFG_PORT . . . . . . . . . . . .  	NUMBER	0080	
+MODEL_BYTE . . . . . . . . . . .  	NUMBER	00FC	
+MOS_OK . . . . . . . . . . . . .  	L NEAR	0A70	CODE
+MOS_OK_1 . . . . . . . . . . . .  	L NEAR	0A50	CODE
+MOS_OK_2 . . . . . . . . . . . .  	L NEAR	0A68	CODE
+MOTOR_WAIT . . . . . . . . . . .  	NUMBER	0025	
+M_OK . . . . . . . . . . . . . .  	L NEAR	09F5	CODE
+M_OK_64  . . . . . . . . . . . .  	L NEAR	0A14	CODE
+
+NMI  . . . . . . . . . . . . . .  	TEXT  100000008		
+NMI_INT  . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+NOCHGLN  . . . . . . . . . . . .  	NUMBER	0001	
+NORM1  . . . . . . . . . . . . .  	L NEAR	0AA3	CODE
+NORMAL_CONFIG  . . . . . . . . .  	L NEAR	0A9A	CODE
+NOT_DONE . . . . . . . . . . . .  	L NEAR	07EB	CODE
+NOT_DONE1  . . . . . . . . . . .  	L NEAR	08C4	CODE
+NOT_FIN  . . . . . . . . . . . .  	L NEAR	07F6	CODE
+NSEG@_HI . . . . . . . . . . . .  	NUMBER	0000	
+NSEG@_LO . . . . . . . . . . . .  	NUMBER	0000	
+NULL_SEG_LEN . . . . . . . . . .  	NUMBER	0000	
+NUM_KEY  . . . . . . . . . . . .  	NUMBER	0045	
+NUM_SHIFT  . . . . . . . . . . .  	NUMBER	0020	
+NUM_STATE  . . . . . . . . . . .  	NUMBER	0020	
+
+OBF_42 . . . . . . . . . . . . .  	L NEAR	03B4	CODE	Global
+OBF_42A  . . . . . . . . . . . .  	L 0002	0404	CODE
+OBF_42B  . . . . . . . . . . . .  	L 0002	040A	CODE
+OONE1  . . . . . . . . . . . . .  	L NEAR	096B	CODE
+OUT2 . . . . . . . . . . . . . .  	NUMBER	0020	
+OUT_BUF_FULL . . . . . . . . . .  	NUMBER	0001	
+
+PARITY_CHECK . . . . . . . . . .  	NUMBER	0080	
+PARITY_ERR . . . . . . . . . . .  	NUMBER	00C0	
+PARITY_EVEN  . . . . . . . . . .  	NUMBER	0080	
+PORT_A . . . . . . . . . . . . .  	NUMBER	0060	
+PORT_B . . . . . . . . . . . . .  	NUMBER	0061	
+POST1  . . . . . . . . . . . . .  	N PROC	0000	CODE	Global	Length = 0CD4
+POST2  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+POST_SP  . . . . . . . . . . . .  	NUMBER	8000	
+POST_SS  . . . . . . . . . . . .  	NUMBER	0000	
+PR . . . . . . . . . . . . . . .  	L NEAR	04FF	CODE
+PRINT_SCREEN . . . . . . . . . .  	L NEAR	0000	CODE	External
+PROC_SHUTDOWN  . . . . . . . . .  	L NEAR	0000	CODE	External
+PRO_FAIL . . . . . . . . . . . .  	NUMBER	0002	
+
+QUIET_SEEK . . . . . . . . . . .  	NUMBER	000A	
+
+RAM_PAR_OFF  . . . . . . . . . .  	NUMBER	000C	
+RAM_PAR_ON . . . . . . . . . . .  	NUMBER	00F3	
+RATE_250 . . . . . . . . . . . .  	NUMBER	0080	
+RATE_300 . . . . . . . . . . . .  	NUMBER	0040	
+RATE_500 . . . . . . . . . . . .  	NUMBER	0000	
+RATE_LOWER . . . . . . . . . . .  	NUMBER	F9F0	
+RATE_MSK . . . . . . . . . . . .  	NUMBER	00C0	
+RATE_UPPER . . . . . . . . . . .  	NUMBER	F8A7	
+RCV_TMOUT  . . . . . . . . . . .  	NUMBER	0040	
+RD_ID  . . . . . . . . . . . . .  	NUMBER	0080	
+READ_8042_INPUT  . . . . . . . .  	NUMBER	00C0	
+RECORD_NOT_FND . . . . . . . . .  	NUMBER	0004	
+REFRESH_BIT  . . . . . . . . . .  	NUMBER	0010	
+RHRZ . . . . . . . . . . . . . .  	NUMBER	0001	
+RIGHT_SHIFT  . . . . . . . . . .  	NUMBER	0001	
+RIGRT_KEY  . . . . . . . . . . .  	NUMBER	0036	
+ROM_CHECK  . . . . . . . . . . .  	L NEAR	0000	CODE	External
+RVRT . . . . . . . . . . . . . .  	NUMBER	0008	
+
+SCROLL_KEY . . . . . . . . . . .  	NUMBER	0046	
+SCROLL_SHIFT . . . . . . . . . .  	NUMBER	0010	
+SCROLL_STATE . . . . . . . . . .  	NUMBER	0010	
+SD0  . . . . . . . . . . . . . .  	L NEAR	09A8	CODE
+SD1  . . . . . . . . . . . . . .  	L NEAR	09BF	CODE
+SD2  . . . . . . . . . . . . . .  	L NEAR	09C0	CODE
+SDA_LEN  . . . . . . . . . . . .  	NUMBER	0300	
+SDA_LOC  . . . . . . . . . . . .  	NUMBER	0400	
+SELF_TEST  . . . . . . . . . . .  	NUMBER	00AA	
+SEND_MSK . . . . . . . . . . . .  	NUMBER	00C0	
+SENSE_DRV_ST . . . . . . . . . .  	NUMBER	0004	
+SET_NUM_LK . . . . . . . . . . .  	NUMBER	0020	
+SHUT0  . . . . . . . . . . . . .  	L NEAR	0125	CODE
+SHUT1  . . . . . . . . . . . . .  	L NEAR	09D1	CODE
+SHUT2  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUT3  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUT4  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUT5  . . . . . . . . . . . . .  	L NEAR	011B	CODE
+SHUT6  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUT7  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUT8  . . . . . . . . . . . . .  	L NEAR	07CB	CODE
+SHUT9  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SHUTA  . . . . . . . . . . . . .  	L NEAR	0121	CODE
+SHUT_8 . . . . . . . . . . . . .  	L NEAR	07C2	CODE
+SHUT_CMD . . . . . . . . . . . .  	NUMBER	00FE	
+SLAVE_VECTOR_TABLE . . . . . . .  	L NEAR	0000	CODE	External
+SPK2 . . . . . . . . . . . . . .  	NUMBER	0002	
+START_1  . . . . . . . . . . . .  	L NEAR	0050	CODE	Global
+STATUS_PORT  . . . . . . . . . .  	NUMBER	0064	
+STGTST_CNT . . . . . . . . . . .  	L NEAR	0000	CODE	External
+STRT_MSK . . . . . . . . . . . .  	NUMBER	000C	
+SUB_MODEL_BYTE . . . . . . . . .  	NUMBER	0000	
+SYSINIT1 . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+SYS_FLAG . . . . . . . . . . . .  	NUMBER	0004	
+SYS_IDT_LEN  . . . . . . . . . .  	NUMBER	0800	
+SYS_IDT_LOC  . . . . . . . . . .  	NUMBER	D0A0	
+SYS_KEY  . . . . . . . . . . . .  	NUMBER	0054	
+SYS_SHIFT  . . . . . . . . . . .  	NUMBER	0004	
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-5
+
+
+
+TIMER  . . . . . . . . . . . . .  	NUMBER	0040	
+TIME_OUT . . . . . . . . . . . .  	NUMBER	0080	
+TRANS_TMOUT  . . . . . . . . . .  	NUMBER	0020	
+TRAP_GATE  . . . . . . . . . . .  	NUMBER	0087	
+TRK_CAPA . . . . . . . . . . . .  	NUMBER	0001	
+TRK_SLAP . . . . . . . . . . . .  	NUMBER	0030	
+TRY_COLOR  . . . . . . . . . . .  	L NEAR	0C11	CODE
+TST1 . . . . . . . . . . . . . .  	L NEAR	034A	CODE
+TST2 . . . . . . . . . . . . . .  	L NEAR	0355	CODE
+TST4 . . . . . . . . . . . . . .  	L NEAR	035D	CODE
+TST4_A . . . . . . . . . . . . .  	L NEAR	036E	CODE
+TST4_B . . . . . . . . . . . . .  	L NEAR	0368	CODE
+TST4_C . . . . . . . . . . . . .  	L NEAR	0373	CODE
+TST4_D . . . . . . . . . . . . .  	L NEAR	039A	CODE
+TST4_D1  . . . . . . . . . . . .  	L NEAR	03A2	CODE
+TST6 . . . . . . . . . . . . . .  	L NEAR	0AC1	CODE
+
+VECTOR_TABLE . . . . . . . . . .  	L NEAR	0000	CODE	External
+VIDEO_PARMS  . . . . . . . . . .  	V BYTE	0000	CODE	External
+VIRTUAL_ENABLE . . . . . . . . .  	NUMBER	0001	
+VIR_OK . . . . . . . . . . . . .  	L NEAR	07CE	CODE
+
+WRITE_8042_LOC . . . . . . . . .  	NUMBER	0060	
+WRITE_PROTECT  . . . . . . . . .  	NUMBER	0003	
+WRT_PAT  . . . . . . . . . . . .  	L NEAR	0647	CODE
+W_MEM_SIZE . . . . . . . . . . .  	NUMBER	0010	
+
+X  . . . . . . . . . . . . . . .  	NUMBER	0101	
+X287 . . . . . . . . . . . . . .  	NUMBER	00F0	
+
+Z  . . . . . . . . . . . . . . .  	L NEAR	04B5	CODE
+Z1 . . . . . . . . . . . . . . .  	L NEAR	04E4	CODE
+Z1_0 . . . . . . . . . . . . . .  	L 0002	059E	CODE
+Z2 . . . . . . . . . . . . . . .  	L NEAR	04EF	CODE
+Z2_0 . . . . . . . . . . . . . .  	L 0002	05A0	CODE
+Z3_0 . . . . . . . . . . . . . .  	L WORD	05A2	CODE
+Z4 . . . . . . . . . . . . . . .  	L NEAR	050F	CODE
+Z4_0 . . . . . . . . . . . . . .  	L 0002	05A4	CODE
+Z5 . . . . . . . . . . . . . . .  	L NEAR	0435	CODE
+Z_0  . . . . . . . . . . . . . .  	L NEAR	04AE	CODE
+Z_1  . . . . . . . . . . . . . .  	L NEAR	04D0	CODE
+Z_2  . . . . . . . . . . . . . .  	L NEAR	044C	CODE
+Z_3  . . . . . . . . . . . . . .  	L NEAR	0471	CODE
+
+??0001 . . . . . . . . . . . . .  	L BYTE	0651	CODE
+??0002 . . . . . . . . . . . . .  	L BYTE	0654	CODE
+??0004 . . . . . . . . . . . . .  	L BYTE	0659	CODE
+??0005 . . . . . . . . . . . . .  	L BYTE	065C	CODE
+??0007 . . . . . . . . . . . . .  	L BYTE	0661	CODE
+??0008 . . . . . . . . . . . . .  	L BYTE	0664	CODE
+??000A . . . . . . . . . . . . .  	L BYTE	0669	CODE
+??000B . . . . . . . . . . . . .  	L BYTE	066C	CODE
+@ACTIVE_PAGE . . . . . . . . . .  	L BYTE	0062	DATA
+@ADDR_6845 . . . . . . . . . . .  	L WORD	0063	DATA
+@ALT_INPUT . . . . . . . . . . .  	L BYTE	0019	DATA
+@BASIC_PTR . . . . . . . . . . .  	L DWORD	0060	ABS0
+@BIOS_BREAK  . . . . . . . . . .  	L BYTE	0072	DATA
+@BOOT_LOCN . . . . . . . . . . .  	L FAR 	7C00	ABS0
+@BUFFER_END  . . . . . . . . . .  	L WORD	0082	DATA
+@BUFFER_HEAD . . . . . . . . . .  	L WORD	001A	DATA
+@BUFFER_START  . . . . . . . . .  	L WORD	0080	DATA
+@BUFFER_TAIL . . . . . . . . . .  	L WORD	001C	DATA
+@CONTROL_BYTE  . . . . . . . . .  	L BYTE	0077	DATA
+@CPU . . . . . . . . . . . . . .  	TEXT  1287		
+@CRT_COLS  . . . . . . . . . . .  	L WORD	004A	DATA
+@CRT_LEN . . . . . . . . . . . .  	L WORD	004C	DATA
+@CRT_MODE  . . . . . . . . . . .  	L BYTE	0049	DATA
+@CRT_MODE_SET  . . . . . . . . .  	L BYTE	0065	DATA
+@CRT_PALETTE . . . . . . . . . .  	L BYTE	0066	DATA
+@CRT_START . . . . . . . . . . .  	L WORD	004E	DATA
+@CURSOR_MODE . . . . . . . . . .  	L WORD	0060	DATA
+@CURSOR_POSN . . . . . . . . . .  	L WORD	0050	DATA	Length = 0008
+@DISK_POINTER  . . . . . . . . .  	L DWORD	0078	ABS0
+@DISK_STATUS1  . . . . . . . . .  	L BYTE	0075	DATA
+@DISK_VECTOR . . . . . . . . . .  	L DWORD	0100	ABS0
+@DSKETTE_STATUS  . . . . . . . .  	L BYTE	0041	DATA
+@DSK_STATE . . . . . . . . . . .  	L BYTE	0090	DATA
+@DSK_TRK . . . . . . . . . . . .  	L BYTE	0094	DATA
+@EQUIP_FLAG  . . . . . . . . . .  	L WORD	0010	DATA
+@EXT_PTR . . . . . . . . . . . .  	L DWORD	007C	ABS0
+@FILENAME  . . . . . . . . . . .  	TEXT  test1		
+@HDISK_INT . . . . . . . . . . .  	L DWORD	01D8	ABS0
+@HF1_TBL_VEC . . . . . . . . . .  	L DWORD	0118	ABS0
+@HF_CNTRL  . . . . . . . . . . .  	L BYTE	008F	DATA
+@HF_ERROR  . . . . . . . . . . .  	L BYTE	008D	DATA
+@HF_INT_FLAG . . . . . . . . . .  	L BYTE	008E	DATA
+@HF_NUM  . . . . . . . . . . . .  	L BYTE	0076	DATA
+@HF_STATUS . . . . . . . . . . .  	L BYTE	008C	DATA
+@HF_TBL_VEC  . . . . . . . . . .  	L DWORD	0104	ABS0
+@INFO  . . . . . . . . . . . . .  	L BYTE	0087	DATA
+@INFO_3  . . . . . . . . . . . .  	L BYTE	0088	DATA
+@INT5_PTR  . . . . . . . . . . .  	L DWORD	0014	ABS0
+@INTR_FLAG . . . . . . . . . . .  	L WORD	006B	DATA
+@INT_PTR . . . . . . . . . . . .  	L DWORD	0020	ABS0
+@IO_ROM_INIT . . . . . . . . . .  	L WORD	0067	DATA
+@IO_ROM_SEG  . . . . . . . . . .  	L WORD	0069	DATA
+@KB_BUFFER . . . . . . . . . . .  	L WORD	001E	DATA	Length = 0010
+@KB_FLAG . . . . . . . . . . . .  	L BYTE	0017	DATA
+@KB_FLAG_1 . . . . . . . . . . .  	L BYTE	0018	DATA
+@KB_FLAG_2 . . . . . . . . . . .  	L BYTE	0097	DATA
+@KB_FLAG_3 . . . . . . . . . . .  	L BYTE	0096	DATA
+@LASTRATE  . . . . . . . . . . .  	L BYTE	008B	DATA
+@MEMORY_SIZE . . . . . . . . . .  	L WORD	0013	DATA
+@MFG_ERR_FLAG  . . . . . . . . .  	L BYTE	0015	DATA
+@MFG_TEST_RTN  . . . . . . . . .  	L FAR 	0500	ABS0
+@MFG_TST . . . . . . . . . . . .  	L BYTE	0012	DATA
+@MOTOR_COUNTD  . . . . . . . . .  	L BYTE	0040	DATA
+@MOTOR_STATUS  . . . . . . . . .  	L BYTE	003F	DATA
+@NEC_STATUS  . . . . . . . . . .  	L BYTE	0042	DATA	Length = 0007
+@NET . . . . . . . . . . . . . .  	L BYTE	00A1	DATA	Length = 0007
+@NMI_PTR . . . . . . . . . . . .  	L DWORD	0008	ABS0
+@ORG_VECTOR  . . . . . . . . . .  	L DWORD	004C	ABS0
+@PARM_PTR  . . . . . . . . . . .  	L DWORD	0074	ABS0
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 13:05:01
+TEST1 ---- 06/10/85  POWER ON SELF TEST (POST)              Symbols-6
+
+
+@POINTS  . . . . . . . . . . . .  	L WORD	0085	DATA
+@PORT_OFF  . . . . . . . . . . .  	L BYTE	0078	DATA
+@PRINTER_BASE  . . . . . . . . .  	L WORD	0008	DATA
+@RESET_FLAG  . . . . . . . . . .  	L WORD	0073	DATA
+@ROWS  . . . . . . . . . . . . .  	L BYTE	0084	DATA
+@RS232_BASE  . . . . . . . . . .  	L WORD	0000	DATA
+@RS232_TIM_OUT . . . . . . . . .  	L BYTE	007C	DATA
+@RTC_HIGH  . . . . . . . . . . .  	L WORD	009E	DATA
+@RTC_LOW . . . . . . . . . . . .  	L WORD	009C	DATA
+@RTC_WAIT_FLAG . . . . . . . . .  	L BYTE	00A0	DATA
+@SAVE_PTR  . . . . . . . . . . .  	L DWORD	00A8	DATA
+@SEEK_STATUS . . . . . . . . . .  	L BYTE	003E	DATA
+@SLAVE_INT_PTR . . . . . . . . .  	L DWORD	01C0	ABS0
+@STATUS_BYTE . . . . . . . . . .  	L BYTE	0100	DATA
+@STG_LOC0  . . . . . . . . . . .  	L BYTE	0000	ABS0
+@TIMER_HIGH  . . . . . . . . . .  	L WORD	006F	DATA
+@TIMER_LOW . . . . . . . . . . .  	L WORD	006D	DATA
+@TIMER_OFL . . . . . . . . . . .  	L BYTE	0071	DATA
+@TOS . . . . . . . . . . . . . .  	L WORD	0400	ABS0
+@USER_FLAG . . . . . . . . . . .  	L WORD	0098	DATA
+@USER_FLAG_SEG . . . . . . . . .  	L WORD	009A	DATA
+@VERSION . . . . . . . . . . . .  	TEXT  510		
+@VIDEO_INT . . . . . . . . . . .  	L DWORD	0040	ABS0
+
+
+   3061 Source  Lines
+   3061 Total   Lines
+    557 Symbols
+
+  45242 + 381363 Bytes symbol space free
+
+      6 Warning Errors
+    110 Severe  Errors

@@ -1,0 +1,600 @@
+Module: /mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/testide.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 00000431 bytes
+0000                          _testide__:
+0000    53                        push        bx 
+0001    51                        push        cx 
+0002    52                        push        dx 
+0003    1E                        push        ds 
+0004    68 00 00                  push        offset DGROUP:L$37 
+0007    E8 00 00                  call        _cprintf 
+000A    83 C4 04                  add         sp,0x0004 
+000D    31 C0                     xor         ax,ax 
+000F    E8 00 00                  call        IDE_INITIALIZE_ 
+0012    85 C0                     test        ax,ax 
+0014    75 0C                     jne         L$1 
+0016    1E                        push        ds 
+0017    68 1B 00                  push        offset DGROUP:L$38 
+001A    E8 00 00                  call        _cprintf 
+001D    83 C4 04                  add         sp,0x0004 
+0020    EB 03                     jmp         L$2 
+0022                          L$1:
+0022    E8 00 00                  call        ideerr_ 
+0025                          L$2:
+0025    66 FF 36 00 00            push        dword ptr _SecBuffer 
+002A    1E                        push        ds 
+002B    68 3A 00                  push        offset DGROUP:L$39 
+002E    E8 00 00                  call        _cprintf 
+0031    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0035    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+0039    83 C4 08                  add         sp,0x0008 
+003C    31 C0                     xor         ax,ax 
+003E    E8 00 00                  call        IDE_READ_ID_ 
+0041    85 C0                     test        ax,ax 
+0043    0F 85 B2 00               jne         L$9 
+0047    1E                        push        ds 
+0048    68 61 00                  push        offset DGROUP:L$40 
+004B    E8 00 00                  call        _cprintf 
+004E    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0052    83 C4 04                  add         sp,0x0004 
+0055    8E 06 02 00               mov         es,word ptr _SecBuffer+0x2 
+0059    06                        push        es 
+005A    83 C3 14                  add         bx,0x0014 
+005D    53                        push        bx 
+005E    1E                        push        ds 
+005F    68 7B 00                  push        offset DGROUP:L$41 
+0062    26 C6 47 14 00            mov         byte ptr es:0x14[bx],0x00 
+0067    E8 00 00                  call        _cprintf 
+006A    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+006E    83 C4 08                  add         sp,0x0008 
+0071    8E 06 02 00               mov         es,word ptr _SecBuffer+0x2 
+0075    06                        push        es 
+0076    83 C3 36                  add         bx,0x0036 
+0079    53                        push        bx 
+007A    1E                        push        ds 
+007B    68 92 00                  push        offset DGROUP:L$42 
+007E    26 C6 47 28 00            mov         byte ptr es:0x28[bx],0x00 
+0083    E8 00 00                  call        _cprintf 
+0086    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+008A    83 C4 08                  add         sp,0x0008 
+008D    8E 06 02 00               mov         es,word ptr _SecBuffer+0x2 
+0091    06                        push        es 
+0092    83 C3 2E                  add         bx,0x002e 
+0095    53                        push        bx 
+0096    1E                        push        ds 
+0097    68 A8 00                  push        offset DGROUP:L$43 
+009A    26 C6 47 08 00            mov         byte ptr es:0x8[bx],0x00 
+009F    E8 00 00                  call        _cprintf 
+00A2    C4 1E 00 00               les         bx,dword ptr _SecBuffer 
+00A6    83 C4 08                  add         sp,0x0008 
+00A9    26 F6 47 62 01            test        byte ptr es:0x62[bx],0x01 
+00AE    74 06                     je          L$3 
+00B0    1E                        push        ds 
+00B1    68 C3 00                  push        offset DGROUP:L$44 
+00B4    EB 04                     jmp         L$4 
+00B6                          L$3:
+00B6    1E                        push        ds 
+00B7    68 D8 00                  push        offset DGROUP:L$45 
+00BA                          L$4:
+00BA    E8 00 00                  call        _cprintf 
+00BD    83 C4 04                  add         sp,0x0004 
+00C0    C4 1E 00 00               les         bx,dword ptr _SecBuffer 
+00C4    26 F6 47 62 02            test        byte ptr es:0x62[bx],0x02 
+00C9    74 06                     je          L$5 
+00CB    1E                        push        ds 
+00CC    68 F5 00                  push        offset DGROUP:L$46 
+00CF    EB 04                     jmp         L$6 
+00D1                          L$5:
+00D1    1E                        push        ds 
+00D2    68 0A 01                  push        offset DGROUP:L$47 
+00D5                          L$6:
+00D5    E8 00 00                  call        _cprintf 
+00D8    83 C4 04                  add         sp,0x0004 
+00DB    C4 1E 00 00               les         bx,dword ptr _SecBuffer 
+00DF    26 F6 87 A7 00 04         test        byte ptr es:0xa7[bx],0x04 
+00E5    74 0C                     je          L$8 
+00E7    1E                        push        ds 
+00E8    68 27 01                  push        offset DGROUP:L$48 
+00EB                          L$7:
+00EB    E8 00 00                  call        _cprintf 
+00EE    83 C4 04                  add         sp,0x0004 
+00F1    EB 09                     jmp         L$10 
+00F3                          L$8:
+00F3    1E                        push        ds 
+00F4    68 4F 01                  push        offset DGROUP:L$49 
+00F7    EB F2                     jmp         L$7 
+00F9                          L$9:
+00F9    E8 00 00                  call        ideerr_ 
+00FC                          L$10:
+00FC    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0101    1E                        push        ds 
+0102    68 7F 01                  push        offset DGROUP:L$50 
+0105    E8 00 00                  call        _cprintf 
+0108    83 C4 08                  add         sp,0x0008 
+010B    6A 01                     push        0x0001 
+010D    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0111    6A 00                     push        0x0000 
+0113    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+0117    6A 00                     push        0x0000 
+0119    31 C0                     xor         ax,ax 
+011B    E8 00 00                  call        IDE_READ_SECTOR_ 
+011E    85 C0                     test        ax,ax 
+0120    75 0C                     jne         L$11 
+0122    A1 00 00                  mov         ax,word ptr _SecBuffer 
+0125    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0129    E8 00 00                  call        PrintBuffer_ 
+012C    EB 03                     jmp         L$12 
+012E                          L$11:
+012E    E8 00 00                  call        ideerr_ 
+0131                          L$12:
+0131    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0136    1E                        push        ds 
+0137    68 AF 01                  push        offset DGROUP:L$51 
+013A    E8 00 00                  call        _cprintf 
+013D    83 C4 08                  add         sp,0x0008 
+0140    6A 01                     push        0x0001 
+0142    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0146    6A 00                     push        0x0000 
+0148    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+014C    6A 01                     push        0x0001 
+014E    31 C0                     xor         ax,ax 
+0150    E8 00 00                  call        IDE_READ_SECTOR_ 
+0153    85 C0                     test        ax,ax 
+0155    75 0C                     jne         L$13 
+0157    A1 00 00                  mov         ax,word ptr _SecBuffer 
+015A    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+015E    E8 00 00                  call        PrintBuffer_ 
+0161    EB 03                     jmp         L$14 
+0163                          L$13:
+0163    E8 00 00                  call        ideerr_ 
+0166                          L$14:
+0166    66 FF 36 00 00            push        dword ptr _SecBuffer 
+016B    1E                        push        ds 
+016C    68 DD 01                  push        offset DGROUP:L$52 
+016F    E8 00 00                  call        _cprintf 
+0172    83 C4 08                  add         sp,0x0008 
+0175    6A 01                     push        0x0001 
+0177    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+017B    6A 00                     push        0x0000 
+017D    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+0181    6A 64                     push        0x0064 
+0183    31 C0                     xor         ax,ax 
+0185    E8 00 00                  call        IDE_READ_SECTOR_ 
+0188    85 C0                     test        ax,ax 
+018A    75 0C                     jne         L$15 
+018C    A1 00 00                  mov         ax,word ptr _SecBuffer 
+018F    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0193    E8 00 00                  call        PrintBuffer_ 
+0196    EB 03                     jmp         L$16 
+0198                          L$15:
+0198    E8 00 00                  call        ideerr_ 
+019B                          L$16:
+019B    66 FF 36 00 00            push        dword ptr _SecBuffer 
+01A0    1E                        push        ds 
+01A1    68 0D 02                  push        offset DGROUP:L$53 
+01A4    E8 00 00                  call        _cprintf 
+01A7    83 C4 08                  add         sp,0x0008 
+01AA    6A 02                     push        0x0002 
+01AC    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+01B0    6A 00                     push        0x0000 
+01B2    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+01B6    6A 00                     push        0x0000 
+01B8    31 C0                     xor         ax,ax 
+01BA    E8 00 00                  call        IDE_READ_SECTOR_ 
+01BD    85 C0                     test        ax,ax 
+01BF    75 19                     jne         L$17 
+01C1    A1 00 00                  mov         ax,word ptr _SecBuffer 
+01C4    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+01C8    E8 00 00                  call        PrintBuffer_ 
+01CB    A1 00 00                  mov         ax,word ptr _SecBuffer 
+01CE    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+01D2    80 C4 02                  add         ah,0x02 
+01D5    E8 00 00                  call        PrintBuffer_ 
+01D8    EB 03                     jmp         L$18 
+01DA                          L$17:
+01DA    E8 00 00                  call        ideerr_ 
+01DD                          L$18:
+01DD    66 FF 36 00 00            push        dword ptr _SecBuffer 
+01E2    1E                        push        ds 
+01E3    68 40 02                  push        offset DGROUP:L$54 
+01E6    E8 00 00                  call        _cprintf 
+01E9    A1 00 00                  mov         ax,word ptr _SecBuffer 
+01EC    83 C4 08                  add         sp,0x0008 
+01EF    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+01F3    E8 00 00                  call        ClearBuffer_ 
+01F6    A1 00 00                  mov         ax,word ptr _SecBuffer 
+01F9    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+01FD    E8 00 00                  call        PrintBuffer_ 
+0200    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0205    1E                        push        ds 
+0206    68 5E 02                  push        offset DGROUP:L$55 
+0209    E8 00 00                  call        _cprintf 
+020C    A1 00 00                  mov         ax,word ptr _SecBuffer 
+020F    83 C4 08                  add         sp,0x0008 
+0212    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0216    E8 00 00                  call        BufferTestPattern_ 
+0219    A1 00 00                  mov         ax,word ptr _SecBuffer 
+021C    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0220    E8 00 00                  call        PrintBuffer_ 
+0223    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0228    1E                        push        ds 
+0229    68 83 02                  push        offset DGROUP:L$56 
+022C    E8 00 00                  call        _cprintf 
+022F    83 C4 08                  add         sp,0x0008 
+0232    6A 01                     push        0x0001 
+0234    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0238    6A 00                     push        0x0000 
+023A    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+023E    6A 64                     push        0x0064 
+0240    31 C0                     xor         ax,ax 
+0242    E8 00 00                  call        IDE_WRITE_SECTOR_ 
+0245    85 C0                     test        ax,ax 
+0247    74 03                     je          L$19 
+0249    E8 00 00                  call        ideerr_ 
+024C                          L$19:
+024C    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0251    1E                        push        ds 
+0252    68 BA 02                  push        offset DGROUP:L$57 
+0255    E8 00 00                  call        _cprintf 
+0258    83 C4 08                  add         sp,0x0008 
+025B    6A 01                     push        0x0001 
+025D    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+0261    6A 00                     push        0x0000 
+0263    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+0267    6A 64                     push        0x0064 
+0269    31 C0                     xor         ax,ax 
+026B    E8 00 00                  call        IDE_READ_SECTOR_ 
+026E    85 C0                     test        ax,ax 
+0270    75 0C                     jne         L$20 
+0272    A1 00 00                  mov         ax,word ptr _SecBuffer 
+0275    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0279    E8 00 00                  call        PrintBuffer_ 
+027C    EB 03                     jmp         L$21 
+027E                          L$20:
+027E    E8 00 00                  call        ideerr_ 
+0281                          L$21:
+0281    66 FF 36 00 00            push        dword ptr _SecBuffer 
+0286    1E                        push        ds 
+0287    68 40 02                  push        offset DGROUP:L$54 
+028A    E8 00 00                  call        _cprintf 
+028D    A1 00 00                  mov         ax,word ptr _SecBuffer 
+0290    83 C4 08                  add         sp,0x0008 
+0293    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+0297    E8 00 00                  call        ClearBuffer_ 
+029A    A1 00 00                  mov         ax,word ptr _SecBuffer 
+029D    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+02A1    E8 00 00                  call        PrintBuffer_ 
+02A4    66 FF 36 00 00            push        dword ptr _SecBuffer 
+02A9    1E                        push        ds 
+02AA    68 F9 02                  push        offset DGROUP:L$58 
+02AD    E8 00 00                  call        _cprintf 
+02B0    83 C4 08                  add         sp,0x0008 
+02B3    6A 01                     push        0x0001 
+02B5    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+02B9    6A 00                     push        0x0000 
+02BB    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+02BF    6A 64                     push        0x0064 
+02C1    31 C0                     xor         ax,ax 
+02C3    E8 00 00                  call        IDE_WRITE_SECTOR_ 
+02C6    85 C0                     test        ax,ax 
+02C8    74 03                     je          L$22 
+02CA    E8 00 00                  call        ideerr_ 
+02CD                          L$22:
+02CD    66 FF 36 00 00            push        dword ptr _SecBuffer 
+02D2    1E                        push        ds 
+02D3    68 31 03                  push        offset DGROUP:L$59 
+02D6    E8 00 00                  call        _cprintf 
+02D9    83 C4 08                  add         sp,0x0008 
+02DC    6A 01                     push        0x0001 
+02DE    8B 1E 00 00               mov         bx,word ptr _SecBuffer 
+02E2    6A 00                     push        0x0000 
+02E4    8B 0E 02 00               mov         cx,word ptr _SecBuffer+0x2 
+02E8    6A 64                     push        0x0064 
+02EA    31 C0                     xor         ax,ax 
+02EC    E8 00 00                  call        IDE_READ_SECTOR_ 
+02EF    85 C0                     test        ax,ax 
+02F1    75 0C                     jne         L$23 
+02F3    A1 00 00                  mov         ax,word ptr _SecBuffer 
+02F6    8B 16 02 00               mov         dx,word ptr _SecBuffer+0x2 
+02FA    E8 00 00                  call        PrintBuffer_ 
+02FD    EB 03                     jmp         L$24 
+02FF                          L$23:
+02FF    E8 00 00                  call        ideerr_ 
+0302                          L$24:
+0302    1E                        push        ds 
+0303    68 69 03                  push        offset DGROUP:L$60 
+0306    E8 00 00                  call        _cprintf 
+0309    B8 08 00                  mov         ax,0x0008 
+030C                          L$25:
+030C    83 C4 04                  add         sp,0x0004 
+030F    5A                        pop         dx 
+0310    59                        pop         cx 
+0311    5B                        pop         bx 
+0312    C3                        ret         
+
+Routine Size: 787 bytes,    Routine Base: _TEXT + 0000
+
+0313                          PrintBuffer_:
+0313    53                        push        bx 
+0314    51                        push        cx 
+0315    56                        push        si 
+0316    57                        push        di 
+0317    55                        push        bp 
+0318    89 E5                     mov         bp,sp 
+031A    50                        push        ax 
+031B    52                        push        dx 
+031C    52                        push        dx 
+031D    50                        push        ax 
+031E    1E                        push        ds 
+031F    68 7B 03                  push        offset DGROUP:L$61 
+0322    31 FF                     xor         di,di 
+0324    E8 00 00                  call        _cprintf 
+0327    83 C4 08                  add         sp,0x0008 
+032A    EB 10                     jmp         L$27 
+032C                          L$26:
+032C    1E                        push        ds 
+032D    68 9E 03                  push        offset DGROUP:L$67 
+0330    E8 00 00                  call        _cprintf 
+0333    83 C4 04                  add         sp,0x0004 
+0336    81 FF 00 02               cmp         di,0x0200 
+033A    7D 6E                     jge         L$32 
+033C                          L$27:
+033C    57                        push        di 
+033D    1E                        push        ds 
+033E    68 8B 03                  push        offset DGROUP:L$62 
+0341    31 F6                     xor         si,si 
+0343    E8 00 00                  call        _cprintf 
+0346    83 C4 06                  add         sp,0x0006 
+0349                          L$28:
+0349    8B 5E FE                  mov         bx,word ptr -0x2[bp] 
+034C    01 FB                     add         bx,di 
+034E    8E 46 FC                  mov         es,word ptr -0x4[bp] 
+0351    01 F3                     add         bx,si 
+0353    26 0F B6 1F               movzx       bx,byte ptr es:[bx] 
+0357    53                        push        bx 
+0358    1E                        push        ds 
+0359    68 91 03                  push        offset DGROUP:L$63 
+035C    46                        inc         si 
+035D    E8 00 00                  call        _cprintf 
+0360    83 C4 06                  add         sp,0x0006 
+0363    83 FE 10                  cmp         si,0x0010 
+0366    7C E1                     jl          L$28 
+0368    1E                        push        ds 
+0369    68 97 03                  push        offset DGROUP:L$64 
+036C    31 F6                     xor         si,si 
+036E    E8 00 00                  call        _cprintf 
+0371    83 C4 04                  add         sp,0x0004 
+0374    EB 11                     jmp         L$31 
+0376                          L$29:
+0376    1E                        push        ds 
+0377    68 9C 03                  push        offset DGROUP:L$66 
+037A    E8 00 00                  call        _cprintf 
+037D    83 C4 04                  add         sp,0x0004 
+0380                          L$30:
+0380    46                        inc         si 
+0381    47                        inc         di 
+0382    83 FE 10                  cmp         si,0x0010 
+0385    7D A5                     jge         L$26 
+0387                          L$31:
+0387    8B 5E FE                  mov         bx,word ptr -0x2[bp] 
+038A    8E 46 FC                  mov         es,word ptr -0x4[bp] 
+038D    01 FB                     add         bx,di 
+038F    26 8A 07                  mov         al,byte ptr es:[bx] 
+0392    3C 1F                     cmp         al,0x1f 
+0394    76 E0                     jbe         L$29 
+0396    3C 80                     cmp         al,0x80 
+0398    73 DC                     jae         L$29 
+039A    0F B6 D8                  movzx       bx,al 
+039D    53                        push        bx 
+039E    1E                        push        ds 
+039F    68 99 03                  push        offset DGROUP:L$65 
+03A2    E8 00 00                  call        _cprintf 
+03A5    83 C4 06                  add         sp,0x0006 
+03A8    EB D6                     jmp         L$30 
+03AA                          L$32:
+03AA    1E                        push        ds 
+03AB    68 9E 03                  push        offset DGROUP:L$67 
+03AE    E8 00 00                  call        _cprintf 
+03B1    83 C4 04                  add         sp,0x0004 
+03B4                          L$33:
+03B4    31 C0                     xor         ax,ax 
+03B6    C9                        leave       
+03B7                          L$34:
+03B7    5F                        pop         di 
+03B8    5E                        pop         si 
+03B9    59                        pop         cx 
+03BA    5B                        pop         bx 
+03BB    C3                        ret         
+
+Routine Size: 169 bytes,    Routine Base: _TEXT + 0313
+
+03BC                          ClearBuffer_:
+03BC    53                        push        bx 
+03BD    51                        push        cx 
+03BE    56                        push        si 
+03BF    57                        push        di 
+03C0    89 C7                     mov         di,ax 
+03C2    89 D6                     mov         si,dx 
+03C4    52                        push        dx 
+03C5    50                        push        ax 
+03C6    1E                        push        ds 
+03C7    68 A0 03                  push        offset DGROUP:L$68 
+03CA    E8 00 00                  call        _cprintf 
+03CD    83 C4 08                  add         sp,0x0008 
+03D0    8E C6                     mov         es,si 
+03D2    31 C0                     xor         ax,ax 
+03D4                          L$35:
+03D4    89 FB                     mov         bx,di 
+03D6    01 C3                     add         bx,ax 
+03D8    40                        inc         ax 
+03D9    26 C6 07 00               mov         byte ptr es:[bx],0x00 
+03DD    3D 00 02                  cmp         ax,0x0200 
+03E0    7C F2                     jl          L$35 
+03E2    31 C0                     xor         ax,ax 
+03E4    EB D1                     jmp         L$34 
+
+Routine Size: 42 bytes,    Routine Base: _TEXT + 03BC
+
+03E6                          BufferTestPattern_:
+03E6    53                        push        bx 
+03E7    51                        push        cx 
+03E8    56                        push        si 
+03E9    57                        push        di 
+03EA    C8 02 00 00               enter       0x0002,0x00 
+03EE    89 C7                     mov         di,ax 
+03F0    89 D6                     mov         si,dx 
+03F2    52                        push        dx 
+03F3    50                        push        ax 
+03F4    1E                        push        ds 
+03F5    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
+03FA    68 B6 03                  push        offset DGROUP:L$69 
+03FD    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
+0402    E8 00 00                  call        _cprintf 
+0405    83 C4 08                  add         sp,0x0008 
+0408    8E C6                     mov         es,si 
+040A                          L$36:
+040A    8B 5E FE                  mov         bx,word ptr -0x2[bp] 
+040D    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
+0410    01 FB                     add         bx,di 
+0412    FF 46 FE                  inc         word ptr -0x2[bp] 
+0415    26 88 07                  mov         byte ptr es:[bx],al 
+0418    81 7E FE 00 02            cmp         word ptr -0x2[bp],0x0200 
+041D    7C EB                     jl          L$36 
+041F    EB 93                     jmp         L$33 
+
+Routine Size: 59 bytes,    Routine Base: _TEXT + 03E6
+
+0421                          ideerr_:
+0421    53                        push        bx 
+0422    51                        push        cx 
+0423    52                        push        dx 
+0424    1E                        push        ds 
+0425    68 DC 03                  push        offset DGROUP:L$70 
+0428    E8 00 00                  call        _cprintf 
+042B    B8 FF FF                  mov         ax,0xffff 
+042E    E9 DB FE                  jmp         L$25 
+
+Routine Size: 16 bytes,    Routine Base: _TEXT + 0421
+
+No disassembly errors
+
+Segment: CONST WORD USE16 000003EB bytes
+0000                          L$37:
+0000    0A 0A 42 65 67 69 6E 20 54 65 73 74 20 49 44 45 ..Begin Test IDE
+0010    20 66 75 6E 63 74 69 6F 6E 0A 00                 function..
+001B                          L$38:
+001B    49 6E 69 74 69 61 6C 69 7A 65 64 20 50 72 69 6D Initialized Prim
+002B    61 72 79 20 49 44 45 20 44 72 69 76 65 0A 00    ary IDE Drive..
+003A                          L$39:
+003A    47 65 74 20 49 44 45 20 44 72 69 76 65 20 49 6E Get IDE Drive In
+004A    66 6F 20 69 6E 74 6F 20 61 64 64 72 65 73 73 20 fo into address 
+005A    25 30 38 6C 78 0A 00                            %08lx..
+0061                          L$40:
+0061    52 65 74 72 69 65 76 65 64 20 49 44 45 20 44 72 Retrieved IDE Dr
+0071    69 76 65 20 49 6E 66 6F 0A 00                   ive Info..
+007B                          L$41:
+007B    49 44 45 20 53 45 52 49 41 4C 20 4E 55 4D 42 45 IDE SERIAL NUMBE
+008B    52 3A 20 25 73 0A 00                            R: %s..
+0092                          L$42:
+0092    49 44 45 20 4D 4F 44 45 4C 20 4E 55 4D 42 45 52 IDE MODEL NUMBER
+00A2    3A 20 25 73 0A 00                               : %s..
+00A8                          L$43:
+00A8    49 44 45 20 46 49 52 4D 57 41 52 45 20 52 45 56 IDE FIRMWARE REV
+00B8    49 53 49 4F 4E 3A 20 25 73 0A 00                ISION: %s..
+00C3                          L$44:
+00C3    44 52 49 56 45 20 53 55 50 50 4F 52 54 53 20 44 DRIVE SUPPORTS D
+00D3    4D 41 2E 0A 00                                  MA...
+00D8                          L$45:
+00D8    44 52 49 56 45 20 44 4F 45 53 20 4E 4F 54 20 53 DRIVE DOES NOT S
+00E8    55 50 50 4F 52 54 20 44 4D 41 2E 0A 00          UPPORT DMA...
+00F5                          L$46:
+00F5    44 52 49 56 45 20 53 55 50 50 4F 52 54 53 20 4C DRIVE SUPPORTS L
+0105    42 41 2E 0A 00                                  BA...
+010A                          L$47:
+010A    44 52 49 56 45 20 44 4F 45 53 20 4E 4F 54 20 53 DRIVE DOES NOT S
+011A    55 50 50 4F 52 54 20 4C 42 41 2E 0A 00          UPPORT LBA...
+0127                          L$48:
+0127    44 52 49 56 45 20 53 55 50 50 4F 52 54 53 20 43 DRIVE SUPPORTS C
+0137    46 41 20 45 58 54 45 4E 53 49 4F 4E 53 20 28 38 FA EXTENSIONS (8
+0147    2D 42 49 54 29 2E 0A 00                         -BIT)...
+014F                          L$49:
+014F    44 52 49 56 45 20 44 4F 45 53 20 4E 4F 54 20 53 DRIVE DOES NOT S
+015F    55 50 50 4F 52 54 20 43 46 41 20 45 58 54 45 4E UPPORT CFA EXTEN
+016F    53 49 4F 4E 53 20 28 38 2D 42 49 54 29 2E 0A 00 SIONS (8-BIT)...
+017F                          L$50:
+017F    54 65 73 74 20 52 65 61 64 20 6F 66 20 31 20 4C Test Read of 1 L
+018F    42 41 20 73 65 63 74 6F 72 20 30 20 69 6E 74 6F BA sector 0 into
+019F    20 61 64 64 72 65 73 73 20 25 30 38 6C 78 0A 00  address %08lx..
+01AF                          L$51:
+01AF    54 65 73 74 20 52 65 61 64 20 6F 66 20 4C 42 41 Test Read of LBA
+01BF    20 73 65 63 74 6F 72 20 31 20 69 6E 74 6F 20 61  sector 1 into a
+01CF    64 64 72 65 73 73 20 25 30 38 6C 78 0A 00       ddress %08lx..
+01DD                          L$52:
+01DD    54 65 73 74 20 52 65 61 64 20 6F 66 20 4C 42 41 Test Read of LBA
+01ED    20 73 65 63 74 6F 72 20 31 30 30 20 69 6E 74 6F  sector 100 into
+01FD    20 61 64 64 72 65 73 73 20 25 30 38 6C 78 0A 00  address %08lx..
+020D                          L$53:
+020D    54 65 73 74 20 52 65 61 64 20 6F 66 20 32 20 4C Test Read of 2 L
+021D    42 41 20 73 65 63 74 6F 72 73 20 30 2B 31 20 69 BA sectors 0+1 i
+022D    6E 74 6F 20 61 64 64 72 65 73 73 20 25 30 38 6C nto address %08l
+023D    78 0A 00                                        x..
+0240                          L$54:
+0240    43 6C 65 61 72 20 62 75 66 66 65 72 20 40 20 61 Clear buffer @ a
+0250    64 64 72 65 73 73 20 25 30 38 6C 78 0A 00       ddress %08lx..
+025E                          L$55:
+025E    50 6C 61 63 65 20 54 65 73 74 20 50 61 74 74 65 Place Test Patte
+026E    72 6E 20 20 40 20 61 64 64 72 65 73 73 20 25 30 rn  @ address %0
+027E    38 6C 78 0A 00                                  8lx..
+0283                          L$56:
+0283    57 52 49 54 45 20 54 65 73 74 20 50 61 74 74 65 WRITE Test Patte
+0293    72 6E 20 20 40 20 61 64 64 72 65 73 73 20 25 30 rn  @ address %0
+02A3    38 6C 78 20 74 6F 20 4C 42 41 20 53 45 43 54 4F 8lx to LBA SECTO
+02B3    52 20 31 30 30 0A 00                            R 100..
+02BA                          L$57:
+02BA    54 65 73 74 20 52 65 61 64 20 28 54 65 73 74 20 Test Read (Test 
+02CA    50 61 74 74 65 72 6E 29 20 6F 66 20 4C 42 41 20 Pattern) of LBA 
+02DA    73 65 63 74 6F 72 20 31 30 30 20 69 6E 74 6F 20 sector 100 into 
+02EA    61 64 64 72 65 73 73 20 25 30 38 6C 78 0A 00    address %08lx..
+02F9                          L$58:
+02F9    57 52 49 54 45 20 7A 65 72 6F 73 20 50 61 74 74 WRITE zeros Patt
+0309    65 72 6E 20 20 40 20 61 64 64 72 65 73 73 20 25 ern  @ address %
+0319    30 38 6C 78 20 74 6F 20 4C 42 41 20 53 45 43 54 08lx to LBA SECT
+0329    4F 52 20 31 30 30 0A 00                         OR 100..
+0331                          L$59:
+0331    54 65 73 74 20 52 65 61 64 20 28 5A 65 72 6F 73 Test Read (Zeros
+0341    29 20 6F 66 20 4C 42 41 20 73 65 63 74 6F 72 20 ) of LBA sector 
+0351    31 30 30 20 69 6E 74 6F 20 61 64 64 72 65 73 73 100 into address
+0361    20 25 30 38 6C 78 0A 00                          %08lx..
+0369                          L$60:
+0369    45 4E 44 20 4F 46 20 49 44 45 20 54 45 53 54 2E END OF IDE TEST.
+0379    0A 00                                           ..
+037B                          L$61:
+037B    0A 42 55 46 46 45 52 2D 3E 25 30 38 6C 78 0A 00 .BUFFER->%08lx..
+038B                          L$62:
+038B    25 30 34 78 20 00                               %04x .
+0391                          L$63:
+0391    25 30 32 78 20 00                               %02x .
+0397                          L$64:
+0397    2D 00                                           -.
+0399                          L$65:
+0399    25 63 00                                        %c.
+039C                          L$66:
+039C    2E 00                                           ..
+039E                          L$67:
+039E    0A 00                                           ..
+03A0                          L$68:
+03A0    0A 43 4C 45 41 52 20 42 55 46 46 45 52 2D 3E 25 .CLEAR BUFFER->%
+03B0    30 38 6C 78 0A 00                               08lx..
+03B6                          L$69:
+03B6    0A 57 52 49 54 45 20 54 45 53 54 20 50 41 54 54 .WRITE TEST PATT
+03C6    45 52 4E 20 54 4F 20 42 55 46 46 45 52 2D 3E 25 ERN TO BUFFER->%
+03D6    30 38 6C 78 0A 00                               08lx..
+03DC                          L$70:
+03DC    49 44 45 20 49 2F 4F 20 45 72 72 6F 72 0A 00    IDE I/O Error..
+
+Segment: CONST2 WORD USE16 00000000 bytes
+
+Segment: _DATA WORD USE16 00000000 bytes
+

@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "SIGNON.C": "cpp",
+        "SEG.C": "cpp",
+        "CPRINTF.C": "cpp"
+    },
+    "editor.fontSize": 28
+}

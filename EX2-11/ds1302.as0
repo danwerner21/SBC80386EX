@@ -1,0 +1,237 @@
+; ds1302.asm -- access to the RTC and NVRAM
+;
+;**********
+; N.B. These will move to P1 from P3 on the final board
+;**********
+DSLTC   equ     P3LTC           ; DS1302 latch
+DSPIN   equ     P3PIN           ;   pin value
+
+DSDAT   equ     BIT0            ; Data must be bit 0 & idles high
+DSCLK   equ     BIT1            ; Clock idles high
+DSRST   equ     BIT6            ; Reset idles low (asserted)
+
+DSMSK   equ     DSRST+DSCLK+DSDAT
+
+
+%macro  nvdelay 0
+        jmp     $+2
+        pusha
+        jmp     $+2
+        popa
+        jmp     $+2
+        pusha
+        jmp     $+2
+        popa
+        jmp     $+2
+%endmacro
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; INT 1A
+; function 20   Get NVRAM byte
+;
+; Enter with:
+;       AH      0x20
+;       AL      byte number ( 0 <= AL <= 30) 
+;   (single byte read)
+;
+;       AH      0x20
+;       AL      31
+;       ES:BX   pointer to 31 byte buffer
+;   (burst read)
+;
+; Exit with:
+;       AL      byte read (single byte read)
+;
+;       AL      byte NVRAM[30] (burst read)
+;       ES:BX buffer filled with bytes 0..30
+;
+;       Carry clear
+;
+; Error:
+;       Carry set
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+nv_read:
+        pushm   bx,cx,dx
+
+        call    nv_reset_on
+
+        mov     ah,31           ; limit check for nvram is 31
+        call    nv_valid
+        je      nv_rburst
+
+;
+; single byte read
+        shl     al,1            ; position address
+        or      al,1100_0001B   ; RAM/READ
+        mov     ah,al
+        call    nv_outb
+
+        call    nv_inb
+        call    nv_reset_off    ;
+        mov     al,ah           ; put byte in AL
+        clc
+        jmp     nv_exit
+
+;
+; handle burst read
+nv_rburst:
+        mov     ah,1111_1111B   ; burst read RAM/READ command
+        call    nv_outb
+
+        mov     cx,31
+nvburst:
+        call    nv_inb          ; get byte in AH
+   es   mov     byte [bx],ah         ;store the byte at ES:[BX]
+        inc     bx
+        loop    nvburst
+
+        mov     al,ah           ; return last byte read
+        call    nv_reset_off
+        clc
+        jmp     nv_exit
+
+
+        
+        
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; INT 1A
+; function 21   Set NVRAM byte
+;
+; Enter with:
+;       AH      0x21
+;       AL      byte number ( 0 <= AL <= 30) 
+;   (single byte write)
+;       CL      byte value to write
+;
+;       AH      0x21
+;       AL      31
+;       ES:BX   pointer to 31 byte buffer
+;   (burst write)
+;
+; Exit with:
+;       Carry clear
+;
+; Error:
+;       Carry set
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+nv_write:
+        pushm   bx,cx,dx
+
+        call    nv_reset_on
+
+        mov     ah,31           ; limit check for nvram is 31
+        call    nv_valid
+        je      nv_wburst
+
+;
+; single byte write
+        shl     al,1            ; position address
+        or      al,1100_0000B   ; RAM/WRITE
+        mov     ah,al
+        call    nv_outb
+
+        mov     ah,cl           ; byte to write
+        call    nv_outb
+
+        call    nv_reset_off
+        mov     al,cl           ; put byte in AL
+        clc
+        jmp     nv_exit
+
+nv_wburst:
+        jmp     nv_errexit
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; utility programs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+
+nv_reset_on:
+        push    ax
+
+        mov     dx,DSLTC        ; get latch values
+        in      al,dx           ;
+        and     al,~DSMSK       ;
+        or      al,DSCLK+DSDAT  ; clear DSRST (assert it)
+        out     dx,al           ;
+        nvdelay
+
+        pop     ax
+        clc                     ; for good exits
+        ret
+
+nv_reset_off:
+        push    ax
+
+        mov     dx,DSLTC        ; get latch values
+        in      al,dx           ;
+        or      al,DSMSK        ; set R(off), C(hi), D(hi)
+        out     dx,al           ;
+        nvdelay
+
+        pop     ax
+        ret
+
+nv_outb:                        ;output byte in AH
+        push    cx
+
+        call    nv_reset_off       ; set all high
+        mov     dx,DSLTC
+        mov     cx,8            ; 8 bits out
+        in      al,dx           ;get latch values
+nvoutb1:
+        ror     ax,1            ; data bit8 to bit7
+        rol     al,1            ; data bit7 to bit 0
+        and     al,~DSCLK       ; drop the clock
+        out     dx,al           ; **
+        nvdelay
+        or      al,DSCLK        ; raise the clock
+        out     dx,al           ; ** 
+        nvdelay
+        loop    nvoutb1         ; put out 8 bits
+
+        pop     cx
+        ret
+
+nv_inb:                 ; input byte to AH
+        push    cx
+
+        call    nv_reset_off    ; set all high
+
+        mov     cx,8            ; 8 bits in
+nvinb1:
+        mov     dx,DSLTC
+        in      al,dx           ;get latch values
+        and     al,~DSCLK       ;drop the clock to get input
+        out     dx,al           ;**
+        nvdelay
+        mov     dx,DSPIN        ;for the read
+        in      al,dx           ; read all pin values
+        ror     ax,1            ; bit 0 to bit 15 in AH
+        nvdelay
+        call    nv_reset_off    ;raise all high
+        loop    nvinb1          ;loop for 8 bits
+
+        pop     cx
+        ret      
+
+
+nv_valid:
+        cmp     al,ah           ; must be .le. AH
+        ja      nv_invalid      ;
+        ret
+nv_invalid:
+        add     sp,2            ; pop return
+nv_errexit:
+        stc
+nv_exit:
+        popm    bx,cx,dx
+        ret     ; (becomes IRET)
+        IRET
+

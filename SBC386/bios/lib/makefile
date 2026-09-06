@@ -1,0 +1,109 @@
+# Makefile for the RetroBrew SBC-386 relocatable BIOS
+#  Use Open Watcom NMAKE to make (or NMAKE?)
+#  Use Open Watcom C 1.9
+#   or NASM version 2.08 (cwsdpmi needed, or WINNT)
+#       NASM ver. 2.09 is reported to have problems
+#
+#
+
+CC = wcl -c -i=..
+# Open Watcom C Compiler options:
+# -bt=DOS  build target
+# -mc   compact memory model  -f
+# -zdp  DS == DGROUP
+# -zu   SS != DGROUP
+# -s    remove stack overflow checks
+# -zp1  set struct packing alignment to 1
+# -oi   inline intrinsic functions
+# -os   optimize for space (dangerous -- switch in cprintf.c fails)
+# -ox	extensive optimization == -obmiler
+# -1    generate code for 186 or higher
+# -2    generate code for 286 or higher
+# -3    generate code for 386 or higher
+# -fpi87 use 8087 instructions
+# -q	quiet compile
+#
+# N.B.:  Watcom 1.9 mishandles SWITCH statements with the '-os' option
+#COPT = -q -mc -zdp -zu -s -zp1 -oabrt -3 -fpi87 -DSBC386=1
+COPT = -q -mc -zdp -zu -s -zp1 -oabrts -3 -fpi87 -DSBC386=1
+
+CLIST = wdis -l -s $*.o
+SIZE = -DROM=$(ROM) -DCHIP=$(CHIP) $(RED)
+#
+# The newer version of NASM provides the __DATE__ & __TIME__
+#NASM = nasm
+NASM = nasm
+ASM = $(NASM) -fobj
+#
+NOPT = -O9 -dROM=$(ROM)
+LINK = wcl
+#LINK = wlink
+# Open Watcom linker options:
+# -lr   create a DOS real-mode program
+LOPT = -lr -q
+
+LIB = wlib
+
+C7LDIR = /C700/LIB
+WLIB2 = /WATCOM/LIB286/DOS
+LIBS = $(WLIB2)/clibc.lib $(C7LDIR)/clibc7.lib $(C7LDIR)/oldnames.lib
+
+
+# Watcom tools
+
+RM=rm -f
+CP=cp
+CAT=cp -b
+PLUS=+
+
+#INCLUDES = seg_def.inc i386EX.inc macro.inc bda.inc date.inc
+CINCL = ../mytypes.h ../cprintf.h
+
+OBJECTS = cprintf.o atoi.o strlen.o uart_det.o testide.o # libc.o stub.o
+LIBOBJS =+cprintf    +atoi    +strlen	 +uart_det    +testide
+
+.EXTENSIONS:
+.EXTENSIONS: .bin .o .exe .asm .c .h .tmp
+
+
+uart_det.o:
+	$(ASM) $(NOPT) -o $@ -l uart_det.lst  uart_det.asm
+.asm.o:
+	$(ASM) $(NOPT) -o $@ -l $*.lst  $*.asm
+.c.o:
+	$(CC) $(COPT) -fo=$@ $*.c
+	$(CLIST)
+
+all:	SBC386.lib
+
+obj:	$(OBJECTS)
+
+
+
+SBC386.lib:	$(OBJECTS)
+	$(LIB) -n $@ $(LIBOBJS)
+
+
+
+
+# Maintenance
+
+tidy:
+	$(RM) *.lst
+
+clean:	tidy
+	$(RM) *.lib
+	$(RM) *.o
+
+spotless: clean
+	$(RM) foo*
+	$(RM) goo*
+	$(RM) foo*.*
+	$(RM) goo*.*
+
+## Dependencies
+cprintf.o:    cprintf.c $(CINCL)
+strlen.o:	strlen.c $(CINCL)
+atoi.o:	atoi.c $(CINCL)
+testide.o:	testide.c $(CINCL)
+uart_det.o:	uart_det.asm ../seg_def.inc

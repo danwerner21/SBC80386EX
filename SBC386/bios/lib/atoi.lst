@@ -1,0 +1,38 @@
+Module: /mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/atoi.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 00000026 bytes
+0000                          atoi_:
+0000    53                        push        bx 
+0001    89 C3                     mov         bx,ax 
+0003    8E C2                     mov         es,dx 
+0005    26 8A 07                  mov         al,byte ptr es:[bx] 
+0008    31 D2                     xor         dx,dx 
+000A                          L$1:
+000A    3C 30                     cmp         al,0x30 
+000C    72 14                     jb          L$2 
+000E    3C 39                     cmp         al,0x39 
+0010    77 10                     ja          L$2 
+0012    6B D2 0A                  imul        dx,0x000a 
+0015    30 E4                     xor         ah,ah 
+0017    01 C2                     add         dx,ax 
+0019    43                        inc         bx 
+001A    83 EA 30                  sub         dx,0x0030 
+001D    26 8A 07                  mov         al,byte ptr es:[bx] 
+0020    EB E8                     jmp         L$1 
+0022                          L$2:
+0022    89 D0                     mov         ax,dx 
+0024    5B                        pop         bx 
+0025    C3                        ret         
+
+Routine Size: 38 bytes,    Routine Base: _TEXT + 0000
+
+No disassembly errors
+
+Segment: CONST WORD USE16 00000000 bytes
+
+Segment: CONST2 WORD USE16 00000000 bytes
+
+Segment: _DATA WORD USE16 00000000 bytes
+

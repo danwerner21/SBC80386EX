@@ -1,0 +1,78 @@
+! bda2.rul -- convert bda.h to bda.inc
+
+%1/*
+=
+%1;
+
+/*%1
+=
+;%1
+
+%1	/*%2
+=
+%1	;%2
+
+#define%1
+=
+%define%1
+
+typedef struct %1 {
+=
+struc %1
+
+}%1
+=
+endstruc
+
+! DWORD rules
+dword	%1[%2];%3
+=
+%1	resd	%2%3
+
+dword	%1;%3
+=
+%1	resd	1%3
+
+dword	%1[%2];
+=
+%1	resd	%2
+
+dword	%1;
+=
+%1	resd	1
+
+! WORD rules
+word	%1[%2];%3
+=
+%1	resw	%2%3
+
+word	%1;%3
+=
+%1	resw	1%3
+
+word	%1[%2];
+=
+%1	resw	%2
+
+word	%1;
+=
+%1	resw	1
+
+
+
+! BYTE rules
+byte	%1[%2];%3
+=
+%1	resb	%2%3
+
+byte	%1;%3
+=
+%1	resb	1%3
+
+byte	%1[%2];
+=
+%1	resb	%2
+
+byte	%1;
+=
+%1	resb	1

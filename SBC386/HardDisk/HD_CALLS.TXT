@@ -1,0 +1,48 @@
+Hard Disk BIOS calls implemented on the SBC188
+
+	**	= actually implemented
+
+standard calls:
+
+** fn00:           ; Reset Disk System
+   fn01:           ; Get Disk System Status
+** fn02:           ; Read Sector
+** fn03:           ; Write Sector
+** fn04:           ; Verify Sector
+   fn05:           ; Format Track
+   fn06:           ; Format Bad Track (fixed disk) [PC]
+   fn07:           ; Format Drive (fixed disk)     [PC]
+** fn08:           ; Get Drive Parameters
+   fn09:           ; Initialize Fixed Disk Characteristics [PC,AT,PS/2]
+   fn0A:           ; Read Sector Long (fixed disk) [PC,AT,PS/2]
+   fn0B:           ; Write Sector Long (fixed disk) [PC,AT,PS/2]
+   fn0C:           ; Seek (fixed disk)
+   fn0D:           ; Reset Fixed Disk System
+   fn0E:           ; Read Sector Buffer (fixed disk) [PC only]
+   fn0F:           ; Write Sector Buffer (fixed disk) [PC only]
+   fn10:           ; Get Drive Status (fixed disk)
+   fn11:           ; Recalibrate Drive (fixed disk)
+   fn12:           ; Controller RAM Diagnostic (fixed disk) [PC/XT]
+   fn13:           ; Controller Drive Diagnostic (fixed disk) [PC/XT]
+   fn14:           ; Controller Internal Diagnostic (fixed disk) [PC,AT,PS/2]
+** fn15:           ; Get Disk Type                 [AT]
+   fn16:           ; Get Disk Change Status (floppy)
+   fn17:           ; Set Disk Type (floppy)
+   fn18:           ; Set Media Type for Format (floppy)
+
+
+packet calls for disks > 1023 cylinders (LBA addressing)
+
+** fn41:           ; Check Extensions Present
+** fn42:           ; Extended Read
+** fn43:           ; Extended Write
+** fn44:           ; Extended Verify
+   fn45:           ; Lock/Unlock Drive
+   fn46:           ; Eject Drive
+** fn47:           ; Extended Seek
+** fn48:           ; Get Drive Parameters
+   fn49:           ; Get Extended Disk Change Status
+** fn4E:           ; Set Hardware Configuration
+
+
+<end>

@@ -1,0 +1,460 @@
+     1                                  ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; crc.asm -- codes for calculating CRC7 & CRC16 checksums
+     3                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     4                                  ;
+     5                                  ; Copyright (C) 2013,2018 John R. Coffman.  All rights reserved.
+     6                                  ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+     7                                  ; Derived from codes that were ...
+     8                                  ; Provided for hobbyist use on the N8VEM SBC-188 board.
+     9                                  ;
+    10                                  ; This program is free software: you can redistribute it and/or modify
+    11                                  ; it under the terms of the GNU General Public License as published by
+    12                                  ; the Free Software Foundation, either version 3 of the License, or
+    13                                  ; (at your option) any later version.
+    14                                  ;
+    15                                  ; This program is distributed in the hope that it will be useful,
+    16                                  ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    17                                  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    18                                  ; GNU General Public License for more details.
+    19                                  ;
+    20                                  ; You should have received a copy of the GNU General Public License
+    21                                  ; along with this program in the file COPYING in the topmost source
+    22                                  ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    23                                  ;
+    24                                  ;
+    25                                  ; SBC-386 board revisions:
+    26                                  ;       SBC386-0   prototype / concept testing
+    27                                  ;	SBC-386EX 2.0	production / January 2018
+    28                                  ;
+    29                                  ; Assembly by NASM 2.08 is preferred
+    30                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;*/
+    31                                  %include "seg_def.inc"
+    32                              <1> ; SEG_DEF.inc
+    33                              <1> ;
+    34                              <1> %ifndef SEG_DEF
+    35                              <1> %define SEG_DEF 1
+    36                              <1> 
+    37                              <1> segment _TEXT	use16 	align=16	class=CODE	public
+    38                              <1> 
+    39                              <1> segment CONST		align=16	class=DATA	public
+    40                              <1> segment CONST2		align=2		class=DATA	public
+    41                              <1> segment _DATA		align=16	class=DATA	public
+    42                              <1> segment _BSS		align=16	class=DATA	public
+    43                              <1> ;group DGROUP CONST2 CONST _DATA _BSS
+    44                              <1> 
+    45                              <1> group DGROUP  _TEXT CONST2 CONST _DATA _BSS
+    46                              <1> 
+    47                              <1> 
+    48                              <1> segment BOOT at 0xFFFF	align=16	class=BOOT	use16
+    49                              <1> 
+    50                              <1> %define XXX
+    51                              <1> %endif
+    52                              <1> ;
+    53                              <1> ; end SEG_DEF.inc
+    32                                  %include "macro.inc"
+    33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    34                              <1> ;
+    35                              <1> ; some useful macros:
+    36                              <1> ;
+    37                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    38                              <1> %define NREPEAT 0
+    39                              <1> 
+    40                              <1> %if NREPEAT
+    41                              <1> 
+    42                              <1> %macro	rep	1
+    43                              <1> %%loop:	%1
+    44                              <1> 	dec	cx
+    45                              <1> 	jnz	%%loop
+    46                              <1> %endm
+    47                              <1> 
+    48                              <1> %macro	repne	1
+    49                              <1> %%loop:	%1
+    50                              <1> 	je	%%e
+    51                              <1> 	dec	cx
+    52                              <1> 	jnz	%%loop
+    53                              <1> 	cmp	cx,1
+    54                              <1> 	jmp	%%done
+    55                              <1> %%e:	dec	cx
+    56                              <1> 	cmp	cx,cx
+    57                              <1> %%done:
+    58                              <1> %endm
+    59                              <1> 
+    60                              <1> %macro	repe	1
+    61                              <1> %%loop:	%1
+    62                              <1> 	jne	%%ne
+    63                              <1> 	dec	cx
+    64                              <1> 	jnz	%%loop
+    65                              <1> 	jmp	%%done
+    66                              <1> %%ne:	dec	cx
+    67                              <1> 	jcxz	%%cxz
+    68                              <1> 	jmp	%%done
+    69                              <1> %%cxz:	cmp	cx,1
+    70                              <1> %%done:
+    71                              <1> %endm
+    72                              <1> 
+    73                              <1> %macro	REP	1
+    74                              <1> %%loop:	%1
+    75                              <1> 	dec	ecx
+    76                              <1> 	jnz	%%loop
+    77                              <1> %endm
+    78                              <1> 
+    79                              <1> %macro	REPNE	1
+    80                              <1> %%loop:	%1
+    81                              <1> 	je	%%e
+    82                              <1> 	dec	ecx
+    83                              <1> 	jnz	%%loop
+    84                              <1> 	cmp	cl,1
+    85                              <1> 	jmp	%%done
+    86                              <1> %%e:	dec	ecx
+    87                              <1> 	cmp	cl,cl
+    88                              <1> %%done:
+    89                              <1> %endm
+    90                              <1> 
+    91                              <1> %macro	REPE	1
+    92                              <1> %%loop:	%1
+    93                              <1> 	jne	%%ne
+    94                              <1> 	dec	ecx
+    95                              <1> 	jnz	%%loop
+    96                              <1> 	jmp	%%done
+    97                              <1> %%ne:	dec	ecx
+    98                              <1> 	jecxz	%%cxz
+    99                              <1> 	jmp	%%done
+   100                              <1> %%cxz:	cmp	cl,1
+   101                              <1> %%done:
+   102                              <1> %endm
+   103                              <1> 
+   104                              <1> %endif
+   105                              <1> 
+   106                              <1> 
+   107                              <1> ;
+   108                              <1> ; format of the BYTE initialization table:  address, byte
+   109                              <1> ;
+   110                              <1> %imacro  binit 2
+   111                              <1>         dw      %1
+   112                              <1>         db      %2
+   113                              <1> %endmacro
+   114                              <1> ; end with DW -1
+   115                              <1> 
+   116                              <1> ;
+   117                              <1> ; format of the WORD initialization table:  address, word
+   118                              <1> ;
+   119                              <1> %imacro  winit 2
+   120                              <1>         dw      %1
+   121                              <1>         dw      %2
+   122                              <1> %endmacro
+   123                              <1> ; end with DW -1
+   124                              <1> 
+   125                              <1> 
+   126                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   127                              <1> %imacro get_bda	1.nolist
+   128                              <1> 	push	0x0040
+   129                              <1> 	pop	%1
+   130                              <1> 	cnop
+   131                              <1> %endm
+   132                              <1> 
+   133                              <1> 
+   134                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   135                              <1> %imacro	get_loc0 1.nolist
+   136                              <1> 	push	0x0000
+   137                              <1> 	pop	%1
+   138                              <1> 	cnop
+   139                              <1> %endm
+   140                              <1> 
+   141                              <1> 
+   142                              <1> 
+   143                              <1> %imacro setloc  1.nolist
+   144                              <1>  times   (%1-($-$$)) db 0FFh
+   145                              <1> %endm
+   146                              <1> 
+   147                              <1> %imacro db_lo   1
+   148                              <1>  db (%1)&255
+   149                              <1> %endm
+   150                              <1> 
+   151                              <1> %imacro cnop    0.nolist
+   152                              <1> %ifdef SOFT_DEBUG
+   153                              <1> %if SOFT_DEBUG
+   154                              <1>         nop
+   155                              <1> %endif
+   156                              <1> %endif
+   157                              <1> %endm
+   158                              <1> 
+   159                              <1> %imacro popm 1-*.nolist
+   160                              <1> %rep %0
+   161                              <1> %ifidni %1,ALL
+   162                              <1>  popa
+   163                              <1> %elifidni %1,F
+   164                              <1>  popf
+   165                              <1> %else
+   166                              <1>  pop %1
+   167                              <1> %ifidni %1,DS
+   168                              <1>  cnop
+   169                              <1> %elifidni %1,ES
+   170                              <1>  cnop
+   171                              <1> %elifidni %1,FS
+   172                              <1>  cnop
+   173                              <1> %elifidni %1,GS
+   174                              <1>  cnop
+   175                              <1> %endif
+   176                              <1> %endif
+   177                              <1> %rotate 1
+   178                              <1> %endrep
+   179                              <1> %endm
+   180                              <1> 
+   181                              <1> %imacro pushm 1-*.nolist
+   182                              <1> %rep %0
+   183                              <1> %rotate -1
+   184                              <1> %ifidni %1,ALL
+   185                              <1>  pusha
+   186                              <1> %elifidni %1,F
+   187                              <1>  pushf
+   188                              <1> %else
+   189                              <1>  push %1
+   190                              <1> %endif
+   191                              <1> %endrep
+   192                              <1> %endm
+   193                              <1> 
+   194                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   195                              <1> %assign __size__ (%2-1)	| 0xFF
+   196                              <1> %if (__size__ <= 0xFFFF)
+   197                              <1> %assign __gran__ 0
+   198                              <1> %else
+   199                              <1> %assign __gran__ 0xC0			; G B 0 0
+   200                              <1> %endif
+   201                              <1> %assign __expand__ 0
+   202                              <1> %if %0==3
+   203                              <1> %if %3
+   204                              <1> %assign __expand__ 4
+   205                              <1> %endif
+   206                              <1> %endif
+   207                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   208                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   209                              <1> %endm
+   210                              <1> 
+   211                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   212                              <1> %assign __size__ (%2-1)	| 0xFF
+   213                              <1> %if (__size__ <= 0xFFFF)
+   214                              <1> %assign __gran__ 0
+   215                              <1> %else
+   216                              <1> %assign __gran__ 0xC0			; G D 0 0
+   217                              <1> %endif
+   218                              <1> %assign __conform__ 0
+   219                              <1> %if %0==3
+   220                              <1> %if %3
+   221                              <1> %assign __conform__ 4
+   222                              <1> %endif
+   223                              <1> %endif
+   224                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   225                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   226                              <1> %endm
+   227                              <1> 
+   228                              <1> ;/* End of macro.inc */
+    33                                  
+    34                                  segment	_TEXT
+    35                                  
+    36                                  %ifndef CRC16
+    37                                  %define CRC16 0		; don't include CRC16 calculations
+    38                                  %endif
+    39                                  %ifndef CRC7
+    40                                  %define CRC7 0
+    41                                  %endif
+    42                                  
+    43                                  
+    44                                  %if CRC7
+    45                                  %if CRC7==1
+    46                                  CRC7poly	equ	00100001b	; 8-bit polynomial
+    47                                  %else
+    48                                  CRC7poly	equ	00010010b
+    49                                  %endif
+    50                                  
+    51                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    52                                  ; crc7	calculate a CRC7 polynomial
+    53                                  ;    /* THIS CODE DIFFERS FROM THE crc7 USED WITH THE SDCARDs */
+    54                                  ; calcCRC7  calculate CRC7 for the SDcard (no OR of last bit)
+    55                                  ;
+    56                                  ;  Enter with:
+    57                                  ;	ES:BX	points at a string of bytes
+    58                                  ;	CX	count of bytes in the string
+    59                                  ;	direction flag clear
+    60                                  ;
+    61                                  ;  Return with:
+    62                                  ;	ES:BX	point at next byte beyond end of string
+    63                                  ;	CX = 0
+    64                                  ;	AL = CRC7 polynomial byte
+    65                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    66                                  %if CRC7==2
+    67                                  	global	calcCRC7
+    68                                  calcCRC7:
+    69                                  %else
+    70                                  	global	crc7
+    71                                  crc7:
+    72                                  %endif
+    73                                  	push	dx
+    74                                  	xor	dl,dl		; start CRC7 at zero
+    75                                  .1:
+    76                                     es	mov	al,[bx]		; get next byte
+    77                                     	inc	bx
+    78                                  	mov	dh,8 			; 8 bits in AL
+    79                                  .11:
+    80                                  	mov	ah,dl			; copy CRC to AH
+    81                                  	xor	ah,al			; Sign bit is 0 or 1
+    82                                  	shl	ax,1
+    83                                  	sbb	ah,ah			; AH is 0 or -1
+    84                                  	shl	dl,1			; shift polynomial
+    85                                  
+    86                                  	and	ah,CRC7poly		; get bits to add into the CRC
+    87                                  ; USE CRC7=1 FOR 8-BIT, CRC7=2 FOR 7-BIT (SDcards)
+    88                                  
+    89                                  	xor	dl,ah			; update the polynomial
+    90                                  	dec	dh
+    91                                  	jnz	.11
+    92                                  
+    93                                  	loop	.1
+    94                                  
+    95                                  	mov	al,dl		; final CRC7 to AL
+    96                                  	pop	dx
+    97                                  	ret
+    98                                  
+    99                                  %endif
+   100                                  
+   101                                  
+   102                                  
+   103                                  %if CRC16
+   104                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   105                                  ; crc16		add data to the input CRC16 calculation
+   106                                  ;
+   107                                  ;  Enter with:
+   108                                  ;	ES:BX	data pointer
+   109                                  ;	CX	count of bytes
+   110                                  ;	AX	partial CRC16 sum
+   111                                  ;
+   112                                  ;  Return with:
+   113                                  ;	ES:BX	updated data pointer
+   114                                  ;	CX = 0
+   115                                  ;	AX	updated CRC16 sum
+   116                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   117                                  	global	crc16
+   118                                  crc16:
+   119 00000000 56                      	pushm	si		; save SI
+   120                                  
+   121 00000001 89DE                    	mov	si,bx		; use ES:SI to address data
+   122                                  .2:
+   123 00000003 88E3                    	mov	bl,ah		; form index into table
+   124 00000005 30FF                    	xor	bh,bh		; zap BH
+   125 00000007 26321C                    es	xor	bl,[si]		; form table index
+   126 0000000A 46                        	inc	si
+   127 0000000B 88C4                      	mov	ah,al		; update CRC16
+   128 0000000D 30C0                    	xor	al,al
+   129 0000000F D1E3                    	shl	bx,1
+   130 00000011 2E3387[1C00]              cs	xor	ax,[crc16tab + bx]
+   131 00000016 E2EB                      	loop	.2
+   132                                  
+   133 00000018 89F3                    	mov	bx,si		; updated BX value
+   134 0000001A 5E                      	popm	si
+   135 0000001B C3                      	ret
+   136                                  
+   137                                  
+   138                                  	align	2
+   139                                  %include "crc16tab.inc"
+   140                              <1> ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   141                              <1> ; crc16tab.inc
+   142                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   143                              <1> ;
+   144                              <1> ;   This version is for assembly by  NASM 0.98.39 or later
+   145                              <1> ;
+   146                              <1> ; Copyright (c) 2013 John R. Coffman.  All rights reserved.
+   147                              <1> ; Provided for hobbyist use on the N8VEM SBC-188 board.
+   148                              <1> ;
+   149                              <1> ; This program is free software: you can redistribute it and/or modify
+   150                              <1> ; it under the terms of the GNU General Public License as published by
+   151                              <1> ; the Free Software Foundation, either version 3 of the License, or
+   152                              <1> ; (at your option) any later version.
+   153                              <1> ;
+   154                              <1> ; This program is distributed in the hope that it will be useful,
+   155                              <1> ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+   156                              <1> ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   157                              <1> ; GNU General Public License for more details.
+   158                              <1> ;
+   159                              <1> ; You should have received a copy of the GNU General Public License
+   160                              <1> ; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   161                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   162                              <1> %if 0			; */
+   163                              <1> #define dw
+   164                              <1>  /*
+   165                              <1> %endif			; */ const word crc16tab[] = {	/*
+   166                              <1> 
+   167                              <1> crc16tab:		; */
+   168                              <1> 
+   169 0000001C 000021104220633084- <1>   dw	0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7
+   169 00000025 40A550C660E770      <1>
+   170 0000002C 088129914AA16BB18C- <1>   dw	0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF  ;*/,/*
+   170 00000035 C1ADD1CEE1EFF1      <1>
+   171 0000003C 3112100273325222B5- <1>   dw	0x1231, 0x0210, 0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6  ;*/,/*
+   171 00000045 529442F772D662      <1>
+   172 0000004C 399318837BB35AA3BD- <1>   dw	0x9339, 0x8318, 0xB37B, 0xA35A, 0xD3BD, 0xC39C, 0xF3FF, 0xE3DE  ;*/,/*
+   172 00000055 D39CC3FFF3DEE3      <1>
+   173 0000005C 6224433420040114E6- <1>   dw	0x2462, 0x3443, 0x0420, 0x1401, 0x64E6, 0x74C7, 0x44A4, 0x5485  ;*/,/*
+   173 00000065 64C774A4448554      <1>
+   174 0000006C 6AA54BB528850995EE- <1>   dw	0xA56A, 0xB54B, 0x8528, 0x9509, 0xE5EE, 0xF5CF, 0xC5AC, 0xD58D  ;*/,/*
+   174 00000075 E5CFF5ACC58DD5      <1>
+   175 0000007C 5336722611163006D7- <1>   dw	0x3653, 0x2672, 0x1611, 0x0630, 0x76D7, 0x66F6, 0x5695, 0x46B4  ;*/,/*
+   175 00000085 76F6669556B446      <1>
+   176 0000008C 5BB77AA719973887DF- <1>   dw	0xB75B, 0xA77A, 0x9719, 0x8738, 0xF7DF, 0xE7FE, 0xD79D, 0xC7BC  ;*/,/*
+   176 00000095 F7FEE79DD7BCC7      <1>
+   177 0000009C C448E5588668A77840- <1>   dw	0x48C4, 0x58E5, 0x6886, 0x78A7, 0x0840, 0x1861, 0x2802, 0x3823  ;*/,/*
+   177 000000A5 08611802282338      <1>
+   178 000000AC CCC9EDD98EE9AFF948- <1>   dw	0xC9CC, 0xD9ED, 0xE98E, 0xF9AF, 0x8948, 0x9969, 0xA90A, 0xB92B  ;*/,/*
+   178 000000B5 8969990AA92BB9      <1>
+   179 000000BC F55AD44AB77A966A71- <1>   dw	0x5AF5, 0x4AD4, 0x7AB7, 0x6A96, 0x1A71, 0x0A50, 0x3A33, 0x2A12  ;*/,/*
+   179 000000C5 1A500A333A122A      <1>
+   180 000000CC FDDBDCCBBFFB9EEB79- <1>   dw	0xDBFD, 0xCBDC, 0xFBBF, 0xEB9E, 0x9B79, 0x8B58, 0xBB3B, 0xAB1A  ;*/,/*
+   180 000000D5 9B588B3BBB1AAB      <1>
+   181 000000DC A66C877CE44CC55C22- <1>   dw	0x6CA6, 0x7C87, 0x4CE4, 0x5CC5, 0x2C22, 0x3C03, 0x0C60, 0x1C41  ;*/,/*
+   181 000000E5 2C033C600C411C      <1>
+   182 000000EC AEED8FFDECCDCDDD2A- <1>   dw	0xEDAE, 0xFD8F, 0xCDEC, 0xDDCD, 0xAD2A, 0xBD0B, 0x8D68, 0x9D49  ;*/,/*
+   182 000000F5 AD0BBD688D499D      <1>
+   183 000000FC 977EB66ED55EF44E13- <1>   dw	0x7E97, 0x6EB6, 0x5ED5, 0x4EF4, 0x3E13, 0x2E32, 0x1E51, 0x0E70  ;*/,/*
+   183 00000105 3E322E511E700E      <1>
+   184 0000010C 9FFFBEEFDDDFFCCF1B- <1>   dw	0xFF9F, 0xEFBE, 0xDFDD, 0xCFFC, 0xBF1B, 0xAF3A, 0x9F59, 0x8F78  ;*/,/*
+   184 00000115 BF3AAF599F788F      <1>
+   185 0000011C 8891A981CAB1EBA10C- <1>   dw	0x9188, 0x81A9, 0xB1CA, 0xA1EB, 0xD10C, 0xC12D, 0xF14E, 0xE16F  ;*/,/*
+   185 00000125 D12DC14EF16FE1      <1>
+   186 0000012C 8010A100C230E32004- <1>   dw	0x1080, 0x00A1, 0x30C2, 0x20E3, 0x5004, 0x4025, 0x7046, 0x6067  ;*/,/*
+   186 00000135 50254046706760      <1>
+   187 0000013C B9839893FBA3DAB33D- <1>   dw	0x83B9, 0x9398, 0xA3FB, 0xB3DA, 0xC33D, 0xD31C, 0xE37F, 0xF35E  ;*/,/*
+   187 00000145 C31CD37FE35EF3      <1>
+   188 0000014C B1029012F322D23235- <1>   dw	0x02B1, 0x1290, 0x22F3, 0x32D2, 0x4235, 0x5214, 0x6277, 0x7256  ;*/,/*
+   188 00000155 42145277625672      <1>
+   189 0000015C EAB5CBA5A89589856E- <1>   dw	0xB5EA, 0xA5CB, 0x95A8, 0x8589, 0xF56E, 0xE54F, 0xD52C, 0xC50D  ;*/,/*
+   189 00000165 F54FE52CD50DC5      <1>
+   190 0000016C E234C324A014810466- <1>   dw	0x34E2, 0x24C3, 0x14A0, 0x0481, 0x7466, 0x6447, 0x5424, 0x4405  ;*/,/*
+   190 00000175 74476424540544      <1>
+   191 0000017C DBA7FAB79987B8975F- <1>   dw	0xA7DB, 0xB7FA, 0x8799, 0x97B8, 0xE75F, 0xF77E, 0xC71D, 0xD73C  ;*/,/*
+   191 00000185 E77EF71DC73CD7      <1>
+   192 0000018C D326F2369106B01657- <1>   dw	0x26D3, 0x36F2, 0x0691, 0x16B0, 0x6657, 0x7676, 0x4615, 0x5634  ;*/,/*
+   192 00000195 66767615463456      <1>
+   193 0000019C 4CD96DC90EF92FE9C8- <1>   dw	0xD94C, 0xC96D, 0xF90E, 0xE92F, 0x99C8, 0x89E9, 0xB98A, 0xA9AB  ;*/,/*
+   193 000001A5 99E9898AB9ABA9      <1>
+   194 000001AC 4458654806782768C0- <1>   dw	0x5844, 0x4865, 0x7806, 0x6827, 0x18C0, 0x08E1, 0x3882, 0x28A3  ;*/,/*
+   194 000001B5 18E1088238A328      <1>
+   195 000001BC 7DCB5CDB3FEB1EFBF9- <1>   dw	0xCB7D, 0xDB5C, 0xEB3F, 0xFB1E, 0x8BF9, 0x9BD8, 0xABBB, 0xBB9A  ;*/,/*
+   195 000001C5 8BD89BBBAB9ABB      <1>
+   196 000001CC 754A545A376A167AF1- <1>   dw	0x4A75, 0x5A54, 0x6A37, 0x7A16, 0x0AF1, 0x1AD0, 0x2AB3, 0x3A92  ;*/,/*
+   196 000001D5 0AD01AB32A923A      <1>
+   197 000001DC 2EFD0FED6CDD4DCDAA- <1>   dw	0xFD2E, 0xED0F, 0xDD6C, 0xCD4D, 0xBDAA, 0xAD8B, 0x9DE8, 0x8DC9  ;*/,/*
+   197 000001E5 BD8BADE89DC98D      <1>
+   198 000001EC 267C076C645C454CA2- <1>   dw	0x7C26, 0x6C07, 0x5C64, 0x4C45, 0x3CA2, 0x2C83, 0x1CE0, 0x0CC1  ;*/,/*
+   198 000001F5 3C832CE01CC10C      <1>
+   199 000001FC 1FEF3EFF5DCF7CDF9B- <1>   dw	0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8  ;*/,/*
+   199 00000205 AFBABFD98FF89F      <1>
+   200 0000020C 176E367E554E745E93- <1>   dw	0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0  ;*/,/*
+   200 00000215 2EB23ED10EF01E      <1>
+   201                              <1> 
+   202                              <1> ; end crc16tab.inc
+   203                              <1> %if 0			; */
+   204                              <1> #undef dw
+   205                              <1> */			 			/*
+   206                              <1> %endif			; */   };
+   140                                  
+   141                                  %endif
+   142                                  
+   143                                  ; end crc.asm

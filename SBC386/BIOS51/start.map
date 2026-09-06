@@ -1,0 +1,190 @@
+Open Watcom Linker Version 1.9
+Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
+Created on:       18/04/15 15:48:21
+Executable Image: start.exe
+creating a DOS executable
+
+
+                        +------------+
+                        |   Groups   |
+                        +------------+
+
+Group                           Address              Size
+=====                           =======              ====
+
+DGROUP                          0000:0000            00002020
+
+
+
+                        +--------------+
+                        |   Segments   |
+                        +--------------+
+
+Segment                Class          Group          Address         Size
+=======                =====          =====          =======         ====
+
+CODE                   CODE           DGROUP         0000:0000       00000890
+_TEXT                  CODE           DGROUP         0089:0000       00000b9f
+CONST                  DATA           DGROUP         0143:0000       000008ac
+CONST2                 DATA           DGROUP         01cd:000c       00000336
+_DATA                  DATA           DGROUP         0202:0000       00000000
+_BSS                   DATA           DGROUP         0202:0000       00000000
+BOOT                   BOOT           AUTO           0202:0000       00000050
+
+
+                        +----------------+
+                        |   Memory Map   |
+                        +----------------+
+
+* = unreferenced symbol
++ = symbol only referenced locally
+
+Address        Symbol
+=======        ======
+
+Module: start.obj(start.asm)
+0000:0000*     origin
+0000:005a*     start
+0000:01ee      _SecBuffer
+0000:01ee*     SecBuffer
+0000:0218*     lites_
+0000:022f*     jleds_
+0000:0236*     jledsh_
+0000:1626      _bda_ptr
+0000:1626*     bda_ptr
+Module: sizer.obj(sizer.asm)
+0000:0250      ext_mem_size
+0000:1650*     gdt0
+Module: crc16.obj(crc.asm)
+0000:02c0      crc16
+Module: crc7.obj(crc.asm)
+0000:04e0      crc7
+Module: 11h_12h.obj(11h_12h.asm)
+0000:0510      int_11h
+0000:051a      int_12h
+Module: 14h_sio0.obj(14h_sio0.asm)
+0000:0530      int_14h
+0000:056f*     sio_divisors
+0000:0890      install_SIO0_
+Module: 15h_misc.obj(15h_misc.asm)
+0000:0600      int_15h
+Module: 1Ah_time.obj(1Ah_time.asm)
+0000:06a0      int_1Ah
+0000:06fc      int_irq0
+0000:073c      get_time
+0000:076e      ds_read
+Module: main.obj(M:\development\Vintage\80386EX SBC\SBC386\BIOS\MAIN.C)
+0000:08c0      _main__
+Module: signon.obj(M:\development\Vintage\80386EX SBC\SBC386\BIOS\SIGNON.C)
+0000:09c4      pr_lic_
+Module: icu.obj(icu.asm)
+0202:0010*     mask_interrupt_
+0202:002e      unmask_interrupt_
+0202:002e*     unmask_interrupt
+Module: stub.obj(stub.asm)
+0000:0860      int_zero_divide
+0000:0860      int_single_step
+0000:0860      int_NMI_interrupt
+0000:0860      int_breakpoint
+0000:0860      int_overflow
+0000:0860      int_bounds_check
+0000:0860      int_invalid_opcode
+0000:0860      int_FPU_escape
+0000:0860      int_nop
+0000:0861      int_irq1
+0000:0861      int_irq2
+0000:0861      int_irq3
+0000:0861      int_irq4
+0000:0861      int_irq5
+0000:0861      int_irq6
+0000:0861      int_irq7
+0000:0861      clear_irq0
+0000:0861*     clear_irq1
+0000:0861*     clear_irq3
+0000:0861*     clear_irq4
+0000:0861*     clear_irq5
+0000:0861*     clear_irq6
+0000:0861*     clear_irq7
+0000:0868*     clear_irq2
+0000:0868      int_10h
+0000:0868      int_13h
+0000:0868      int_16h
+0000:0868      int_17h
+0000:0868      int_18h
+0000:0868      int_19h
+0000:0868      int_1Bh
+0000:0860      int_1Ch
+0000:0868      int_1Dh
+0000:0868      int_1Eh
+0000:0868      int_1Fh
+0000:0868      int_EMM
+0000:0868      int_msdos
+0000:086f      int_40h
+0000:086f      param_hd0
+0000:086f      int_42h
+0000:086f      param_VGA
+0000:086f      param_font
+0000:086f      param_hd1
+0000:086f      int_4Ah
+0000:0870      int_irq8
+0000:0870      int_irq9
+0000:0870      int_irq10
+0000:0870      int_irq11
+0000:0870      int_irq12
+0000:0870      int_irq13
+0000:0870      int_irq14
+0000:0870      int_irq15
+0000:0870*     clear_irq8
+0000:0870*     clear_irq9
+0000:0870*     clear_irq10
+0000:0870*     clear_irq11
+0000:0870*     clear_irq12
+0000:0870*     clear_irq13
+0000:0870*     clear_irq14
+0000:0870*     clear_irq15
+0000:087d      _small_code_
+0000:087f      VIDEO_putchar_
+0000:087f*     @VIDEO_putchar
+0000:087f*     @CVDU_putchar
+Module: cprintf.obj(M:\development\Vintage\80386EX SBC\SBC386\BIOS\CPRINTF.C)
+0000:0a20      _cprintf
+0000:2000+     _nstring
+Module: diskide.obj(diskide.asm)
+0000:0d50*     IDE_READ_SECTOR
+0000:0d50      IDE_READ_SECTOR_
+0000:0d92*     IDE_WRITE_SECTOR
+0000:0d92      IDE_WRITE_SECTOR_
+0000:0dd4*     IDE_READ_ID
+0000:0dd4      IDE_READ_ID_
+0000:0e10*     IDE_INITIALIZE
+0000:0e10      IDE_INITIALIZE_
+Module: testide.obj(M:\development\Vintage\80386EX SBC\SBC386\BIOS\TESTIDE.C)
+0000:0ee3      _testide__
+0000:121b+     PrintBuffer_
+0000:12dc+     ClearBuffer_
+0000:1305+     BufferTestPattern_
+0000:1340+     ideerr_
+Module: C:\WATCOM\LIB286\DOS\clibc.lib(strlen.c)
+0000:134d      strlen_
+Module: C:\WATCOM\LIB286\DOS\clibc.lib(i4d)
+0000:1362*     __I4D
+0000:13ab      __U4D
+Warning! W1014: stack segment not found
+Warning! W1023: no starting address found, using 0000:0000
+
+
+                        +--------------------+
+                        |   Libraries Used   |
+                        +--------------------+
+
+C:\WATCOM\LIB286\DOS\clibc.lib
+
+
+                        +-----------------------+
+                        |   Linker Statistics   |
+                        +-----------------------+
+
+Stack size:  1000 (4096.)
+Memory size:  2070 (8304.)
+Entry point address: 0000:0000
+Link time: 00:00.81

@@ -1,0 +1,368 @@
+     1                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; uart_det.asm -- detect UART type
+     3                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     4                                  ;
+     5                                  ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+     6                                  ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+     7                                  ;
+     8                                  ; This program is free software: you can redistribute it and/or modify
+     9                                  ; it under the terms of the GNU General Public License as published by
+    10                                  ; the Free Software Foundation, either version 3 of the License, or
+    11                                  ; (at your option) any later version.
+    12                                  ;
+    13                                  ; This program is distributed in the hope that it will be useful,
+    14                                  ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    15                                  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    16                                  ; GNU General Public License for more details.
+    17                                  ;
+    18                                  ; You should have received a copy of the GNU General Public License
+    19                                  ; along with this program in the file COPYING in the topmost source
+    20                                  ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    21                                  ;
+    22                                  ;
+    23                                  ; SBC-386 board revisions:
+    24                                  ;       SBC386-0   prototype / concept testing
+    25                                  ;	SBC-386EX 2.0	production / January 2017
+    26                                  ;
+    27                                  ; Assembly by NASM 2.08 is preferred
+    28                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    29                                  %include "../seg_def.inc"
+    30                              <1> ; SEG_DEF.inc
+    31                              <1> ;
+    32                              <1> %ifndef SEG_DEF
+    33                              <1> %define SEG_DEF 1
+    34                              <1> 
+    35                              <1> segment _TEXT	use16 	align=16	class=CODE	public
+    36                              <1> 
+    37                              <1> segment CONST		align=16	class=DATA	public
+    38                              <1> segment CONST2		align=2		class=DATA	public
+    39                              <1> segment _DATA		align=16	class=DATA	public
+    40                              <1> segment _BSS		align=16	class=DATA	public
+    41                              <1> ;group DGROUP CONST2 CONST _DATA _BSS
+    42                              <1> 
+    43                              <1> group DGROUP  _TEXT CONST2 CONST _DATA _BSS
+    44                              <1> 
+    45                              <1> 
+    46                              <1> segment BOOT at 0xFFFF	align=16	class=BOOT	use16
+    47                              <1> 
+    48                              <1> %define XXX
+    49                              <1> %endif
+    50                              <1> ;
+    51                              <1> ; end SEG_DEF.inc
+    30                                  %include "../macro.inc"
+    31                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    32                              <1> ;
+    33                              <1> ; some useful macros:
+    34                              <1> ;
+    35                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    36                              <1> %define NREPEAT 0
+    37                              <1> 
+    38                              <1> %if NREPEAT
+    39                              <1> 
+    40                              <1> %macro	rep	1
+    41                              <1> %%loop:	%1
+    42                              <1> 	dec	cx
+    43                              <1> 	jnz	%%loop
+    44                              <1> %endm
+    45                              <1> 
+    46                              <1> %macro	repne	1
+    47                              <1> %%loop:	%1
+    48                              <1> 	je	%%e
+    49                              <1> 	dec	cx
+    50                              <1> 	jnz	%%loop
+    51                              <1> 	cmp	cx,1
+    52                              <1> 	jmp	%%done
+    53                              <1> %%e:	dec	cx
+    54                              <1> 	cmp	cx,cx
+    55                              <1> %%done:
+    56                              <1> %endm
+    57                              <1> 
+    58                              <1> %macro	repe	1
+    59                              <1> %%loop:	%1
+    60                              <1> 	jne	%%ne
+    61                              <1> 	dec	cx
+    62                              <1> 	jnz	%%loop
+    63                              <1> 	jmp	%%done
+    64                              <1> %%ne:	dec	cx
+    65                              <1> 	jcxz	%%cxz
+    66                              <1> 	jmp	%%done
+    67                              <1> %%cxz:	cmp	cx,1
+    68                              <1> %%done:
+    69                              <1> %endm
+    70                              <1> 
+    71                              <1> %macro	REP	1
+    72                              <1> %%loop:	%1
+    73                              <1> 	dec	ecx
+    74                              <1> 	jnz	%%loop
+    75                              <1> %endm
+    76                              <1> 
+    77                              <1> %macro	REPNE	1
+    78                              <1> %%loop:	%1
+    79                              <1> 	je	%%e
+    80                              <1> 	dec	ecx
+    81                              <1> 	jnz	%%loop
+    82                              <1> 	cmp	cl,1
+    83                              <1> 	jmp	%%done
+    84                              <1> %%e:	dec	ecx
+    85                              <1> 	cmp	cl,cl
+    86                              <1> %%done:
+    87                              <1> %endm
+    88                              <1> 
+    89                              <1> %macro	REPE	1
+    90                              <1> %%loop:	%1
+    91                              <1> 	jne	%%ne
+    92                              <1> 	dec	ecx
+    93                              <1> 	jnz	%%loop
+    94                              <1> 	jmp	%%done
+    95                              <1> %%ne:	dec	ecx
+    96                              <1> 	jecxz	%%cxz
+    97                              <1> 	jmp	%%done
+    98                              <1> %%cxz:	cmp	cl,1
+    99                              <1> %%done:
+   100                              <1> %endm
+   101                              <1> 
+   102                              <1> %endif
+   103                              <1> 
+   104                              <1> 
+   105                              <1> ;
+   106                              <1> ; format of the BYTE initialization table:  address, byte
+   107                              <1> ;
+   108                              <1> %imacro  binit 2
+   109                              <1>         dw      %1
+   110                              <1>         db      %2
+   111                              <1> %endmacro
+   112                              <1> ; end with DW -1
+   113                              <1> 
+   114                              <1> ;
+   115                              <1> ; format of the WORD initialization table:  address, word
+   116                              <1> ;
+   117                              <1> %imacro  winit 2
+   118                              <1>         dw      %1
+   119                              <1>         dw      %2
+   120                              <1> %endmacro
+   121                              <1> ; end with DW -1
+   122                              <1> 
+   123                              <1> 
+   124                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   125                              <1> %imacro get_bda	1.nolist
+   126                              <1> 	push	0x0040
+   127                              <1> 	pop	%1
+   128                              <1> 	cnop
+   129                              <1> %endm
+   130                              <1> 
+   131                              <1> 
+   132                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   133                              <1> %imacro	get_loc0 1.nolist
+   134                              <1> 	push	0x0000
+   135                              <1> 	pop	%1
+   136                              <1> 	cnop
+   137                              <1> %endm
+   138                              <1> 
+   139                              <1> 
+   140                              <1> 
+   141                              <1> %imacro setloc  1.nolist
+   142                              <1>  times   (%1-($-$$)) db 0FFh
+   143                              <1> %endm
+   144                              <1> 
+   145                              <1> %imacro db_lo   1
+   146                              <1>  db (%1)&255
+   147                              <1> %endm
+   148                              <1> 
+   149                              <1> %imacro cnop    0.nolist
+   150                              <1> %ifdef SOFT_DEBUG
+   151                              <1> %if SOFT_DEBUG
+   152                              <1>         nop
+   153                              <1> %endif
+   154                              <1> %endif
+   155                              <1> %endm
+   156                              <1> 
+   157                              <1> %imacro popm 1-*.nolist
+   158                              <1> %rep %0
+   159                              <1> %ifidni %1,ALL
+   160                              <1>  popa
+   161                              <1> %elifidni %1,F
+   162                              <1>  popf
+   163                              <1> %else
+   164                              <1>  pop %1
+   165                              <1> %ifidni %1,DS
+   166                              <1>  cnop
+   167                              <1> %elifidni %1,ES
+   168                              <1>  cnop
+   169                              <1> %elifidni %1,FS
+   170                              <1>  cnop
+   171                              <1> %elifidni %1,GS
+   172                              <1>  cnop
+   173                              <1> %endif
+   174                              <1> %endif
+   175                              <1> %rotate 1
+   176                              <1> %endrep
+   177                              <1> %endm
+   178                              <1> 
+   179                              <1> %imacro pushm 1-*.nolist
+   180                              <1> %rep %0
+   181                              <1> %rotate -1
+   182                              <1> %ifidni %1,ALL
+   183                              <1>  pusha
+   184                              <1> %elifidni %1,F
+   185                              <1>  pushf
+   186                              <1> %else
+   187                              <1>  push %1
+   188                              <1> %endif
+   189                              <1> %endrep
+   190                              <1> %endm
+   191                              <1> 
+   192                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   193                              <1> %assign __size__ (%2-1)	| 0xFF
+   194                              <1> %if (__size__ <= 0xFFFF)
+   195                              <1> %assign __gran__ 0
+   196                              <1> %else
+   197                              <1> %assign __gran__ 0xC0			; G B 0 0
+   198                              <1> %endif
+   199                              <1> %assign __expand__ 0
+   200                              <1> %if %0==3
+   201                              <1> %if %3
+   202                              <1> %assign __expand__ 4
+   203                              <1> %endif
+   204                              <1> %endif
+   205                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   206                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   207                              <1> %endm
+   208                              <1> 
+   209                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   210                              <1> %assign __size__ (%2-1)	| 0xFF
+   211                              <1> %if (__size__ <= 0xFFFF)
+   212                              <1> %assign __gran__ 0
+   213                              <1> %else
+   214                              <1> %assign __gran__ 0xC0			; G D 0 0
+   215                              <1> %endif
+   216                              <1> %assign __conform__ 0
+   217                              <1> %if %0==3
+   218                              <1> %if %3
+   219                              <1> %assign __conform__ 4
+   220                              <1> %endif
+   221                              <1> %endif
+   222                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   223                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   224                              <1> %endm
+   225                              <1> 
+   226                              <1> ;/* End of macro.inc */
+    31                                  
+    32                                  %define SAVE 0
+    33                                  
+    34                                  segment	_TEXT
+    35                                  ;
+    36                                  ;	word uart_detect(word device_code);
+    37                                  ;
+    38                                  ;  Returns:
+    39                                  ;	0	None
+    40                                  ;	1	8250
+    41                                  ;	2	16450/8250A
+    42                                  ;	3	16550
+    43                                  ;	4	16550A
+    44                                  ;	5	16550C
+    45                                  ;	6	16650
+    46                                  ;	7	16750
+    47                                  ;	8	16850	can't distinguish from 16650 yet
+    48                                  ;
+    49                                  	global	uart_det_	; Watcom calling convention
+    50                                  uart_det_:
+    51 00000000 5756525153              	pushm	bx,cx,dx,si,di
+    52                                  
+    53 00000005 89C2                    	mov	dx,ax		; base device code to DX
+    54 00000007 42                      	inc	dx		; IER
+    55 00000008 31C0                    	xor	ax,ax		; AH=0 (no uart), AL=0
+    56 0000000A EE                      	out	dx,al		; IER=0
+    57 0000000B 88D5                    	mov	ch,dl		; CH=IER
+    58 0000000D 42                      	inc	dx
+    59 0000000E 42                      	inc	dx		; DX=LCR
+    60 0000000F B080                    	mov	al,0x80
+    61 00000011 EE                      	out	dx,al		; LCR=80h, set DLAB
+    62 00000012 88D1                    	mov	cl,dl		; CL=LCR
+    63 00000014 88EA                    	mov	dl,ch		; DX=IER/DLH
+    64 00000016 B05A                    	mov	al,0x5A
+    65 00000018 88C7                    	mov	bh,al		; save 0x5A constant
+    66 0000001A EE                      	out	dx,al
+    67 0000001B 4A                      	dec	dx
+    68 0000001C F6D0                    	not	al		; AL = 0xA5
+    69 0000001E EE                      	out	dx,al
+    70 0000001F 42                      	inc	dx
+    71 00000020 EC                      	in	al,dx		; readback
+    72 00000021 38F8                    	cmp	al,bh
+    73 00000023 740E                    	je	.1
+    74 00000025 08C0                    	or	al,al
+    75 00000027 7566                    	jne	.99		; no uart detected
+    76 00000029 4A                      	dec	dx
+    77 0000002A EC                      	in	al,dx
+    78 0000002B 42                      	inc	dx
+    79 0000002C 08C0                    	or	al,al
+    80 0000002E 755F                    	jne	.99
+    81 00000030 80CC40                  	or	ah,0x40		; Divisor reads as 0x0000
+    82                                  
+    83                                  .1:
+    84 00000033 88CA                    	mov	dl,cl		; DX=LCR
+    85 00000035 30C0                    	xor	al,al		; AL=0
+    86 00000037 EE                      	out	dx,al		; turn off DLAT access
+    87 00000038 88EA                    	mov	dl,ch		; DX=IER
+    88 0000003A EC                      	in	al,dx		; get IER/DLH
+    89 0000003B 38F8                    	cmp	al,bh		; is it still 0x5A
+    90 0000003D 7450                    	je	.99		; no UART if it is still 0x5A
+    91                                  
+    92 0000003F FEC4                    	inc	ah		; AH=1, at least 8250
+    93                                  ; Test for the scratch register presence
+    94 00000041 83C206                  	add	dx,6		; DX=SCR
+    95 00000044 88F8                    	mov	al,bh		; AL=0x5A
+    96 00000046 EE                      	out	dx,al		; SCR=0x5A
+    97 00000047 EC                      	in	al,dx		; read SCR
+    98 00000048 38F8                    	cmp	al,bh		; is SCR there?
+    99 0000004A 7543                    	jne	.99		; UART without SCR is 8250 vanilla
+   100                                  
+   101 0000004C FEC4                    	inc	ah		; AH=2, it is 8250A or 16450
+   102 0000004E 86D1                    	xchg	dl,cl		; DX=LCR  CL=SCR
+   103 00000050 B0BF                    	mov	al,0xBF		; special value to enable FIFOs
+   104 00000052 EE                      	out	dx,al		; **
+   105 00000053 86D1                    	xchg	dl,cl		; DX=SCR  CL=LCR
+   106 00000055 EC                      	in	al,dx		; read back SCR
+   107 00000056 38F8                    	cmp	al,bh		; is SCR still 0x5A
+   108 00000058 7532                    	jne	.6
+   109                                  
+   110 0000005A 88CA                    	mov	dl,cl		; DX=LCR  CL=LCR
+   111 0000005C B080                    	mov	al,0x80		; set DLAB bit once more
+   112 0000005E EE                      	out	dx,al		;  **
+   113 0000005F 4A                      	dec	dx		; DX=FCR/IIR
+   114 00000060 B0E7                    	mov	al,0xE7
+   115 00000062 EE                      	out	dx,al		; set FCR/IIR
+   116 00000063 EC                      	in	al,dx		; read it back
+   117 00000064 88C7                    	mov	bh,al		; save FCR in BH
+   118 00000066 42                      	inc	dx		; DX=LCR
+   119 00000067 30C0                    	xor	al,al
+   120 00000069 EE                      	out	dx,al		; reset DLAB bit
+   121                                  
+   122 0000006A F6C740                  	test	bh,1<<6		; test bit 6
+   123 0000006D 7420                    	jz	.99		; it is 16450
+   124 0000006F FEC4                    	inc	ah		; AH=3 at least a 16550
+   125 00000071 F6C780                  	test	bh,1<<7		; test bit 7
+   126 00000074 7419                    	jz	.99		; it is 16550
+   127 00000076 F6C720                  	test	bh,1<<5		; bit 5, 64-byte FIFO
+   128 00000079 750F                    	jnz	.7		; set, it is a 16750
+   129                                  
+   130 0000007B FEC4                    	inc	ah		; AH=4      16550A or  16550C
+   131 0000007D 42                      	inc	dx		; DX=MCR
+   132 0000007E B020                    	mov	al,0x20
+   133 00000080 EE                      	out	dx,al		; set AFE bit
+   134 00000081 EC                      	in	al,dx
+   135 00000082 A820                    	test	al,0x20		; still set
+   136 00000084 7409                    	jz	.99		; it is a 16550A
+   137 00000086 FEC4                    	inc	ah		; AH=5	   16550C
+   138 00000088 EB05                    	jmp	.99
+   139                                  
+   140                                  .7:	; it is 16750
+   141 0000008A B403                    	mov	ah,3		; will return 7
+   142                                  
+   143                                  .6:	; it is 16650 or 16850
+   144 0000008C 80C404                  	add	ah,4		; AH was 2 if label .6 is branched to
+   145                                  .99:
+   146 0000008F 88E0                    	mov	al,ah
+   147 00000091 98                      	cbw			; always positive
+   148                                  
+   149 00000092 5B595A5E5F              	popm	bx,cx,dx,si,di
+   150 00000097 C3                      	ret			; return UART level in AX

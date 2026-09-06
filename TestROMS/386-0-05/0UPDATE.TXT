@@ -1,0 +1,11 @@
+===============
+Wed 29-Nov-2017
+===============
+
+Circuit update (mandatory) to allow auto-detect of FPU chip
+     Wire from U8.6 (RTC_DQ) to RR1.8 (10k p.u.)
+     Wire from U2.56 (PEREQ) to RR1.9 (10k p.u.)
+     Wire from U1.89 (PEREQ) to U1.105 (port P1 bit3)
+See the accompanying photo for easy pin location.
+
+--JRC

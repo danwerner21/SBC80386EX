@@ -1,0 +1,13 @@
+[18-Feb-2018]
+
+Mandatory circuit update:  SBC-386EX v. 2.0 board
+
+The following update is required by U22 GAL  DCTL16-7
+
+1. connect U9.9 (74HCT14) to U22.9 (DCTL16 GAL)
+
+After the update is installed, earlier versions of the DCTL16 are still operational.  However,
+the dual Chip Select anomaly will still be encountered.  The update above, along with the GAL
+update should solve the dual Chip Select problem.
+
+--JRCoffman 2/18/2018

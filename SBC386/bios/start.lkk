@@ -1,0 +1,3 @@
+library	c:\watcom\lib386\dos\clib3r.lib
+library c:\c700\lib\clibc7.lib
+library c:\c700\lib\oldnames.lib

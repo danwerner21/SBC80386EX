@@ -1,0 +1,184 @@
+Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/signon.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 000000C6 bytes
+0000                          get_time_:
+0000    53                        push        bx 
+0001    51                        push        cx 
+0002    56                        push        si 
+0003    57                        push        di 
+0004    C8 04 00 00               enter       0x0004,0x00 
+0008    B4 02                     mov         ah,0x02 
+000A    CD 1A                     int         0x1a 
+000C    8A E6                     mov         ah,dh 
+000E    89 8E FE FF               mov         word ptr -0x2[bp],cx 
+0012    89 86 FC FF               mov         word ptr -0x4[bp],ax 
+0016                          L$1:
+0016    8B 46 FC                  mov         ax,word ptr -0x4[bp] 
+0019    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
+001C    C9                        leave       
+001D    5F                        pop         di 
+001E    5E                        pop         si 
+001F    59                        pop         cx 
+0020    5B                        pop         bx 
+0021    C3                        ret         
+0022                          get_date_:
+0022    53                        push        bx 
+0023    51                        push        cx 
+0024    56                        push        si 
+0025    57                        push        di 
+0026    C8 04 00 00               enter       0x0004,0x00 
+002A    B4 04                     mov         ah,0x04 
+002C    CD 1A                     int         0x1a 
+002E    89 8E FE FF               mov         word ptr -0x2[bp],cx 
+0032    89 96 FC FF               mov         word ptr -0x4[bp],dx 
+0036    EB DE                     jmp         L$1 
+
+Routine Size: 56 bytes,    Routine Base: _TEXT + 0000
+
+0038                          pr_lic_:
+0038    53                        push        bx 
+0039    51                        push        cx 
+003A    52                        push        dx 
+003B    56                        push        si 
+003C    C8 0C 00 00               enter       0x000c,0x00 
+0040    BB F5 FF                  mov         bx,0xfff5 
+0043    B8 00 F0                  mov         ax,0xf000 
+0046    31 F6                     xor         si,si 
+0048    8E C0                     mov         es,ax 
+004A                          L$2:
+004A    46                        inc         si 
+004B    26 8A 07                  mov         al,byte ptr es:[bx] 
+004E    43                        inc         bx 
+004F    88 42 F3                  mov         byte ptr -0xd[bp+si],al 
+0052    83 FE 08                  cmp         si,0x0008 
+0055    7C F3                     jl          L$2 
+0057    1E                        push        ds 
+0058    68 00 00                  push        offset _license 
+005B    C6 46 FC 00               mov         byte ptr -0x4[bp],0x00 
+005F    E8 00 00                  call        _cprintf 
+0062    83 C4 04                  add         sp,0x0004 
+0065    16                        push        ss 
+0066    8D 56 F4                  lea         dx,-0xc[bp] 
+0069    52                        push        dx 
+006A    1E                        push        ds 
+006B    68 00 00                  push        offset DGROUP:L$5 
+006E    E8 00 00                  call        _cprintf 
+0071    83 C4 08                  add         sp,0x0008 
+0074    E8 00 00                  call        get_time_ 
+0077    89 D3                     mov         bx,dx 
+0079    89 46 FE                  mov         word ptr -0x2[bp],ax 
+007C    B9 08 00                  mov         cx,0x0008 
+007F                          L$3:
+007F    D1 EA                     shr         dx,0x01 
+0081    D1 D8                     rcr         ax,0x01 
+0083    E2 FA                     loop        L$3 
+0085    30 E4                     xor         ah,ah 
+0087    50                        push        ax 
+0088    89 D8                     mov         ax,bx 
+008A    30 E4                     xor         ah,ah 
+008C    C1 EB 08                  shr         bx,0x08 
+008F    50                        push        ax 
+0090    0F B6 C3                  movzx       ax,bl 
+0093    50                        push        ax 
+0094    1E                        push        ds 
+0095    68 3C 00                  push        offset DGROUP:L$6 
+0098    E8 00 00                  call        _cprintf 
+009B    83 C4 0A                  add         sp,0x000a 
+009E    E8 00 00                  call        get_date_ 
+00A1    89 46 FE                  mov         word ptr -0x2[bp],ax 
+00A4    52                        push        dx 
+00A5    0F B6 5E FE               movzx       bx,byte ptr -0x2[bp] 
+00A9    B9 08 00                  mov         cx,0x0008 
+00AC                          L$4:
+00AC    D1 EA                     shr         dx,0x01 
+00AE    D1 D8                     rcr         ax,0x01 
+00B0    E2 FA                     loop        L$4 
+00B2    53                        push        bx 
+00B3    30 E4                     xor         ah,ah 
+00B5    50                        push        ax 
+00B6    1E                        push        ds 
+00B7    68 5F 00                  push        offset DGROUP:L$7 
+00BA    E8 00 00                  call        _cprintf 
+00BD    83 C4 0A                  add         sp,0x000a 
+00C0    C9                        leave       
+00C1    5E                        pop         si 
+00C2    5A                        pop         dx 
+00C3    59                        pop         cx 
+00C4    5B                        pop         bx 
+00C5    C3                        ret         
+
+Routine Size: 142 bytes,    Routine Base: _TEXT + 0038
+
+No disassembly errors
+
+Segment: CONST WORD USE16 00000076 bytes
+0000                          L$5:
+0000    52 65 6C 65 61 73 65 3A 20 25 73 20 20 20 20 20 Release: %s     
+0010    20 20 20 20 20 43 6F 6D 70 69 6C 65 64 3A 20 20      Compiled:  
+0020    53 65 70 20 20 36 20 32 30 32 36 20 20 61 74 20 Sep  6 2026  at 
+0030    20 32 33 3A 31 32 3A 30 36 0A 0A 00              23:12:06...
+003C                          L$6:
+003C    20 20 20 20 20 20 20 20 20 20 20 20 42 6F 6F 74             Boot
+004C    20 61 74 20 25 30 32 78 3A 25 30 32 78 3A 25 30  at %02x:%02x:%0
+005C    32 78 00                                        2x.
+005F                          L$7:
+005F    20 20 6F 6E 20 20 25 30 32 78 2F 25 30 32 78 2F   on  %02x/%02x/
+006F    25 30 34 78 0A 0A 00                            %04x...
+
+Segment: CONST2 WORD USE16 00000312 bytes
+0000                          _license:
+0000    0A 43 6F 70 79 72 69 67 68 74 20 28 43 29 20 32 .Copyright (C) 2
+0010    30 31 38 20 4A 6F 68 6E 20 52 2E 20 43 6F 66 66 018 John R. Coff
+0020    6D 61 6E 2E 20 20 41 6C 6C 20 72 69 67 68 74 73 man.  All rights
+0030    20 72 65 73 65 72 76 65 64 2E 0A 50 72 6F 76 69  reserved..Provi
+0040    64 65 64 20 66 6F 72 20 68 6F 62 62 79 69 73 74 ded for hobbyist
+0050    20 75 73 65 20 6F 6E 20 74 68 65 20 52 65 74 72  use on the Retr
+0060    6F 42 72 65 77 20 53 42 43 2D 33 38 36 45 58 20 oBrew SBC-386EX 
+0070    62 6F 61 72 64 2E 0A 0A 54 68 69 73 20 70 72 6F board...This pro
+0080    67 72 61 6D 20 69 73 20 66 72 65 65 20 73 6F 66 gram is free sof
+0090    74 77 61 72 65 3A 20 79 6F 75 20 63 61 6E 20 72 tware: you can r
+00A0    65 64 69 73 74 72 69 62 75 74 65 20 69 74 20 61 edistribute it a
+00B0    6E 64 2F 6F 72 20 6D 6F 64 69 66 79 0A 69 74 20 nd/or modify.it 
+00C0    75 6E 64 65 72 20 74 68 65 20 74 65 72 6D 73 20 under the terms 
+00D0    6F 66 20 74 68 65 20 47 4E 55 20 47 65 6E 65 72 of the GNU Gener
+00E0    61 6C 20 50 75 62 6C 69 63 20 4C 69 63 65 6E 73 al Public Licens
+00F0    65 20 61 73 20 70 75 62 6C 69 73 68 65 64 20 62 e as published b
+0100    79 0A 74 68 65 20 46 72 65 65 20 53 6F 66 74 77 y.the Free Softw
+0110    61 72 65 20 46 6F 75 6E 64 61 74 69 6F 6E 2C 20 are Foundation, 
+0120    65 69 74 68 65 72 20 76 65 72 73 69 6F 6E 20 33 either version 3
+0130    20 6F 66 20 74 68 65 20 4C 69 63 65 6E 73 65 2C  of the License,
+0140    20 6F 72 0A 28 61 74 20 79 6F 75 72 20 6F 70 74  or.(at your opt
+0150    69 6F 6E 29 20 61 6E 79 20 6C 61 74 65 72 20 76 ion) any later v
+0160    65 72 73 69 6F 6E 2E 0A 0A 54 68 69 73 20 70 72 ersion...This pr
+0170    6F 67 72 61 6D 20 69 73 20 64 69 73 74 72 69 62 ogram is distrib
+0180    75 74 65 64 20 69 6E 20 74 68 65 20 68 6F 70 65 uted in the hope
+0190    20 74 68 61 74 20 69 74 20 77 69 6C 6C 20 62 65  that it will be
+01A0    20 75 73 65 66 75 6C 2C 0A 62 75 74 20 57 49 54  useful,.but WIT
+01B0    48 4F 55 54 20 41 4E 59 20 57 41 52 52 41 4E 54 HOUT ANY WARRANT
+01C0    59 3B 20 77 69 74 68 6F 75 74 20 65 76 65 6E 20 Y; without even 
+01D0    74 68 65 20 69 6D 70 6C 69 65 64 20 77 61 72 72 the implied warr
+01E0    61 6E 74 79 20 6F 66 0A 4D 45 52 43 48 41 4E 54 anty of.MERCHANT
+01F0    41 42 49 4C 49 54 59 20 6F 72 20 46 49 54 4E 45 ABILITY or FITNE
+0200    53 53 20 46 4F 52 20 41 20 50 41 52 54 49 43 55 SS FOR A PARTICU
+0210    4C 41 52 20 50 55 52 50 4F 53 45 2E 20 20 53 65 LAR PURPOSE.  Se
+0220    65 20 74 68 65 0A 47 4E 55 20 47 65 6E 65 72 61 e the.GNU Genera
+0230    6C 20 50 75 62 6C 69 63 20 4C 69 63 65 6E 73 65 l Public License
+0240    20 66 6F 72 20 6D 6F 72 65 20 64 65 74 61 69 6C  for more detail
+0250    73 2E 0A 0A 59 6F 75 20 73 68 6F 75 6C 64 20 68 s...You should h
+0260    61 76 65 20 72 65 63 65 69 76 65 64 20 61 20 63 ave received a c
+0270    6F 70 79 20 6F 66 20 74 68 65 20 47 4E 55 20 47 opy of the GNU G
+0280    65 6E 65 72 61 6C 20 50 75 62 6C 69 63 20 4C 69 eneral Public Li
+0290    63 65 6E 73 65 0A 61 6C 6F 6E 67 20 77 69 74 68 cense.along with
+02A0    20 74 68 69 73 20 70 72 6F 67 72 61 6D 20 69 6E  this program in
+02B0    20 74 68 65 20 66 69 6C 65 20 43 4F 50 59 49 4E  the file COPYIN
+02C0    47 20 69 6E 20 74 68 65 20 74 6F 70 6D 6F 73 74 G in the topmost
+02D0    20 73 6F 75 72 63 65 0A 64 69 72 65 63 74 6F 72  source.director
+02E0    79 2E 20 20 49 66 20 6E 6F 74 2C 20 73 65 65 20 y.  If not, see 
+02F0    3C 68 74 74 70 3A 2F 2F 77 77 77 2E 67 6E 75 2E <http://www.gnu.
+0300    6F 72 67 2F 6C 69 63 65 6E 73 65 73 2F 3E 2E 0A org/licenses/>..
+0310    0A 00                                           ..
+
+Segment: _DATA WORD USE16 00000000 bytes
+

@@ -1,0 +1,173 @@
+Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/getline.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 0000012E bytes
+0000                          is_print_:
+0000    3D 20 00                  cmp         ax,0x0020 
+0003    7C 05                     jl          L$1 
+0005    3D 7F 00                  cmp         ax,0x007f 
+0008    7C 03                     jl          L$2 
+000A                          L$1:
+000A    31 C0                     xor         ax,ax 
+000C    C3                        ret         
+000D                          L$2:
+000D    B8 01 00                  mov         ax,0x0001 
+0010    C3                        ret         
+
+Routine Size: 17 bytes,    Routine Base: _TEXT + 0000
+
+0011                          putline_:
+0011    53                        push        bx 
+0012    51                        push        cx 
+0013    89 C3                     mov         bx,ax 
+0015    89 D1                     mov         cx,dx 
+0017                          L$3:
+0017    8E C1                     mov         es,cx 
+0019    26 80 3F 00               cmp         byte ptr es:[bx],0x00 
+001D    74 0D                     je          L$4 
+001F    BA 07 00                  mov         dx,0x0007 
+0022    26 0F B6 07               movzx       ax,byte ptr es:[bx] 
+0026    E8 00 00                  call        VIDEO_putchar_ 
+0029    43                        inc         bx 
+002A    EB EB                     jmp         L$3 
+002C                          L$4:
+002C    59                        pop         cx 
+002D    5B                        pop         bx 
+002E    C3                        ret         
+002F                          L$5:
+002F    77 13 10 0D 05 02 01 00                         w.......
+0037                          L$6:
+0037    02 01                                           DW	offset L$14
+0039    CA 00                                           DW	offset L$11
+003B    D9 00                                           DW	offset L$12
+003D    A8 00                                           DW	offset L$10
+003F    A8 00                                           DW	offset L$10
+0041    F3 00                                           DW	offset L$13
+0043    F3 00                                           DW	offset L$13
+0045    A6 00                                           DW	offset L$9
+0047    CA 00                                           DW	offset L$11
+
+Routine Size: 56 bytes,    Routine Base: _TEXT + 0011
+
+0049                          getline_:
+0049    51                        push        cx 
+004A    56                        push        si 
+004B    57                        push        di 
+004C    C8 02 00 00               enter       0x0002,0x00 
+0050    50                        push        ax 
+0051    52                        push        dx 
+0052    89 DE                     mov         si,bx 
+0054    4E                        dec         si 
+0055    31 DB                     xor         bx,bx 
+0057                          L$7:
+0057    39 F3                     cmp         bx,si 
+0059    0F 8D CA 00               jge         L$17 
+005D    E8 00 00                  call        KBD_getchar_ 
+0060    89 C1                     mov         cx,ax 
+0062    89 C2                     mov         dx,ax 
+0064    8D 7F 01                  lea         di,0x1[bx] 
+0067    E8 00 00                  call        is_print_ 
+006A    89 7E FE                  mov         word ptr -0x2[bp],di 
+006D    85 C0                     test        ax,ax 
+006F    74 16                     je          L$8 
+0071    8E 46 FA                  mov         es,word ptr -0x6[bp] 
+0074    BA 07 00                  mov         dx,0x0007 
+0077    89 DF                     mov         di,bx 
+0079    89 C8                     mov         ax,cx 
+007B    03 7E FC                  add         di,word ptr -0x4[bp] 
+007E    8B 5E FE                  mov         bx,word ptr -0x2[bp] 
+0081    26 88 0D                  mov         byte ptr es:[di],cl 
+0084    E9 80 00                  jmp         L$15 
+0087                          L$8:
+0087    83 E9 08                  sub         cx,0x0008 
+008A    83 F9 77                  cmp         cx,0x0077 
+008D    77 73                     ja          L$14 
+008F    BF 2F 00                  mov         di,offset L$5 
+0092    88 C8                     mov         al,cl 
+0094    0E                        push        cs 
+0095    07                        pop         es 
+0096    B9 09 00                  mov         cx,0x0009 
+0099    F2 AE                     repne scasb 
+009B    D1 E1                     shl         cx,0x01 
+009D    89 CF                     mov         di,cx 
+009F    2E 8B 85 37 00            mov         ax,word ptr cs:L$6[di] 
+00A4    FF E0                     jmp         ax 
+00A6                          L$9:
+00A6    31 DB                     xor         bx,bx 
+00A8                          L$10:
+00A8    BA 07 00                  mov         dx,0x0007 
+00AB    B8 0D 00                  mov         ax,0x000d 
+00AE    E8 00 00                  call        VIDEO_putchar_ 
+00B1    BA 07 00                  mov         dx,0x0007 
+00B4    B8 0A 00                  mov         ax,0x000a 
+00B7    8B 76 FC                  mov         si,word ptr -0x4[bp] 
+00BA    E8 00 00                  call        VIDEO_putchar_ 
+00BD    01 DE                     add         si,bx 
+00BF    8E 46 FA                  mov         es,word ptr -0x6[bp] 
+00C2    89 D8                     mov         ax,bx 
+00C4    26 C6 04 00               mov         byte ptr es:[si],0x00 
+00C8    EB 5F                     jmp         L$18 
+00CA                          L$11:
+00CA    85 DB                     test        bx,bx 
+00CC    7E 3C                     jle         L$16 
+00CE    B8 00 00                  mov         ax,offset DGROUP:L$19 
+00D1    8C DA                     mov         dx,ds 
+00D3    E8 00 00                  call        putline_ 
+00D6    4B                        dec         bx 
+00D7    EB 31                     jmp         L$16 
+00D9                          L$12:
+00D9    BA 07 00                  mov         dx,0x0007 
+00DC    B8 20 00                  mov         ax,0x0020 
+00DF    E8 00 00                  call        VIDEO_putchar_ 
+00E2    89 DF                     mov         di,bx 
+00E4    8E 46 FA                  mov         es,word ptr -0x6[bp] 
+00E7    03 7E FC                  add         di,word ptr -0x4[bp] 
+00EA    8B 5E FE                  mov         bx,word ptr -0x2[bp] 
+00ED    26 C6 05 20               mov         byte ptr es:[di],0x20 
+00F1    EB 17                     jmp         L$16 
+00F3                          L$13:
+00F3    85 DB                     test        bx,bx 
+00F5    74 13                     je          L$16 
+00F7    B8 00 00                  mov         ax,offset DGROUP:L$19 
+00FA    8C DA                     mov         dx,ds 
+00FC    E8 00 00                  call        putline_ 
+00FF    4B                        dec         bx 
+0100    EB F1                     jmp         L$13 
+0102                          L$14:
+0102    BA 07 00                  mov         dx,0x0007 
+0105    89 D0                     mov         ax,dx 
+0107                          L$15:
+0107    E8 00 00                  call        VIDEO_putchar_ 
+010A                          L$16:
+010A    39 F3                     cmp         bx,si 
+010C    0F 85 47 FF               jne         L$7 
+0110    BA 07 00                  mov         dx,0x0007 
+0113    89 D0                     mov         ax,dx 
+0115    E8 00 00                  call        VIDEO_putchar_ 
+0118    BA 07 00                  mov         dx,0x0007 
+011B    B8 08 00                  mov         ax,0x0008 
+011E    8D 5C FF                  lea         bx,-0x1[si] 
+0121    E8 00 00                  call        VIDEO_putchar_ 
+0124    E9 30 FF                  jmp         L$7 
+0127                          L$17:
+0127    89 D8                     mov         ax,bx 
+0129                          L$18:
+0129    C9                        leave       
+012A    5F                        pop         di 
+012B    5E                        pop         si 
+012C    59                        pop         cx 
+012D    C3                        ret         
+
+Routine Size: 229 bytes,    Routine Base: _TEXT + 0049
+
+No disassembly errors
+
+Segment: CONST WORD USE16 00000004 bytes
+0000                          L$19:
+0000    08 20 08 00                                     . ..
+
+Segment: CONST2 WORD USE16 00000000 bytes
+
+Segment: _DATA WORD USE16 00000000 bytes
+

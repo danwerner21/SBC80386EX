@@ -1,0 +1,30 @@
+Module: /mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/strlen.c
+GROUP: 'DGROUP' CONST,CONST2,_DATA
+
+File contains no line numbers.
+Segment: _TEXT BYTE USE16 00000013 bytes
+0000                          strlen_:
+0000    53                        push        bx 
+0001    89 C3                     mov         bx,ax 
+0003    8E C2                     mov         es,dx 
+0005    31 C0                     xor         ax,ax 
+0007                          L$1:
+0007    26 80 3F 00               cmp         byte ptr es:[bx],0x00 
+000B    74 04                     je          L$2 
+000D    40                        inc         ax 
+000E    43                        inc         bx 
+000F    EB F6                     jmp         L$1 
+0011                          L$2:
+0011    5B                        pop         bx 
+0012    C3                        ret         
+
+Routine Size: 19 bytes,    Routine Base: _TEXT + 0000
+
+No disassembly errors
+
+Segment: CONST WORD USE16 00000000 bytes
+
+Segment: CONST2 WORD USE16 00000000 bytes
+
+Segment: _DATA WORD USE16 00000000 bytes
+

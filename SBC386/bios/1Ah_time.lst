@@ -1,0 +1,1837 @@
+     1                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; 1Ah_time.asm -- date/time, NVRAM, and timers
+     3                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     4                                  ;
+     5                                  ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+     6                                  ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+     7                                  ;
+     8                                  ; This program is free software: you can redistribute it and/or modify
+     9                                  ; it under the terms of the GNU General Public License as published by
+    10                                  ; the Free Software Foundation, either version 3 of the License, or
+    11                                  ; (at your option) any later version.
+    12                                  ;
+    13                                  ; This program is distributed in the hope that it will be useful,
+    14                                  ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    15                                  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    16                                  ; GNU General Public License for more details.
+    17                                  ;
+    18                                  ; You should have received a copy of the GNU General Public License
+    19                                  ; along with this program in the file COPYING in the topmost source
+    20                                  ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    21                                  ;
+    22                                  ;
+    23                                  ; SBC-386 board revisions:
+    24                                  ;       SBC386-0   prototype / concept testing
+    25                                  ;	SBC-386EX 2.0	production / January 2018
+    26                                  ;
+    27                                  ; Assembly by NASM 2.08 is preferred
+    28                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    29                                  %include "seg_def.inc"
+    30                              <1> ; SEG_DEF.inc
+    31                              <1> ;
+    32                              <1> %ifndef SEG_DEF
+    33                              <1> %define SEG_DEF 1
+    34                              <1> 
+    35                              <1> segment _TEXT	use16 	align=16	class=CODE	public
+    36                              <1> 
+    37                              <1> segment CONST		align=16	class=DATA	public
+    38                              <1> segment CONST2		align=2		class=DATA	public
+    39                              <1> segment _DATA		align=16	class=DATA	public
+    40                              <1> segment _BSS		align=16	class=DATA	public
+    41                              <1> ;group DGROUP CONST2 CONST _DATA _BSS
+    42                              <1> 
+    43                              <1> group DGROUP  _TEXT CONST2 CONST _DATA _BSS
+    44                              <1> 
+    45                              <1> 
+    46                              <1> segment BOOT at 0xFFFF	align=16	class=BOOT	use16
+    47                              <1> 
+    48                              <1> %define XXX
+    49                              <1> %endif
+    50                              <1> ;
+    51                              <1> ; end SEG_DEF.inc
+    30                                  %include "i386ex.inc"
+    31                              <1> ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    32                              <1> ; i386EX.inc  --  register definitions for the Intel 80386EX processor
+    33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    34                              <1> ;
+    35                              <1> ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+    36                              <1> ; Provided for hobbyist use on the RetroBrew SBC-386 board.
+    37                              <1> ;
+    38                              <1> ; This program is free software: you can redistribute it and/or modify
+    39                              <1> ; it under the terms of the GNU General Public License as published by
+    40                              <1> ; the Free Software Foundation, either version 3 of the License, or
+    41                              <1> ; (at your option) any later version.
+    42                              <1> ;
+    43                              <1> ; This program is distributed in the hope that it will be useful,
+    44                              <1> ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    45                              <1> ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    46                              <1> ; GNU General Public License for more details.
+    47                              <1> ;
+    48                              <1> ; You should have received a copy of the GNU General Public License
+    49                              <1> ; along with this program in the file COPYING in the topmost source
+    50                              <1> ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    51                              <1> ;
+    52                              <1> ;
+    53                              <1> ; SBC-386 board revisions:
+    54                              <1> ;       SBC386-0   prototype / concept testing
+    55                              <1> ;	SBC386EX 2.0 production board (Jan 2018, not 2017 as labeled)
+    56                              <1> ;
+    57                              <1> ; Assembly by NASM 2.08 is preferred
+    58                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;*/
+    59                              <1> 
+    60                              <1> ;/* i386EX.inc  --  register definitions for the Intel 80386EX processor
+    61                              <1> ;
+    62                              <1> %define defb
+    63                              <1> %define defw
+    64                              <1> %define defd
+    65                              <1> ;*/
+    66                              <1> 
+    67                              <1> ;/* The Address Configuration register
+    68                              <1> ;*/
+    69                              <1> defb REMAPCFGH  equ     0x0023
+    70                              <1> defb REMAPCFGL  equ     0x0022
+    71                              <1> defw REMAPCFG   equ     0x0022
+    72                              <1> 
+    73                              <1> ;/* The A20gate and fast CPU Reset
+    74                              <1> ;*/
+    75                              <1> defb PORT92     equ     0xF092
+    76                              <1> defb PORT92_AT  equ     0x0092
+    77                              <1> 
+    78                              <1> ;
+    79                              <1> ;/* The DMA Controller and Bus Arbiter
+    80                              <1> ;*/
+    81                              <1> defb DMA0TAR    equ     0xF000
+    82                              <1> defb DMA0TAR_AT equ     0x0000
+    83                              <1> defb DMA0BYC    equ     0xF001
+    84                              <1> defb DMA0BYC_AT equ     0x0001
+    85                              <1> defb DMA1TAR    equ     0xF002
+    86                              <1> defb DMA1TAR_AT equ     0x0002
+    87                              <1> defb DMA1BYC    equ     0xF003
+    88                              <1> defb DMA1BYC_AT equ     0x0003
+    89                              <1> defb DMACMD1    equ     0xF008
+    90                              <1> defb DMACMD1_AT equ     0x0008
+    91                              <1> defb DMASTS     equ     0xF008
+    92                              <1> defb DMASTS_AT  equ     0x0008
+    93                              <1> defb DMASRR     equ     0xF009
+    94                              <1> defb DMASRR_AT  equ     0x0009
+    95                              <1> defb DMAMSK     equ     0xF00A
+    96                              <1> defb DMAMSK_AT  equ     0x000A
+    97                              <1> defb DMAMOD1    equ     0xF00B
+    98                              <1> defb DMAMOD1_AT equ     0x000B
+    99                              <1> defb DMACLRBP   equ     0xF00C
+   100                              <1> defb DMACLRBP_AT equ    0x000C
+   101                              <1> defb DMACLR     equ     0xF00D
+   102                              <1> defb DMACLR_AT  equ     0x000D
+   103                              <1> defb DMACLRMSK  equ     0xF00E
+   104                              <1> defb DMACLRMSK_AT equ   0x000E
+   105                              <1> defb DMAGRPMSK  equ     0xF00F
+   106                              <1> defb DMAGRPMSK_AT equ   0x000F
+   107                              <1> defb DMA0REQ0_1 equ     0xF010
+   108                              <1> defb DMA0REQ2_3 equ     0xF011
+   109                              <1> defb DMA1REQ0_1 equ     0xF012
+   110                              <1> defb DMA1REQ2_3 equ     0xF013
+   111                              <1> defb DMABSR     equ     0xF018
+   112                              <1> defb DMACHR     equ     0xF019
+   113                              <1> defb DMAIS      equ     0xF019
+   114                              <1> defb DMACMD2    equ     0xF01A
+   115                              <1> defb DMAMOD2    equ     0xF01B
+   116                              <1> defb DMAIEN     equ     0xF01C
+   117                              <1> defb DMAOVFE    equ     0xF01D
+   118                              <1> defb DMACLRTC   equ     0xF01E
+   119                              <1> ;
+   120                              <1> ;/* The DMA Page Registers
+   121                              <1> ;*/
+   122                              <1> defb DMA1TAR2    equ    0xF083
+   123                              <1> defb DMA1TAR2_AT equ    0x0083
+   124                              <1> defb DMA1TAR3    equ    0xF085
+   125                              <1> defb DMA1TAR3_AT equ    0x0085
+   126                              <1> defb DMA0TAR3    equ    0xF086
+   127                              <1> defb DMA0TAR3_AT equ    0x0086
+   128                              <1> defb DMA0TAR2    equ    0xF087
+   129                              <1> defb DMA0TAR2_AT equ    0x0087
+   130                              <1> ;
+   131                              <1> defb DMA0BYC2   equ     0xF098
+   132                              <1> defb DMA1BYC2   equ     0xF099
+   133                              <1> 
+   134                              <1> ;
+   135                              <1> ;/* The Master Interrupt Controller
+   136                              <1> ;*/
+   137                              <1> defb ICW1M_AT   equ     0x0020
+   138                              <1> defb ICW2M_AT   equ     0x0021
+   139                              <1> defb ICW3M_AT   equ     0x0021
+   140                              <1> defb ICW4M_AT   equ     0x0021
+   141                              <1> defb OCW1M_AT   equ     0x0021
+   142                              <1> defb OCW2M_AT   equ     0x0020
+   143                              <1> defb OCW3M_AT   equ     0x0020
+   144                              <1> 
+   145                              <1> defb ICW1M      equ     0xF020
+   146                              <1> defb ICW2M      equ     0xF021
+   147                              <1> defb ICW3M      equ     0xF021
+   148                              <1> defb ICW4M      equ     0xF021
+   149                              <1> defb OCW1M      equ     0xF021
+   150                              <1> defb OCW2M      equ     0xF020
+   151                              <1> defb OCW3M      equ     0xF020
+   152                              <1> defb IRR_M	equ	0xF020
+   153                              <1> 
+   154                              <1> ;
+   155                              <1> ;/* The Slave Interrupt Controller
+   156                              <1> ;*/
+   157                              <1> defb ICW1S_AT   equ     0x00A0
+   158                              <1> defb ICW2S_AT   equ     0x00A1
+   159                              <1> defb ICW3S_AT   equ     0x00A1
+   160                              <1> defb ICW4S_AT   equ     0x00A1
+   161                              <1> defb OCW1S_AT   equ     0x00A1
+   162                              <1> defb OCW2S_AT   equ     0x00A0
+   163                              <1> defb OCW3S_AT   equ     0x00A0
+   164                              <1> defb IRR_M_AT	equ	0x00A0
+   165                              <1> 
+   166                              <1> defb ICW1S      equ     0xF0A0
+   167                              <1> defb ICW2S      equ     0xF0A1
+   168                              <1> defb ICW3S      equ     0xF0A1
+   169                              <1> defb ICW4S      equ     0xF0A1
+   170                              <1> defb OCW1S      equ     0xF0A1
+   171                              <1> defb OCW2S      equ     0xF0A0
+   172                              <1> defb OCW3S      equ     0xF0A0
+   173                              <1> 
+   174                              <1> ;
+   175                              <1> ;/* The Timer/Counter Unit
+   176                              <1> ;*/
+   177                              <1> defb    TMR0    equ     0xF040
+   178                              <1> defb    TMR0_AT equ     0x0040
+   179                              <1> defb    TMR1    equ     0xF041
+   180                              <1> defb    TMR1_AT equ     0x0041
+   181                              <1> defb    TMR2    equ     0xF042
+   182                              <1> defb    TMR2_AT equ     0x0042
+   183                              <1> defb    TMRCON  equ     0xF043
+   184                              <1> defb    TMRCON_AT  equ  0x0043
+   185                              <1> 
+   186                              <1> ;
+   187                              <1> ;/* The Chip Select Unit
+   188                              <1> ;*/
+   189                              <1> defw    CS0ADL  equ     0xF400
+   190                              <1> defw    CS0ADH  equ     0xF402
+   191                              <1> defw    CS0MSKL equ     0xF404
+   192                              <1> defw    CS0MSKH equ     0xF406
+   193                              <1> defw    CS1ADL  equ     0xF408
+   194                              <1> defw    CS1ADH  equ     0xF40A
+   195                              <1> defw    CS1MSKL equ     0xF40C
+   196                              <1> defw    CS1MSKH equ     0xF40E
+   197                              <1> defw    CS2ADL  equ     0xF410
+   198                              <1> defw    CS2ADH  equ     0xF412
+   199                              <1> defw    CS2MSKL equ     0xF414
+   200                              <1> defw    CS2MSKH equ     0xF416
+   201                              <1> defw    CS3ADL  equ     0xF418
+   202                              <1> defw    CS3ADH  equ     0xF41A
+   203                              <1> defw    CS3MSKL equ     0xF41C
+   204                              <1> defw    CS3MSKH equ     0xF41E
+   205                              <1> defw    CS4ADL  equ     0xF420
+   206                              <1> defw    CS4ADH  equ     0xF422
+   207                              <1> defw    CS4MSKL equ     0xF424
+   208                              <1> defw    CS4MSKH equ     0xF426
+   209                              <1> defw    CS5ADL  equ     0xF428
+   210                              <1> defw    CS5ADH  equ     0xF42A
+   211                              <1> defw    CS5MSKL equ     0xF42C
+   212                              <1> defw    CS5MSKH equ     0xF42E
+   213                              <1> defw    CS6ADL  equ     0xF430
+   214                              <1> defw    CS6ADH  equ     0xF432
+   215                              <1> defw    CS6MSKL equ     0xF434
+   216                              <1> defw    CS6MSKH equ     0xF436
+   217                              <1> defw    UCSADL  equ     0xF438
+   218                              <1> defw    UCSADH  equ     0xF43A
+   219                              <1> defw    UCSMSKL equ     0xF43C
+   220                              <1> defw    UCSMSKH equ     0xF43E
+   221                              <1> 
+   222                              <1> ;
+   223                              <1> ;/* The Synchronous Serial I/O Unit
+   224                              <1> ;*/
+   225                              <1> defw    SSIOTBUF equ    0xF480
+   226                              <1> defw    SSIORBUF equ    0xF482
+   227                              <1> defw    SSIOBAUD equ    0xF484
+   228                              <1> defw    SSIOCON1 equ    0xF486
+   229                              <1> defw    SSIOCON2 equ    0xF488
+   230                              <1> defw    SSIOCTR  equ    0xF48A
+   231                              <1> 
+   232                              <1> ;
+   233                              <1> ;/* The Refresh Control Unit
+   234                              <1> ;*/
+   235                              <1> defw    RFSBAD  equ     0xF4A0
+   236                              <1> defw    RFSCIR  equ     0xF4A2
+   237                              <1> defw    RFSCON  equ     0xF4A4
+   238                              <1> defw    RFSADD  equ     0xF4A6
+   239                              <1> 
+   240                              <1> ;
+   241                              <1> ;/* The Watchdog Timer Unit
+   242                              <1> ;*/
+   243                              <1> defw    WDTRLDH equ     0xF4C0
+   244                              <1> defw    WDTRLDL equ     0xF4C2
+   245                              <1> defw    WDTCNTH equ     0xF4C4
+   246                              <1> defw    WDTCNTL equ     0xF4C6
+   247                              <1> defw    WDTCLR  equ     0xF4C8
+   248                              <1> defb    WDTSTATUS  equ  0xF4CA
+   249                              <1> 
+   250                              <1> ;
+   251                              <1> ;/* Clock Generation and Power Management
+   252                              <1> ;*/
+   253                              <1> defb    PWRCON  equ     0xF800
+   254                              <1> defw    CLKPRS  equ     0xF804
+   255                              <1> 
+   256                              <1> ;
+   257                              <1> ;/* Device Configuration Registers
+   258                              <1> ;*/
+   259                              <1> defb    P1CFG   equ     0xF820
+   260                              <1> defb    P2CFG   equ     0xF822
+   261                              <1> defb    P3CFG   equ     0xF824
+   262                              <1> defb    PINCFG  equ     0xF826
+   263                              <1> defb    DMACFG  equ     0xF830
+   264                              <1> defb    INTCFG  equ     0xF832
+   265                              <1> defb    TMRCFG  equ     0xF834
+   266                              <1> defb    SIOCFG  equ     0xF836
+   267                              <1> 
+   268                              <1> ;
+   269                              <1> ;/* Parallel I/O Ports
+   270                              <1> ;*/
+   271                              <1> defb    P1PIN   equ     0xF860
+   272                              <1> defb    P1LTC   equ     0xF862
+   273                              <1> defb    P1DIR   equ     0xF864
+   274                              <1> defb    P2PIN   equ     0xF868
+   275                              <1> defb    P2LTC   equ     0xF86A
+   276                              <1> defb    P2DIR   equ     0xF86C
+   277                              <1> defb    P3PIN   equ     0xF870
+   278                              <1> defb    P3LTC   equ     0xF872
+   279                              <1> defb    P3DIR   equ     0xF874
+   280                              <1> 
+   281                              <1> 
+   282                              <1> ; bits.inc
+   283                              <1> ;
+   284                              <1> ; assembly language bit definitions
+   285                              <1> ;
+   286                              <1> defb    BIT0    equ     0x01
+   287                              <1> defb    BIT1    equ     0x02
+   288                              <1> defb    BIT2    equ     0x04
+   289                              <1> defb    BIT3    equ     0x08
+   290                              <1> defb    BIT4    equ     0x10
+   291                              <1> defb    BIT5    equ     0x20
+   292                              <1> defb    BIT6    equ     0x40
+   293                              <1> defb    BIT7    equ     0x80
+   294                              <1> 
+   295                              <1> defw    BIT8    equ     0x0100
+   296                              <1> defw    BIT9    equ     0x0200
+   297                              <1> defw    BIT10   equ     0x0400
+   298                              <1> defw    BIT11   equ     0x0800
+   299                              <1> defw    BIT12   equ     0x1000
+   300                              <1> defw    BIT13   equ     0x2000
+   301                              <1> defw    BIT14   equ     0x4000
+   302                              <1> defw    BIT15   equ     0x8000
+   303                              <1> 
+   304                              <1> defd    BIT16   equ     0x00010000
+   305                              <1> defd    BIT31   equ     0x80000000
+   306                              <1> 
+   307                              <1> defb    ZBIT0    equ     0
+   308                              <1> defb    ZBIT1    equ     0
+   309                              <1> defb    ZBIT2    equ     0
+   310                              <1> defb    ZBIT3    equ     0
+   311                              <1> defb    ZBIT4    equ     0
+   312                              <1> defb    ZBIT5    equ     0
+   313                              <1> defb    ZBIT6    equ     0
+   314                              <1> defb    ZBIT7    equ     0
+   315                              <1> 
+   316                              <1> defw    ZBIT8    equ     0
+   317                              <1> defw    ZBIT9    equ     0
+   318                              <1> defw    ZBIT10   equ     0
+   319                              <1> defw    ZBIT11   equ     0
+   320                              <1> defw    ZBIT12   equ     0
+   321                              <1> defw    ZBIT13   equ     0
+   322                              <1> defw    ZBIT14   equ     0
+   323                              <1> defw    ZBIT15   equ     0
+   324                              <1> 
+   325                              <1> 
+   326                              <1> ;
+   327                              <1> ;/* Asynchronout Serial I/O channel 0  (COM1)
+   328                              <1> ;*/
+   329                              <1> defb    RBR0_F4 equ     0xF4F8
+   330                              <1> defb    TBR0_F4 equ     0xF4F8
+   331                              <1> defb    DLL0_F4 equ     0xF4F8
+   332                              <1> defb    DLH0_F4 equ     0xF4F9
+   333                              <1> defb    IER0_F4 equ     0xF4F9
+   334                              <1> defb    IIR0_F4 equ     0xF4FA
+   335                              <1> defb    LCR0_F4 equ     0xF4FB
+   336                              <1> defb    MCR0_F4 equ     0xF4FC
+   337                              <1> defb    LSR0_F4 equ     0xF4FD
+   338                              <1> defb    MSR0_F4 equ     0xF4FE
+   339                              <1> defb    SCR0_F4 equ     0xF4FF
+   340                              <1> 
+   341                              <1> %define MFPIC 0
+   342                              <1> %if MFPIC
+   343                              <1> defb    RBR0    equ     0x0448
+   344                              <1> defb    TBR0    equ     0x0448
+   345                              <1> defb    DLL0    equ     0x0448
+   346                              <1> defb    DLH0    equ     0x0449
+   347                              <1> defb    IER0    equ     0x0449
+   348                              <1> defb    IIR0    equ     0x044A
+   349                              <1> defb    LCR0    equ     0x044B
+   350                              <1> defb    MCR0    equ     0x044C
+   351                              <1> defb    LSR0    equ     0x044D
+   352                              <1> defb    MSR0    equ     0x044E
+   353                              <1> defb    SCR0    equ     0x044F
+   354                              <1> %else
+   355                              <1> defb    RBR0    equ     0x03F8
+   356                              <1> defb    TBR0    equ     0x03F8
+   357                              <1> defb    DLL0    equ     0x03F8
+   358                              <1> defb    DLH0    equ     0x03F9
+   359                              <1> defb    IER0    equ     0x03F9
+   360                              <1> defb    IIR0    equ     0x03FA
+   361                              <1> defb    LCR0    equ     0x03FB
+   362                              <1> defb    MCR0    equ     0x03FC
+   363                              <1> defb    LSR0    equ     0x03FD
+   364                              <1> defb    MSR0    equ     0x03FE
+   365                              <1> defb    SCR0    equ     0x03FF
+   366                              <1> %endif
+   367                              <1> 
+   368                              <1> ;
+   369                              <1> ;/* Asynchronout Serial I/O channel 1  (COM2)
+   370                              <1> ;*/
+   371                              <1> defb    RBR1_F8 equ     0xF8F8
+   372                              <1> defb    TBR1_F8 equ     0xF8F8
+   373                              <1> defb    DLL1_F8 equ     0xF8F8
+   374                              <1> defb    DLH1_F8 equ     0xF8F9
+   375                              <1> defb    IER1_F8 equ     0xF8F9
+   376                              <1> defb    IIR1_F8 equ     0xF8FA
+   377                              <1> defb    LCR1_F8 equ     0xF8FB
+   378                              <1> defb    MCR1_F8 equ     0xF8FC
+   379                              <1> defb    LSR1_F8 equ     0xF8FD
+   380                              <1> defb    MSR1_F8 equ     0xF8FE
+   381                              <1> defb    SCR1_F8 equ     0xF8FF
+   382                              <1> 
+   383                              <1> defb    RBR1    equ     0x02F8
+   384                              <1> defb    TBR1    equ     0x02F8
+   385                              <1> defb    DLL1    equ     0x02F8
+   386                              <1> defb    DLH1    equ     0x02F9
+   387                              <1> defb    IER1    equ     0x02F9
+   388                              <1> defb    IIR1    equ     0x02FA
+   389                              <1> defb    LCR1    equ     0x02FB
+   390                              <1> defb    MCR1    equ     0x02FC
+   391                              <1> defb    LSR1    equ     0x02FD
+   392                              <1> defb    MSR1    equ     0x02FE
+   393                              <1> defb    SCR1    equ     0x02FF
+   394                              <1> 
+   395                              <1> ;/* LSRx bits
+   396                              <1> ;*/
+   397                              <1> defb    LSR_TE  equ     BIT6
+   398                              <1> defb    LSR_TBE equ     BIT5
+   399                              <1> defb    LSR_BI  equ     BIT4
+   400                              <1> defb    LSR_FE  equ     BIT3
+   401                              <1> defb    LSR_PE  equ     BIT2
+   402                              <1> defb    LSR_OE  equ     BIT1
+   403                              <1> defb    LSR_RBF equ     BIT0
+   404                              <1> 
+   405                              <1> ;/* MSRx bits
+   406                              <1> ;*/
+   407                              <1> defb	MSR_DCD	equ	BIT7
+   408                              <1> defb	MSR_RI 	equ	BIT6
+   409                              <1> defb	MSR_DSR	equ	BIT5
+   410                              <1> defb	MSR_CTS	equ	BIT4
+   411                              <1> defb	MSR_deltaDCD	equ	BIT3
+   412                              <1> defb	MSR_deltaRI	equ	BIT2
+   413                              <1> defb	MSR_deltaDSR	equ	BIT1
+   414                              <1> defb	MSR_deltaCTS	equ	BIT0
+   415                              <1> 
+   416                              <1> ;/* Bits in CR0
+   417                              <1> ;*/
+   418                              <1> defb    CR0_PE  equ     BIT0
+   419                              <1> defb    CR0_MP  equ     BIT1
+   420                              <1> defb    CR0_EM  equ     BIT2
+   421                              <1> defb    CR0_TS  equ     BIT3
+   422                              <1> defd    CR0_WP  equ     BIT16
+   423                              <1> defd    CR0_PG  equ     BIT31
+   424                              <1> 
+   425                              <1> ;/* Some ASCII character codes
+   426                              <1> ;*/
+   427                              <1> defb    ASCII_NUL       equ     0x00
+   428                              <1> defb    ASCII_BS        equ     0x08
+   429                              <1> defb    ASCII_HT        equ     0x09
+   430                              <1> defb    ASCII_LF        equ     0x0A
+   431                              <1> defb    ASCII_NL        equ     0x0A
+   432                              <1> defb    ASCII_FF        equ     0x0C
+   433                              <1> defb    ASCII_CR        equ     0x0D
+   434                              <1> defb	ASCII_ESC	equ	0x1B
+   435                              <1> defb    ASCII_SP        equ     0x20
+   436                              <1> defb    ASCII_DEL       equ     0x7F
+   437                              <1> defb	ASCII_RUB	equ	0xFF
+   438                              <1> 
+   439                              <1> 
+   440                              <1> ;/* End of i386EX.inc */
+    31                                  %include "bda.inc"
+    32                              <1> XXX
+    33                              <1> ; bda.h -- definitions of the BIOS Data Area at 0040:0000 (0x400)  */
+    34                              <1> %define BDA_segment 0x40
+    35                              <1> struc _BDA
+    36                              <1> ; first items at 0x40:0	*/
+    37 00000000 ????????????????    <1> serial_dev	resw	4	; serial port device codes */
+    38 00000008 ????????????????    <1> parallel_dev	resw	4	; printer port device codes */
+    39 00000010 ????                <1> equip_flag	resw	1		; int 12h equipment flags */
+    40 00000012 ??                  <1> mfg_test	resb	1		; initialization flags */
+    41 00000013 ????                <1> memory_size	resw	1	; base memory size in Kilowords (1224) */
+    42 00000015 ??                  <1> mfg_err_flag	resb	1
+    43 00000016 ??                  <1> mfg_err_flag2	resb	1
+    44                              <1> ; */
+    45                              <1> ; first Keyboard data area */
+    46 00000017 ??                  <1> kbd_flag	resb	1	; shift status &c. */
+    47 00000018 ??                  <1> kbd_flag1	resb	1	;  mrre  */
+    48 00000019 ??                  <1> alt_input	resb	1	; save alternate kbd entry code */
+    49 0000001A ????                <1> buffer_head	resw	1
+    50 0000001C ????                <1> buffer_tail	resw	1
+    51                              <1> ; */
+    52 0000001E <res 20h>           <1> kbd_buffer	resw	16	; buffer empty when  head==tail**/
+    53                              <1> ; */
+    54                              <1> ; Diskette data area */
+    55 0000003E ??                  <1> seek_status	resb	1	; drive recalibration status */
+    56                              <1> ; bits 3..0 drive must recalibrate before next seek */
+    57 0000003F ??                  <1> motor_status	resb	1	; bits 3..0 motor running */
+    58                              <1> ; bit 7 current op is write */
+    59 00000040 ??                  <1> motor_count	resb	1	; timeout counter for motor turn-off */
+    60 00000041 ??                  <1> fd_status	resb	1	; return code status byte */
+    61 00000042 ??????????????      <1> fd_ctrl_stat	resb	7	; controller return bytes */
+    62                              <1> ; */
+    63                              <1> ; Video Display data area -- also used for video emulation */
+    64 00000049 ??                  <1> vid_mode	resb	1	; current display mode */
+    65 0000004A ????                <1> vid_columns	resw	1	; no. of columns on the screen */
+    66 0000004C ????                <1> vid_buf_len	resw	1	; length of video buffer in bytes*//
+    67 0000004E ????                <1> vid_start	resw	1	; start address of screen regeneration (in vid buf)*//
+    68 00000050 <res 10h>           <1> vid_cursor	resw	8	; cursor postition on up to 8 screens */
+    69 00000060 ????                <1> vid_cursor_mode	resw	1
+    70 00000062 ??                  <1> vid_active_page	resb	1
+    71 00000063 ????                <1> vid_addr_chip	resw	1	; I/O address for the video chip (6845,EGA,VGA)*//
+    72 00000065 ??                  <1> vid_crt_mode	resb	1	; current setting of the 3x8 register ???? */
+    73 00000066 ??                  <1> vid_palette	resb	1	; current color setting / palette **/
+    74                              <1> ; */
+    75                              <1> ; POST and ROM data */
+    76 00000067 ????????            <1> io_rom_addr	resd	1	; far word to ROM initialization routine */
+    77                              <1> %define io_rom_addr_low io_rom_addr
+    78                              <1> %define io_rom_addr_seg (io_rom_addr+2)
+    79 0000006B ??                  <1> interrupt_flag	resb	1	; indicates an interrupt occurred */
+    80                              <1> ; */
+    81                              <1> ; Timer data area  18.206602 hz  = ~54.925 ms  */
+    82 0000006C ????                <1> timer_count_low	resw	1	; low word of timer count */
+    83 0000006E ????                <1> timer_count_high	resw	1
+    84                              <1> %define timer_count timer_count_low
+    85                              <1> ; use timer_count as the double word timer counter */
+    86 00000070 ??                  <1> timer_overflow	resb	1	; timer has rolled over since last read */
+    87                              <1> ; */
+    88                              <1> ; System & Keboard data area */
+    89 00000071 ??                  <1> kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
+    90 00000072 ????                <1> reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
+    91                              <1> ; */
+    92                              <1> ; Fixed (Hard) disk data area */
+    93 00000074 ??                  <1> hd_status	resb	1	; status info for hard disk */
+    94                              <1> %define disk_status1 hd_status
+    95 00000075 ??                  <1> hd_number	resb	1	; number of hard disks (for int 13h, fn 8h) */
+    96 00000076 ??                  <1> control_byte	resb	1	; head control ???? */
+    97 00000077 ??                  <1> port_offset	resb	1	; obsolete, maybe ???? */
+    98                              <1> ; */
+    99                              <1> ; Timeout counters */
+   100 00000078 ????????            <1> printer_timeout	resb	4	; four bytes for each interaace */
+   101 0000007C ????????            <1> serial_timeout	resb	4	; four bytes for each interacce */
+   102                              <1> ; */
+   103                              <1> ; Keyboard additional data area -- buffer location within segment 40h */
+   104 00000080 ????                <1> buffer_start	resw	1	; offset of keyboard buffer start**/
+   105 00000082 ????                <1> buffer_end	resw	1		; offset of end of kbd buffer */
+   106                              <1> ; */
+   107                              <1> ; EGA/PGA? data work area (graphic mode?  probably available) */
+   108 00000084 ??                  <1> ega_rows	resb	1		; rows on the active screen (less 1)**/
+   109 00000085 ????                <1> ega_points	resw	1		; bytes per charateer	*/
+   110 00000087 ??                  <1> ega_info	resb	1		; mode options ????*//
+   111 00000088 ??                  <1> ega_info_3	resb	1		; switch settings*//
+   112 00000089 ????                <1> ega_rsvd	resb	2	; reserved for adapter mfgrs */
+   113                              <1> ; */
+   114                              <1> ; Disk / Diskette media data */
+   115 0000008B ??                  <1> fd_last_data_rate	resb	1	; last data rate selected */
+   116 0000008C ??                  <1> hd_status_reg	resb	1		; hard disk status register */
+   117 0000008D ??                  <1> hd_error_reg	resb	1		; hard disk error register */
+   118 0000008E ??                  <1> hd_int_flag	resb	1	; HD interrupt flag */
+   119 0000008F ??                  <1> hd_cntrl	resb	1		; HD/FD combo controller bit flag */
+   120 00000090 ????                <1> hd_media	resb	2	; media state */
+   121 00000092 ????                <1> hd_op_start	resb	2	; operation start state */
+   122 00000094 ????                <1> hd_track	resw	1		; HD present cylinder number */
+   123                              <1> ; */
+   124                              <1> ; Additional Keyboard flags */
+   125 00000096 ??                  <1> kbd_flag3	resb	1	; mode state & type flags */
+   126 00000097 ??                  <1> kbd_flag2	resb	1	; kbd LED flags */
+   127                              <1> ; */
+   128                              <1> ; Real Time Clock data area */
+   129 00000098 ????????            <1> rtc_user_flag_addr	resd	1	; far address of user's wait flag */
+   130 0000009C ????????            <1> rtc_user_wait_flag	resd	1	; user wait flag */
+   131 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
+   132                              <1> ; */
+   133                              <1> ; Miscellaneous */
+   134 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
+   135 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   136                              <1> ; */
+   137                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   138 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   139 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   140 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   141 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   142                              <1> ; this size is stored in CMOS on the PC/AT */
+   143 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   144 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   145                              <1> ; */
+   146                              <1> ; start of 31 bytes of NVRAM informaiion */
+   147 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   148                              <1> ; starts with 2 bytes of SIO0 params */
+   149 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   150 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   151 000000ED <res 11h>           <1> nvram_unused	resb	17
+   152 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   153                              <1> ; end of 31 bytes of NVRAM information */
+   154                              <1> ; */
+   155 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   156                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   157 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   158                              <1> ; */
+   159                              <1> ; Extentsion to BDA during BIOS startup */
+   160                              <1> ; */
+   161                              <1> endstruc
+   161          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+    32                                  %include "macro.inc"
+    33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    34                              <1> ;
+    35                              <1> ; some useful macros:
+    36                              <1> ;
+    37                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    38                              <1> %define NREPEAT 0
+    39                              <1> 
+    40                              <1> %if NREPEAT
+    41                              <1> 
+    42                              <1> %macro	rep	1
+    43                              <1> %%loop:	%1
+    44                              <1> 	dec	cx
+    45                              <1> 	jnz	%%loop
+    46                              <1> %endm
+    47                              <1> 
+    48                              <1> %macro	repne	1
+    49                              <1> %%loop:	%1
+    50                              <1> 	je	%%e
+    51                              <1> 	dec	cx
+    52                              <1> 	jnz	%%loop
+    53                              <1> 	cmp	cx,1
+    54                              <1> 	jmp	%%done
+    55                              <1> %%e:	dec	cx
+    56                              <1> 	cmp	cx,cx
+    57                              <1> %%done:
+    58                              <1> %endm
+    59                              <1> 
+    60                              <1> %macro	repe	1
+    61                              <1> %%loop:	%1
+    62                              <1> 	jne	%%ne
+    63                              <1> 	dec	cx
+    64                              <1> 	jnz	%%loop
+    65                              <1> 	jmp	%%done
+    66                              <1> %%ne:	dec	cx
+    67                              <1> 	jcxz	%%cxz
+    68                              <1> 	jmp	%%done
+    69                              <1> %%cxz:	cmp	cx,1
+    70                              <1> %%done:
+    71                              <1> %endm
+    72                              <1> 
+    73                              <1> %macro	REP	1
+    74                              <1> %%loop:	%1
+    75                              <1> 	dec	ecx
+    76                              <1> 	jnz	%%loop
+    77                              <1> %endm
+    78                              <1> 
+    79                              <1> %macro	REPNE	1
+    80                              <1> %%loop:	%1
+    81                              <1> 	je	%%e
+    82                              <1> 	dec	ecx
+    83                              <1> 	jnz	%%loop
+    84                              <1> 	cmp	cl,1
+    85                              <1> 	jmp	%%done
+    86                              <1> %%e:	dec	ecx
+    87                              <1> 	cmp	cl,cl
+    88                              <1> %%done:
+    89                              <1> %endm
+    90                              <1> 
+    91                              <1> %macro	REPE	1
+    92                              <1> %%loop:	%1
+    93                              <1> 	jne	%%ne
+    94                              <1> 	dec	ecx
+    95                              <1> 	jnz	%%loop
+    96                              <1> 	jmp	%%done
+    97                              <1> %%ne:	dec	ecx
+    98                              <1> 	jecxz	%%cxz
+    99                              <1> 	jmp	%%done
+   100                              <1> %%cxz:	cmp	cl,1
+   101                              <1> %%done:
+   102                              <1> %endm
+   103                              <1> 
+   104                              <1> %endif
+   105                              <1> 
+   106                              <1> 
+   107                              <1> ;
+   108                              <1> ; format of the BYTE initialization table:  address, byte
+   109                              <1> ;
+   110                              <1> %imacro  binit 2
+   111                              <1>         dw      %1
+   112                              <1>         db      %2
+   113                              <1> %endmacro
+   114                              <1> ; end with DW -1
+   115                              <1> 
+   116                              <1> ;
+   117                              <1> ; format of the WORD initialization table:  address, word
+   118                              <1> ;
+   119                              <1> %imacro  winit 2
+   120                              <1>         dw      %1
+   121                              <1>         dw      %2
+   122                              <1> %endmacro
+   123                              <1> ; end with DW -1
+   124                              <1> 
+   125                              <1> 
+   126                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   127                              <1> %imacro get_bda	1.nolist
+   128                              <1> 	push	0x0040
+   129                              <1> 	pop	%1
+   130                              <1> 	cnop
+   131                              <1> %endm
+   132                              <1> 
+   133                              <1> 
+   134                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   135                              <1> %imacro	get_loc0 1.nolist
+   136                              <1> 	push	0x0000
+   137                              <1> 	pop	%1
+   138                              <1> 	cnop
+   139                              <1> %endm
+   140                              <1> 
+   141                              <1> 
+   142                              <1> 
+   143                              <1> %imacro setloc  1.nolist
+   144                              <1>  times   (%1-($-$$)) db 0FFh
+   145                              <1> %endm
+   146                              <1> 
+   147                              <1> %imacro db_lo   1
+   148                              <1>  db (%1)&255
+   149                              <1> %endm
+   150                              <1> 
+   151                              <1> %imacro cnop    0.nolist
+   152                              <1> %ifdef SOFT_DEBUG
+   153                              <1> %if SOFT_DEBUG
+   154                              <1>         nop
+   155                              <1> %endif
+   156                              <1> %endif
+   157                              <1> %endm
+   158                              <1> 
+   159                              <1> %imacro popm 1-*.nolist
+   160                              <1> %rep %0
+   161                              <1> %ifidni %1,ALL
+   162                              <1>  popa
+   163                              <1> %elifidni %1,F
+   164                              <1>  popf
+   165                              <1> %else
+   166                              <1>  pop %1
+   167                              <1> %ifidni %1,DS
+   168                              <1>  cnop
+   169                              <1> %elifidni %1,ES
+   170                              <1>  cnop
+   171                              <1> %elifidni %1,FS
+   172                              <1>  cnop
+   173                              <1> %elifidni %1,GS
+   174                              <1>  cnop
+   175                              <1> %endif
+   176                              <1> %endif
+   177                              <1> %rotate 1
+   178                              <1> %endrep
+   179                              <1> %endm
+   180                              <1> 
+   181                              <1> %imacro pushm 1-*.nolist
+   182                              <1> %rep %0
+   183                              <1> %rotate -1
+   184                              <1> %ifidni %1,ALL
+   185                              <1>  pusha
+   186                              <1> %elifidni %1,F
+   187                              <1>  pushf
+   188                              <1> %else
+   189                              <1>  push %1
+   190                              <1> %endif
+   191                              <1> %endrep
+   192                              <1> %endm
+   193                              <1> 
+   194                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   195                              <1> %assign __size__ (%2-1)	| 0xFF
+   196                              <1> %if (__size__ <= 0xFFFF)
+   197                              <1> %assign __gran__ 0
+   198                              <1> %else
+   199                              <1> %assign __gran__ 0xC0			; G B 0 0
+   200                              <1> %endif
+   201                              <1> %assign __expand__ 0
+   202                              <1> %if %0==3
+   203                              <1> %if %3
+   204                              <1> %assign __expand__ 4
+   205                              <1> %endif
+   206                              <1> %endif
+   207                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   208                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   209                              <1> %endm
+   210                              <1> 
+   211                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   212                              <1> %assign __size__ (%2-1)	| 0xFF
+   213                              <1> %if (__size__ <= 0xFFFF)
+   214                              <1> %assign __gran__ 0
+   215                              <1> %else
+   216                              <1> %assign __gran__ 0xC0			; G D 0 0
+   217                              <1> %endif
+   218                              <1> %assign __conform__ 0
+   219                              <1> %if %0==3
+   220                              <1> %if %3
+   221                              <1> %assign __conform__ 4
+   222                              <1> %endif
+   223                              <1> %endif
+   224                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   225                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   226                              <1> %endm
+   227                              <1> 
+   228                              <1> ;/* End of macro.inc */
+    33                                  %include "timer.inc"
+    34                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    35                              <1> ; timer.inc -- constants for the timers
+    36                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    37                              <1> ;
+    38                              <1> ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+    39                              <1> ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+    40                              <1> ;
+    41                              <1> ; This program is free software: you can redistribute it and/or modify
+    42                              <1> ; it under the terms of the GNU General Public License as published by
+    43                              <1> ; the Free Software Foundation, either version 3 of the License, or
+    44                              <1> ; (at your option) any later version.
+    45                              <1> ;
+    46                              <1> ; This program is distributed in the hope that it will be useful,
+    47                              <1> ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    48                              <1> ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    49                              <1> ; GNU General Public License for more details.
+    50                              <1> ;
+    51                              <1> ; You should have received a copy of the GNU General Public License
+    52                              <1> ; along with this program in the file COPYING in the topmost source
+    53                              <1> ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    54                              <1> ;
+    55                              <1> ;
+    56                              <1> ; SBC-386 board revisions:
+    57                              <1> ;       SBC386-0   prototype / concept testing
+    58                              <1> ;	SBC-386EX 2.0	production / January 2018
+    59                              <1> ;
+    60                              <1> ; Assembly by NASM 2.08 is preferred
+    61                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    62                              <1> ;
+    63                              <1> ;include "i386EX.inc" -- must be included at a higher level
+    64                              <1> 
+    65                              <1> TIMER_STOP	equ	BIT6+BIT0 + ZBIT1 + ZBIT3 + ZBIT5 ; stop 0, 1, 2
+    66                              <1> TIMER_RUN	equ	TIMER_STOP + BIT1 + BIT3	; run counters 0, 1
+    67                              <1> 
+    68                              <1>         binit   TMRCFG, ZBIT7+TIMER_STOP ; bit6: s/w control of GATEn, bit7=0 enables all clocks
+   111 00000000 34F8                <2>  dw %1
+   112 00000002 41                  <2>  db %2
+    69                              <1> 		;Timers enabled, 1&2 use PSCLK, 0 uses TMRCLK0 (COMCLK/2)
+    70                              <1> CTR0 equ ZBIT7+ZBIT6	;select counter 0
+    71                              <1> CTR1 equ ZBIT7+ BIT6	;select counter 1
+    72                              <1> CTR2 equ  BIT7+ZBIT6	;select counter 2
+    73                              <1> CWR01 equ BIT5+BIT4	;Write Count low, then high
+    74                              <1> MODE0 equ ZBIT3+ZBIT2+ZBIT1
+    75                              <1> MODE1 equ ZBIT3+ZBIT2+ BIT1
+    76                              <1> MODE2 equ ZBIT3+ BIT2+ZBIT1
+    77                              <1> MODE3 equ ZBIT3+ BIT2+ BIT1
+    78                              <1> MODE4 equ  BIT3+ZBIT2+ZBIT1
+    79                              <1> MODE5 equ  BIT3+ZBIT2+ BIT1
+    80                              <1> ; counter 0 runs at 1.8432mhz / 2  =  921600  (just under 1mhz)
+    81                              <1> ; @20hz, the divisor is 46080 yielding a 50ms time slot
+    82                              <1> COMCLK	equ	1843200		; standard 1.8432mhz oscillator
+    83                              <1> BAUD	equ	9600		; default SIO0 bit rate
+    84                              <1> DIVISOR	equ	COMCLK/16/BAUD	; SIO0 divisor to achieve BAUD rate
+    85                              <1> CLKIN0	equ	COMCLK/2	; Timer0 input count rate
+    86                              <1> MS50	equ	CLKIN0 / 20	; 50ms clock
+    87                              <1> MS50HI	equ	MS50/256
+    88                              <1> MS50LO	equ	MS50 & 0xFF
+    89                              <1> MS18	equ	50619		; 18.206602hz clock (54.92513ms)
+    90                              <1> 				; 0x1800BA = 1573050 ticks/day
+    91                              <1> MS18b	equ	50625		; 18.204444hz clock (54.93164ms)
+    92                              <1> 				; 0x180000 = 1572864 ticks/day
+    93                              <1> MS18HI	equ	MS18/256
+    94                              <1> MS18LO	equ	MS18 & 0xFF
+    34                                  
+    35                                  
+    36                                  %ifndef DEBUG
+    37                                  %define	DEBUG 1
+    38                                  %endif
+    39                                  
+    40                                  	global	int_1Ah
+    41                                  
+    42                                  segment	_TEXT
+    43                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    44                                  ;
+    45                                  ; INT 1A
+    46                                  ;
+    47                                  ; Enter with:
+    48                                  ;       AH      function code
+    49                                  ;
+    50                                  ; Exit with:
+    51                                  ;	varies
+    52                                  ;
+    53                                  ;       Carry clear
+    54                                  ;
+    55                                  ; Error:
+    56                                  ;	AH	error code
+    57                                  ;       Carry set
+    58                                  ;
+    59                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    60                                  int_1Ah:
+    61 00000000 FB                      	sti			;turn on interrupts
+    62 00000001 56                      	pushm	si
+    63                                  
+    64 00000002 89C6                    	mov	si,ax		; can't use BX for certain calls
+    65 00000004 C1EE08                  	shr	si,8		; zero fill high bits
+    66 00000007 01F6                    	add	si,si		; address words
+    67                                  
+    68 00000009 83FE10                  	cmp	si,len_dispatch0  ; length is in words
+    69 0000000C 720F                    	jb	low_dispatch2
+    70                                  
+    71 0000000E 83EE40                  	sub	si,0x20 * 2	; calls based at 20h
+    72 00000011 83FE0A                  	cmp	si,len_dispatch20  ; length is in words
+    73 00000014 720E                    	jb	exec20_dispatch
+    74                                  
+    75                                  fn_not_defined:
+    76 00000016 B486                    	mov	ah,0x86		;function not defined
+    77 00000018 F9                      	stc
+    78                                  exit:	
+    79 00000019 5E                      	popm	si
+    80 0000001A CA0200                  	retf	2		;return from call
+    81                                  
+    82                                  low_dispatch2:
+    83 0000001D 2EFF94[2C00]               cs	call	[dispatch0 + si]
+    84 00000022 EBF5                    	jmp	exit
+    85                                  
+    86                                  exec20_dispatch:
+    87 00000024 2EFF94[3C00]               cs	call	[dispatch20 + si]
+    88 00000029 EBEE                    	jmp	exit
+    89                                  
+    90                                  
+    91                                  
+    92 0000002B 90                      	align	2
+    93                                  dispatch0:
+    94 0000002C [6200]                  	dw	get_tick_count
+    95 0000002E [E000]                  	dw	set_tick_count
+    96 00000030 [F600]                  	dw	get_time
+    97 00000032 [2801]                  	dw	set_time
+    98 00000034 [5901]                  	dw	get_date
+    99 00000036 [8F01]                  	dw	set_date
+   100 00000038 [4600]                  	dw	set_alarm
+   101 0000003A [4600]                  	dw	reset_alarm
+   102                                  len_dispatch0	equ	$-dispatch0
+   103                                  
+   104                                  dispatch20:
+   105 0000003C [D201]                  	dw	ds_read		; 20h
+   106 0000003E [3C02]                  	dw	ds_write	; 21h
+   107 00000040 [6C02]                  	dw	wr_protect	; 22h
+   108 00000042 [8102]                  	dw	ds_set_charge	; 23h
+   109 00000044 [9102]                  	dw	ds_get_charge	; 24h
+   110                                  len_dispatch20	equ	$-dispatch20
+   111                                  
+   112                                  set_alarm:
+   113                                  reset_alarm:
+   114 00000046 EBCE                    	jmp	fn_not_defined
+   115                                  ;
+   116                                  
+   117                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   118                                  ; diagnostic aid
+   119                                  ;	AL = read command
+   120                                  ; 	AX has byte read in AL
+   121                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   122                                  	global	ds_read_reg_
+   123                                  ds_read_reg_:
+   124 00000048 52                      	pushm	dx
+   125 00000049 88C4                    	mov	ah,al			; move command to position
+   126 0000004B 80CC81                  	or	ah,1000_0001B
+   127 0000004E E85902                  	call	ds_reset_on
+   128 00000051 E86702                  	call	ds_reset_off
+   129 00000054 E87102                  	call	ds_outb
+   130 00000057 E88402                  	call	ds_inb
+   131 0000005A E84D02                  	call	ds_reset_on
+   132 0000005D C1E808                  	shr	ax,8			; return byte value
+   133 00000060 5A                      	popm	dx
+   134 00000061 C3                      	ret
+   135                                  
+   136                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   137                                  ; INT 1A
+   138                                  ; function 00	get_tick_count
+   139                                  ;
+   140                                  ;    Enter with:
+   141                                  ;	AH	00h
+   142                                  ;
+   143                                  ;    Exit with:
+   144                                  ;	CX:DX	tick count
+   145                                  ;	AL	rolled over flag  0=no	1=day rollover
+   146                                  ;
+   147                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   148                                  	align	2
+   149                                  get_tick_count:
+   150 00000062 1E                      	push	ds		;save
+   151 00000063 6A401F                  	get_bda	DS
+   152 00000066 FA                      	cli		;disable interrupts
+   153 00000067 8B166C00                	mov	dx,[timer_count_low]
+   154 0000006B 8B0E6E00                	mov	cx,[timer_count_high]
+   155 0000006F 30C0                    	xor	al,al
+   156 00000071 86067000                	xchg	al,[timer_overflow]
+   157 00000075 FB                      	sti		;restore interrupts
+   158 00000076 F8                      	clc
+   159 00000077 1F                      	pop	ds
+   160 00000078 C3                      	ret
+   161                                  
+   162                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   163                                  ; Timer 0 interrupt handler
+   164                                  ;
+   165                                  ;	Count down the tick timer
+   166                                  ;	Reset if it reaches zero
+   167                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   168                                  	global	int_irq0
+   169 00000079 90                      	align	2
+   170                                  int_irq0:
+   171 0000007A FC                      	cld			; insurance
+   172 0000007B CD1C                    	int	0x1C
+   173                                  
+   174 0000007D 1E5153                  	pushm	bx,cx,ds
+   175 00000080 6A401F                  	get_bda	DS
+   176 00000083 B90800                  	mov	cx,8		; will be used later
+   177                                  
+   178 00000086 66FF066C00              	inc	dword [timer_count]
+   179 0000008B 66813E6C00BA001800      	cmp	dword [timer_count],tick
+   180 00000094 720E                    	jb	.2
+   181                                  ; tick went to zero (or negative)
+   182 00000096 C606700001              	mov	byte [timer_overflow],1
+   183 0000009B 66C7066C0000000000      	mov	dword [timer_count],0
+   184                                  .2:
+   185                                  ; handle the FDC motor timeout
+   186 000000A4 382E4000                	cmp	[motor_count],ch	; CH==0
+   187 000000A8 7409                    	je	.3
+   188 000000AA FE0E4000                	dec	byte [motor_count]
+   189 000000AE 7503                    	jnz	.3
+   190                                  	extern	FDC_stop_motor	; currently in stub.asm
+   191 000000B0 E8(0000)                	call	FDC_stop_motor
+   192                                  .3:
+   193                                  ; handle the printer & serial line timeouts
+   194 000000B3 BB7800                  	mov	bx,printer_timeout	; 4 printer, 4 serial timeouts
+   195 000000B6 382F                    .4:	cmp	byte [bx],ch
+   196 000000B8 7402                    	je	.5
+   197 000000BA FE0F                    	dec	byte [bx]
+   198 000000BC 43                      .5:	inc	bx
+   199 000000BD E2F7                    	loop	.4
+   200                                  
+   201                                  ; restore before clearing the interrupt
+   202 000000BF 5B591F                  	popm	bx,cx,ds
+   203                                  
+   204                                  	extern	clear_irq0	; currently in stub.asm
+   205 000000C2 E9(0000)                	jmp	clear_irq0
+   206                                  
+   207                                  
+   208                                  ; Timer 0 constants
+   209                                  ;
+   210                                  divide	equ	MS18 		; 50619
+   211                                  tick	equ	CLKIN0*86400/divide
+   212                                  ttime	equ	(divide*1000000)/(CLKIN0)
+   213                                  
+   214                                  
+   215                                  t0tab:
+   216                                  	binit	TMRCON, CTR0 + CWR01 + MODE2 + ZBIT0	;binary
+   111 000000C5 43F0                <1>  dw %1
+   112 000000C7 34                  <1>  db %2
+   217                                  	binit	TMR0, MS18LO	;low byte
+   111 000000C8 40F0                <1>  dw %1
+   112 000000CA BB                  <1>  db %2
+   218                                  	binit	TMR0, MS18HI	;high byte = 46080
+   111 000000CB 40F0                <1>  dw %1
+   112 000000CD C5                  <1>  db %2
+   219                                  	binit	TMRCFG, TIMER_STOP + BIT1		; start timer 0
+   111 000000CE 34F8                <1>  dw %1
+   112 000000D0 43                  <1>  db %2
+   220 000000D1 FFFF                            dw      -1
+   221                                  
+   222                                  ; Timer 0 startup
+   223                                  ;
+   224                                  	global	start_timer0_
+   225                                  	extern	initb			; in start.asm
+   226                                  start_timer0_:
+   227 000000D3 561E                    	pushm	ds,si
+   228 000000D5 0E                      	push	cs
+   229 000000D6 1F                      	pop	ds
+   230 000000D7 BE[C500]                	mov	si,t0tab
+   231 000000DA E8(0000)                	call	initb
+   232 000000DD 1F5E                    	popm	ds,si
+   233 000000DF C3                      	ret
+   234                                  
+   235                                  
+   236                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   237                                  ; INT 1A
+   238                                  ; function 01	set_tick_count
+   239                                  ;
+   240                                  ;    Enter with:
+   241                                  ;	AH	01h
+   242                                  ;	CX:DX	tick count
+   243                                  ;
+   244                                  ;    Exit with:
+   245                                  ;	nothing
+   246                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   247                                  set_tick_count:
+   248 000000E0 1E                      	push	ds
+   249 000000E1 6A401F                  	get_bda	DS	;address BDA
+   250 000000E4 FA                      	cli		;disable interrupts
+   251 000000E5 89166C00                	mov	[timer_count_low],dx
+   252 000000E9 890E6E00                	mov	[timer_count_high],cx
+   253 000000ED C606700000              	mov	byte [timer_overflow],0	; 'byte' qualifier needed
+   254 000000F2 FB                      	sti		;interrupts back on
+   255 000000F3 F8                      	clc
+   256 000000F4 1F                      	pop	ds
+   257 000000F5 C3                      	ret
+   258                                  
+   259                                  
+   260                                  
+   261                                  
+   262                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   263                                  ;
+   264                                  ; INT 1A
+   265                                  ; function 02   Get Time
+   266                                  ;
+   267                                  ; Enter with:
+   268                                  ;       AH      0x02
+   269                                  ;
+   270                                  ; Exit with:
+   271                                  ;	CH	hours in BCD
+   272                                  ;	CL	minutes in BCD
+   273                                  ;	DH	seconds in BCD
+   274                                  ;	DL	daylight savings time flag
+   275                                  ;		  00=not DST, 01==DST
+   276                                  ;	
+   277                                  ;       Carry clear	if clock is running
+   278                                  ;
+   279                                  ; Error:
+   280                                  ;       Carry set	if clock is stopped
+   281                                  ;
+   282                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   283                                  	global	get_time
+   284                                  get_time:
+   285 000000F6 50                      	pushm	ax
+   286 000000F7 31DB                    	xor	bx,bx		; saved at a higher level
+   287 000000F9 B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
+   288 000000FC 88C2                    	mov	dl,al		; DST off
+   289 000000FE E80D01                  	call	byte_read
+   290 00000101 88E6                    	mov	dh,ah		; save seconds
+   291                                  
+   292 00000103 52                      .1:	push	dx
+   293 00000104 B80181                  	mov	ax, 1000_0001B << 8 | 1		; minutes
+   294 00000107 E80401                  	call	byte_read
+   295 0000010A 88E1                    	mov	cl,ah		; save minutes
+   296 0000010C B80281                  	mov	ax, 1000_0001B << 8 | 2		; hours
+   297 0000010F E8FC00                  	call	byte_read
+   298 00000112 88E5                    	mov	ch,ah		; save hours
+   299 00000114 B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
+   300 00000117 E8F400                  	call	byte_read
+   301 0000011A 5A                      	pop	dx
+   302 0000011B 86F4                    	xchg	dh,ah
+   303 0000011D 38F4                    	cmp	ah,dh
+   304 0000011F 75E2                    	jne	.1		; loop back
+   305                                  
+   306 00000121 80E67F                  	and	dh,0x7F		; mask clock halt bit
+   307 00000124 00E4                    	add	ah,ah		; set carry if halted
+   308                                  
+   309 00000126 58                      	popm	ax
+   310 00000127 C3                      	ret
+   311                                  
+   312                                  
+   313                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   314                                  ;
+   315                                  ; INT 1A
+   316                                  ; function 03   Set Time
+   317                                  ;
+   318                                  ; Enter with:
+   319                                  ;       AH      0x03
+   320                                  ;
+   321                                  ;	CH	hours in BCD
+   322                                  ;	CL	minutes in BCD
+   323                                  ;	DH	seconds in BCD
+   324                                  ;	DL	daylight savings time flag (ignored)
+   325                                  ;		  00=not DST, 01==DST
+   326                                  ;	
+   327                                  ; Exit with:
+   328                                  ;       Carry clear	if clock is running
+   329                                  ;
+   330                                  ; Error:
+   331                                  ;       Carry set	if clock is stopped
+   332                                  ;
+   333                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   334                                  	global	set_time
+   335                                  set_time:
+   336 00000128 5250                    	pushm	ax,dx
+   337                                  
+   338 0000012A 5251                    	pushm	cx,dx		;protect the parameters
+   339                                  
+   340 0000012C B000                    	mov	al,0		;disable write protect
+   341 0000012E E83B01                  	call	wr_protect	;**
+   342                                  %if 0
+   343                                  	mov	ax, 1000_0000B << 8 | 0		;seconds
+   344                                  	mov	cl,80h			; stop the clock
+   345                                  	call	byte_write
+   346                                  %endif
+   347 00000131 5B                      	popm	bx		; was CX
+   348                                  
+   349 00000132 B80280                  	mov	ax, 1000_0000B << 8 | 2		;hours
+   350 00000135 88F9                    	mov	cl,bh		; **
+   351 00000137 80E17F                  	and	cl,0x7F		; 24-hr format
+   352 0000013A E8E700                  	call	byte_write
+   353                                  
+   354 0000013D B80180                  	mov	ax, 1000_0000B << 8 | 1		;minutes
+   355 00000140 88D9                    	mov	cl,bl		; **
+   356 00000142 E8DF00                  	call	byte_write
+   357                                  
+   358 00000145 5B                      	popm	bx		; was DX
+   359                                  
+   360 00000146 B80080                  	mov	ax, 1000_0000B << 8 | 0		;seconds
+   361 00000149 88F9                    	mov	cl,bh
+   362 0000014B 80E17F                  	and	cl,0x7F			; enable the clock
+   363 0000014E E8D300                  	call	byte_write
+   364                                  
+   365 00000151 B080                    	mov	al,80h		;set Write Protect
+   366 00000153 E81601                  	call	wr_protect
+   367                                  
+   368 00000156 E98B00                  	jmp	ds_full_exit
+   369                                  
+   370                                  
+   371                                  
+   372                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   373                                  ;
+   374                                  ; INT 1A
+   375                                  ; function 04   Get Date
+   376                                  ;
+   377                                  ; Enter with:
+   378                                  ;       AH      0x04
+   379                                  ;
+   380                                  ; Exit with:
+   381                                  ;	CH	century in BCD
+   382                                  ;	CL	year in BCD
+   383                                  ;	DH	month in BCD
+   384                                  ;	DL	day in BCD
+   385                                  ;	
+   386                                  ;       Carry clear	if clock is running
+   387                                  ;
+   388                                  ; Error:
+   389                                  ;       Carry set	if clock is stopped
+   390                                  ;
+   391                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   392                                  	global	get_date
+   393                                  get_date:
+   394 00000159 B80681                  	mov	ax,1000_0001B << 8 | 6	;year
+   395 0000015C E8AF00                  	call	byte_read
+   396 0000015F 88E1                    	mov	cl,ah		; return in CL
+   397                                  
+   398 00000161 B80481                  	mov	ax,1000_0001B << 8 | 4	;month
+   399 00000164 E8A700                  	call	byte_read
+   400 00000167 88E7                    	mov	bh,ah		; save in BH
+   401                                  
+   402 00000169 B80381                  	mov	ax,1000_0001B << 8 | 3	;day of month (DATE)
+   403 0000016C E89F00                  	call	byte_read
+   404 0000016F 88E3                    	mov	bl,ah
+   405                                  	
+   406 00000171 B80581                  	mov	ax,1000_0001B << 8 | 5	;day of week (DAY)
+   407 00000174 E89700                  	call	byte_read
+   408 00000177 88E5                    	mov	ch,ah		; save in Century byte
+   409                                  
+   410 00000179 B80081                  	mov	ax,1000_0001B << 8 | 0	;clock halt flag
+   411 0000017C E88F00                  	call	byte_read
+   412                                  ; clock halt flag is in AH
+   413                                  
+   414 0000017F 89DA                    	mov	dx,bx		;
+   415 00000181 88E8                    	mov	al,ch		; Day-of-Week flag to AL
+   416 00000183 B519                    	mov	ch,0x19		; 20th century in CH
+   417 00000185 80F970                  	cmp	cl,0x70		; year less than '70 sets carry
+   418                                  %if 0
+   419                                  	adc	al,0		; add in the carry if CL<70h
+   420                                  	daa			; correct (DAA doesn't work???)
+   421                                  %else
+   422 00000188 7302                    	jnb	.8
+   423 0000018A B520                    	mov	ch,0x20		; carry is set
+   424                                  .8:
+   425                                  %endif
+   426 0000018C D0E4                    	shl	ah,1		; clock halt to carry
+   427 0000018E C3                      	ret
+   428                                  
+   429                                  
+   430                                  
+   431                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   432                                  ;
+   433                                  ; INT 1A
+   434                                  ; function 05   Set Date
+   435                                  ;
+   436                                  ; Enter with:
+   437                                  ;       AH      0x05
+   438                                  ;
+   439                                  ;	CH	century in BCD	(used for Day Of Week calculation)
+   440                                  ;	CL	year in BCD
+   441                                  ;	DH	month in BCD
+   442                                  ;	DL	day in BCD
+   443                                  ;	
+   444                                  ; Exit with:
+   445                                  ;	Nothing
+   446                                  ;
+   447                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   448                                  	global	set_date
+   449                                  set_date:
+   450 0000018F 5250                    	pushm	ax,dx		;usual 2 register save
+   451 00000191 80FD20                  	cmp	ch,0x20		; century must be 21st
+   452 00000194 7405                    	je	.1
+   453 00000196 80FD19                  	cmp 	ch,0x19		; century may be 20th
+   454 00000199 754D                    	jne	ds_error
+   455                                  .1:
+   456 0000019B 5152                    	pushm	dx,cx
+   457                                  
+   458 0000019D E86401                  	call	day_of_week_
+   459                                  
+   460 000001A0 5B59                    	popm	bx,cx		; was DX,CX
+   461 000001A2 51                      	pushm	cx		; save CX
+   462                                  
+   463 000001A3 88C5                    	mov	ch,al		; DOW to CH
+   464                                  
+   465 000001A5 B000                    	mov	al,0		;disable write protect
+   466 000001A7 E8C200                  	call	wr_protect
+   467                                  
+   468 000001AA B80680                  	mov	ax,1000_0000B << 8 | 6	;year
+   469 000001AD E87400                  	call	byte_write	; year is in CL already
+   470                                  
+   471 000001B0 B80480                  	mov	ax,1000_0000B << 8 | 4	;month
+   472 000001B3 88F9                    	mov	cl,bh			; was in DH
+   473 000001B5 E86C00                  	call	byte_write
+   474                                  
+   475 000001B8 B80380                  	mov	ax,1000_0000B << 8 | 3	;day (DATE)
+   476 000001BB 88D9                    	mov	cl,bl			; was in DL
+   477 000001BD E86400                  	call	byte_write
+   478                                  
+   479 000001C0 B80580                  	mov	ax,1000_0000B << 8 | 5	;day of week (DOW)
+   480 000001C3 88E9                    	mov	cl,ch
+   481 000001C5 FEC1                    	inc	cl		; DS1302 is 1..7, not 0..6
+   482 000001C7 E85A00                  	call	byte_write
+   483                                  
+   484 000001CA B080                    	mov	al,80h		;set Write Protect
+   485 000001CC E89D00                  	call	wr_protect
+   486                                  
+   487 000001CF 59                      	popm	cx
+   488 000001D0 EB12                    	jmp	ds_full_exit
+   489                                  
+   490                                  
+   491                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   492                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   493                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   494                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   495                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   496                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   497                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   498                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   499                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   500                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   501                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   502                                  
+   503                                  
+   504                                  
+   505                                  
+   506                                  
+   507                                  
+   508                                  
+   509                                  
+   510                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   511                                  ;
+   512                                  ; INT 1A
+   513                                  ; function 20   Get NVRAM byte
+   514                                  ;
+   515                                  ; Enter with:
+   516                                  ;       AH      0x20
+   517                                  ;       AL      byte number ( 0 <= AL <= 30) 
+   518                                  ;   (single byte read)
+   519                                  ;
+   520                                  ;       AH      0x20
+   521                                  ;       AL      31
+   522                                  ;       ES:BX   pointer to 31 byte buffer
+   523                                  ;   (burst read)
+   524                                  ;
+   525                                  ; Exit with:
+   526                                  ;       AL      byte read (single byte read)
+   527                                  ;       Carry clear
+   528                                  ;
+   529                                  ;       AL      byte NVRAM[30] (burst read)
+   530                                  ;       ES:BX buffer filled with bytes 0..30
+   531                                  ;
+   532                                  ;       Carry clear
+   533                                  ;
+   534                                  ; Error:
+   535                                  ;       Carry set
+   536                                  ;
+   537                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   538                                  	global	ds_read
+   539                                  ds_read:
+   540 000001D2 5250                            pushm   ax,dx
+   541                                  
+   542 000001D4 3C1F                    	cmp	al,31
+   543 000001D6 7314                    	jae	ds_burstr	; burst or error
+   544                                  	
+   545 000001D8 B4C1                    	mov	ah,1100_0001B	; NVRAM read
+   546 000001DA E83100                   	call	byte_read
+   547                                  
+   548                                  ds_read_exit:
+   549 000001DD 88E0                    	mov	al,ah		;return in AL
+   550 000001DF 5A                      	pop	dx		;get old ax
+   551 000001E0 88F4                    	mov	ah,dh		;restore AH
+   552 000001E2 EB01                    	jmp	ds_good_exit
+   553                                  
+   554                                  ds_full_exit:
+   555 000001E4 58                      	popm	ax
+   556                                  ds_good_exit:
+   557 000001E5 F8                      	clc 			;signal good return
+   558 000001E6 5A                      	popm	dx
+   559 000001E7 C3                      	ret	
+   560                                  
+   561                                  ds_error:
+   562 000001E8 585A                    	popm	ax,dx
+   563 000001EA F9                      	stc
+   564 000001EB C3                      	ret
+   565                                  
+   566                                  
+   567                                  
+   568                                  
+   569                                  ;
+   570                                  ; handle burst read
+   571                                  ds_burstr:
+   572 000001EC 75FA                            jne	ds_error	;must be 31 exactly, else error
+   573                                  
+   574 000001EE 5153                    	pushm	bx,cx		;extra save
+   575                                  
+   576 000001F0 E8B700                  	call	ds_reset_on	;reset before command byte
+   577 000001F3 E8C500                  	call	ds_reset_off	;set for read
+   578                                  
+   579                                  
+   580 000001F6 B4FF                    	mov	ah,1111_1111B	;burst read command
+   581 000001F8 E8CD00                  	call	ds_outb		;output the command
+   582                                  
+   583 000001FB B91F00                  	mov	cx,31		;
+   584                                  ds_read2:
+   585 000001FE E8DD00                  	call	ds_inb		;retrieve a byte in AH
+   586 00000201 268827                    es	mov	byte [bx],ah	;save in the array
+   587 00000204 43                        	inc	bx
+   588 00000205 E2F7                    	loop	ds_read2	;and loop back
+   589                                  
+   590 00000207 E8A000                  	call	ds_reset_on	;terminate read
+   591                                  
+   592 0000020A 5B59                    	popm	bx,cx		;and restore
+   593 0000020C EBCF                            jmp	ds_read_exit	;return AH
+   594                                   
+   595                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   596                                  ;
+   597                                  ; byte read into AH
+   598                                  ;	AH = command bits
+   599                                  ;	AL = register number
+   600                                  ; byte read direct
+   601                                  ;	AH = command bits + (reg<<1)
+   602                                  ;
+   603                                  ; Exit with:
+   604                                  ;	AH is the byte read in
+   605                                  ;
+   606                                  ;  Uses AX, DX
+   607                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   608                                  byte_read:
+   609                                  ; single byte read
+   610 0000020E D0E0                    	shl	al,1		; shift by one
+   611 00000210 08E0                            or      al,ah		; Clock or NVRAM read
+   612 00000212 88C4                    	mov	ah,al		; command byte to AH
+   613                                  byte_read_direct:
+   614 00000214 E89300                  	call	ds_reset_on	;start of command, set AL & DX
+   615 00000217 E8A100                  	call	ds_reset_off	;remove the Reset
+   616                                  
+   617                                  ; output the command
+   618 0000021A E8AB00                          call    ds_outb
+   619                                  
+   620 0000021D E8BE00                  	call	ds_inb		;input byte to AH
+   621                                  
+   622 00000220 E88700                  	call	ds_reset_on	;terminate command
+   623                                  
+   624 00000223 C3                      	ret
+   625                                  
+   626                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   627                                  ; byte write
+   628                                  ;	AH = command bits
+   629                                  ;	AL = register number
+   630                                  ;	CL = byte value to write
+   631                                  ;
+   632                                  ; byte_write_direct
+   633                                  ;	AH = command, register<<1 included
+   634                                  ;	CL = byte value to write
+   635                                  ;
+   636                                  ;  Uses AX, DX
+   637                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   638                                  byte_write:
+   639                                  ; single byte write
+   640 00000224 D0E0                    	shl	al,1		; prepare command
+   641 00000226 08E0                            or      al,ah		; clock or NVRAM write
+   642 00000228 88C4                    	mov	ah,al		; command byte to AH
+   643                                  byte_write_direct:
+   644 0000022A E87D00                  	call	ds_reset_on	;start of command, set AL & DX
+   645 0000022D E88B00                  	call	ds_reset_off	;prepare for read
+   646                                  
+   647                                  ; output the command, will turn Reset off
+   648 00000230 E89500                          call    ds_outb
+   649                                  
+   650 00000233 88CC                            mov     ah,cl		;single byte to write
+   651 00000235 E89000                          call    ds_outb
+   652                                  
+   653 00000238 E86F00                  	call	ds_reset_on	;terminate the write
+   654 0000023B C3                      	ret
+   655                                  
+   656                                  
+   657                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   658                                  ;
+   659                                  ; INT 1A
+   660                                  ; function 21   Set NVRAM byte
+   661                                  ;
+   662                                  ; Enter with:
+   663                                  ;       AH      0x21
+   664                                  ;       AL      byte number ( 0 <= AL <= 30) 
+   665                                  ;   (single byte write)
+   666                                  ;       CL      byte value to write
+   667                                  ;
+   668                                  ;       AH      0x21
+   669                                  ;       AL      31
+   670                                  ;       ES:BX   pointer to 31 byte buffer
+   671                                  ;   (burst write)
+   672                                  ;
+   673                                  ; Exit with:
+   674                                  ;       Carry clear
+   675                                  ;
+   676                                  ; Error:
+   677                                  ;       Carry set
+   678                                  ;
+   679                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   680                                  	global	ds_write
+   681                                  ds_write:
+   682 0000023C 5250                            pushm   ax,dx
+   683                                  
+   684 0000023E 3C1F                    	cmp	al,31
+   685 00000240 7307                    	jae	ds_burstw	; burst or error
+   686                                  
+   687                                  ; single byte write
+   688                                  %if 1
+   689 00000242 B4C0                    	mov	ah,1100_0000B   ; RAM/WRITE
+   690 00000244 E8DDFF                  	call	byte_write
+   691                                  %else
+   692                                  	shl	al,1		; prepare command
+   693                                          or      al,1100_0000B   ; RAM/WRITE
+   694                                  	mov	ah,al		; command byte to AH
+   695                                  
+   696                                  	call	ds_reset_on	;start of command, set AL & DX
+   697                                  	call	ds_reset_off	;prepare for read
+   698                                  
+   699                                  ; output the command, will turn Reset off
+   700                                          call    ds_outb
+   701                                  
+   702                                          mov     ah,cl		;single byte to write
+   703                                          call    ds_outb
+   704                                  
+   705                                  	call	ds_reset_on	;terminate the write
+   706                                  %endif
+   707 00000247 EB9B                    	jmp	ds_full_exit
+   708                                  	
+   709                                  	
+   710                                  ; burst write
+   711                                  ds_burstw:
+   712 00000249 759D                            jne	ds_error	;must be 31 exactly, else error
+   713                                  
+   714 0000024B 5153                    	pushm	bx,cx		;extra save
+   715                                  
+   716 0000024D E85A00                  	call	ds_reset_on	;reset before command byte
+   717 00000250 E86800                  	call	ds_reset_off	;prepare for burst write
+   718                                  
+   719 00000253 B4FE                    	mov	ah,1111_1110B	;burst write command
+   720 00000255 E87000                  	call	ds_outb		;output the command
+   721                                  
+   722 00000258 B91F00                  	mov	cx,31		;
+   723                                  ds_write2:
+   724 0000025B 268A27                     es	mov	ah,byte [bx]	;get byte to write
+   725 0000025E E86700                     	call	ds_outb
+   726 00000261 43                      	inc	bx		;increment
+   727 00000262 E2F7                    	loop	ds_write2
+   728                                  
+   729 00000264 E84300                  	call	ds_reset_on	;terminate the write
+   730                                  
+   731 00000267 5B59                    	popm	bx,cx
+   732 00000269 E978FF                  	jmp	ds_full_exit	;restore & return
+   733                                  
+   734                                  
+   735                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   736                                  ;
+   737                                  ; INT 1A
+   738                                  ; function 22   Enable/Disable write protect
+   739                                  ;
+   740                                  ; Enter with:
+   741                                  ;       AH      0x22
+   742                                  ;       AL      0x80 to set write protect
+   743                                  ;		0x00 to disable write protect
+   744                                  ;
+   745                                  ; Exit with:
+   746                                  ;       Carry clear
+   747                                  ;
+   748                                  ; Error:
+   749                                  ;       Carry set
+   750                                  ;
+   751                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   752                                  wr_protect:
+   753 0000026C 5250                    	pushm	ax,dx
+   754 0000026E A87F                    	test	al,0111_1111B	; only 00,80h allowed
+   755 00000270 0F8574FF                	jnz	ds_error
+   756                                  
+   757 00000274 51                      	pushm	cx
+   758 00000275 88C1                    	mov	cl,al		; option to write
+   759 00000277 B80780                  	mov	ax, 1000_0000B << 8 | 7	; clock write, reg 7
+   760 0000027A E8A7FF                  	call	byte_write
+   761 0000027D 59                      	popm	cx
+   762                                  
+   763 0000027E E963FF                  	jmp	ds_full_exit
+   764                                  
+   765                                  
+   766                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   767                                  ;
+   768                                  ; INT 1A
+   769                                  ; function 23   Set charging parameters
+   770                                  ;
+   771                                  ; Enter with:
+   772                                  ;       AH      0x23
+   773                                  ;       AL      charge parameter byte
+   774                                  ;
+   775                                  ; Exit with:
+   776                                  ;       Carry clear
+   777                                  ;
+   778                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   779                                  ds_set_charge:
+   780 00000281 5250                    	pushm	ax,dx
+   781 00000283 51                      	pushm	cx
+   782                                  
+   783 00000284 B480                    	mov	ah,1000_0000B	; clock write
+   784 00000286 88C1                    	mov	cl,al		; byte to write
+   785 00000288 B008                    	mov	al,8
+   786 0000028A E897FF                  	call	byte_write
+   787 0000028D 59                      	popm	cx
+   788                                  
+   789 0000028E E953FF                  	jmp	ds_full_exit
+   790                                  
+   791                                  
+   792                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   793                                  ;
+   794                                  ; INT 1A
+   795                                  ; function 24   Get charging parameters
+   796                                  ;
+   797                                  ; Enter with:
+   798                                  ;       AH      0x24
+   799                                  ;
+   800                                  ; Exit with:
+   801                                  ;       AL      charge parameter byte
+   802                                  ;       Carry clear
+   803                                  ;
+   804                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   805                                  	global	ds_get_charge
+   806                                  ds_get_charge:
+   807 00000291 5250                    	pushm	ax,dx
+   808                                  
+   809 00000293 B80881                  	mov	ax,1000_0001B << 8  | 8	; clock read
+   810 00000296 E875FF                  	call	byte_read
+   811 00000299 88E2                    	mov	dl,ah		; save in DL
+   812 0000029B 58                      	popm	ax
+   813 0000029C 88D0                    	mov	al,dl		; return in AL
+   814                                  
+   815 0000029E E944FF                  	jmp	ds_good_exit
+   816                                  
+   817                                  
+   818                                  ;**********
+   819                                  ; N.B. These will move to P1 from P3 on the final board
+   820                                  ; Jan 2018 -- updated to P1 for rev 2.0 board
+   821                                  ;**********
+   822                                  DSLTC   equ     P1LTC           ; DS1302 latch
+   823                                  DSPIN   equ     P1PIN           ;   pin value
+   824                                  
+   825                                  DSDAT   equ     BIT0            ; Data must be bit 0 & idles high
+   826                                  DSCLK   equ     BIT2            ; Clock idles high
+   827                                  DSRST   equ     BIT3            ; Reset idles low (asserted)
+   828                                  
+   829                                  DSMSK   equ     DSRST+DSCLK+DSDAT
+   830                                  
+   831                                  
+   832                                  %macro  us_delay 0
+   833                                  	jmp	$+2
+   834                                  	jmp	$+2
+   835                                  	jmp	$+2
+   836                                  %endmacro
+   837                                  
+   838                                  
+   839 000002A1 90                      	align	2
+   840                                  ds_out_latch:
+   841 000002A2 EE                      	out	dx,al
+   842                                  	us_delay
+   833 000002A3 EB00                <1>  jmp $+2
+   834 000002A5 EB00                <1>  jmp $+2
+   835 000002A7 EB00                <1>  jmp $+2
+   843 000002A9 C3                      	ret
+   844                                  
+   845                                  ;
+   846                                  ; initializes the DSLTC in DX
+   847                                  ; sets the Clock low, then asserts Reset
+   848                                  ;
+   849                                  	global	ds_reset_on
+   850                                  ds_reset_on:
+   851 000002AA BA62F8                  	mov	dx,DSLTC	;set I/O latch address in DX
+   852 000002AD EC                      	in	al,dx		;get the latch value
+   853 000002AE 24FB                    	and	al,~DSCLK	;set the clock low (should be idle state)
+   854 000002B0 E8EFFF                  	call	ds_out_latch
+   855 000002B3 0C01                    	or	al,DSDAT	;set data for input
+   856 000002B5 24F7                    	and	al,~DSRST	;assert RESET#
+   857 000002B7 E8E8FF                  	call	ds_out_latch
+   858 000002BA C3                      	ret
+   859                                  
+   860                                  ;
+   861                                  ; sets the Clock low, then removes the Reset
+   862                                  ;
+   863                                  	global	ds_reset_off
+   864                                  ds_reset_off:		; assume DX is set
+   865 000002BB 24FB                    	and	al,~DSCLK	;set the clock low (idle)
+   866 000002BD 0C01                    	or	al,DSDAT	;set data for input
+   867 000002BF E8E0FF                  	call	ds_out_latch
+   868 000002C2 0C08                    	or	al,DSRST	;deassert RESET#
+   869 000002C4 E8DBFF                  	call	ds_out_latch
+   870 000002C7 C3                      	ret			;clock idles low
+   871                                  
+   872                                  ;
+   873                                  ; moves output bit into position, and then drops the clock low
+   874                                  ; pauses, then sets the clock high to clock in the data bit
+   875                                  ; loops back for all 8 bits
+   876                                  ; exits with the clock HIGH
+   877                                  ;
+   878                                  ds_outb:	;output the byte in AH
+   879 000002C8 51                      	pushm	cx
+   880 000002C9 B90800                  	mov	cx,8		;8 bits go out
+   881                                  
+   882 000002CC 24FB                    .1:	and	al,~DSCLK	;drop the clock
+   883 000002CE D1E8                    	shr	ax,1		;LSB to AL
+   884 000002D0 D0C0                    	rol	al,1		;data bit to position
+   885 000002D2 E8CDFF                  	call	ds_out_latch
+   886 000002D5 0C04                    	or	al,DSCLK	
+   887 000002D7 E8C8FF                  	call	ds_out_latch
+   888 000002DA E2F0                    	loop	.1
+   889                                  
+   890 000002DC 59                      	popm	cx
+   891 000002DD C3                         	ret			;clock is high on exit
+   892                                  
+   893                                  ;
+   894                                  ; sets clock High and data bit for input
+   895                                  ; pauses, drops the clock, pauses, reads the data bit
+   896                                  ; shifts 8 bits into AH from the left, hence LSB ends up in AX bit 8
+   897                                  ; exits with the clock low
+   898                                  ;
+   899                                  ds_inb:		;input a byte to AH
+   900 000002DE 51                      	pushm	cx
+   901 000002DF B90800                  	mov	cx,8
+   902                                  
+   903 000002E2 0C05                    .2:	or	al,DSCLK+DSDAT	;raise the clock, O.C. data set for input
+   904 000002E4 E8BBFF                  	call	ds_out_latch
+   905 000002E7 24FB                    	and	al,~DSCLK	;drop the clock
+   906 000002E9 E8B6FF                  	call	ds_out_latch
+   907 000002EC 52                      	push	dx
+   908 000002ED BA60F8                     	mov	dx,DSPIN	;set to read data bit
+   909 000002F0 EC                      	in	al,dx		;data bit to LSB
+   910 000002F1 5A                      	pop	dx
+   911 000002F2 D1C8                    	ror	ax,1		;data to AH MSB
+   912 000002F4 D0E0                    	shl	al,1		;restore latch value just read in
+   913 000002F6 E2EA                    	loop	.2
+   914                                  
+   915 000002F8 59                      	popm	cx
+   916 000002F9 C3                      	ret		; exit with clock Low
+   917                                  
+   918                                  ; convert packed BCD to binary int
+   919                                  ;
+   920                                  ;	arg in AL
+   921                                  ;
+   922                                  ;  int bcd2int(byte bcd);
+   923                                  ;
+   924                                  	global	bcd2int_
+   925                                  bcd2int_:
+   926 000002FA 88C4                    	mov	ah,al
+   927 000002FC C0EC04                  	shr	ah,4		; AH is unpacked high decimal digit
+   928 000002FF 240F                    	and	al,0x0F		; AL is unpacked low decimal digit
+   929 00000301 D50A                    	aad			; convert to integer in AX
+   930 00000303 C3                      	ret
+   931                                  
+   932                                  	global	day_of_week_
+   933                                  day_of_week_:	;parameters in BCD
+   934                                  ;	CH = century
+   935                                  ;	CL = year
+   936                                  ;	DH = month
+   937                                  ;	DL = day
+   938                                  ;
+   939 00000304 88E8                    	mov	al,ch		;century to AL
+   940 00000306 E8F1FF                  	call	bcd2int_
+   941 00000309 89C3                    	mov	bx,ax
+   942                                  
+   943 0000030B 88C8                    	mov	al,cl		;year to AL
+   944 0000030D E8EAFF                  	call	bcd2int_
+   945 00000310 89C1                    	mov	cx,ax
+   946                                  
+   947 00000312 88F0                    	mov	al,dh		;month to AL
+   948 00000314 E8E3FF                  	call	bcd2int_
+   949 00000317 92                      	xchg	ax,dx		;month to DX, day to AL
+   950 00000318 E8DFFF                  	call	bcd2int_
+   951 0000031B 92                      	xchg	ax,dx		;day to DX, month to AX
+   952                                  
+   953                                  ; fall into 'dow_'
+   954                                  	global	dow_
+   955                                  dow_:
+   956                                  ;	AX = month
+   957                                  ;	DX = day
+   958                                  ;	BX = century
+   959                                  ;	CX = year
+   960                                  ; normalize for calendar starting in March
+   961 0000031C 83E803                  	sub	ax,3		;
+   962 0000031F 790A                    	jns	.4
+   963 00000321 83C00C                  	add	ax,12		; month went negative
+   964 00000324 49                      	dec	cx
+   965 00000325 7904                    	jns	.4
+   966 00000327 83C164                  	add	cx,100		;
+   967 0000032A 4B                      	dec	bx		; year went negative
+   968                                  .4:
+   969                                  ; now calculate
+   970 0000032B 01CA                    	add	dx,cx		; D+Y
+   971 0000032D C1E902                  	shr	cx,2		; Y/4
+   972 00000330 01CA                    	add	dx,cx		; + Y/4
+   973 00000332 01DA                    	add	dx,bx		; + C
+   974 00000334 C1E302                  	shl	bx,2		; C*4
+   975 00000337 01DA                    	add	dx,bx		; D+Y+Y/4+5*C
+   976 00000339 C1EB04                  	shr	bx,4		; C/4
+   977 0000033C 01DA                    	add	dx,bx		; + C/4
+   978 0000033E B90500                  	mov	cx,5		; CX = 5
+   979 00000341 F6F1                    	div	cl		; M/5 to AL, Mrem to AH
+   980 00000343 88E3                    	mov	bl,ah		; BX = Mrem
+   981 00000345 2E8A9F[5B03]               cs	mov	bl,[dow_tab+bx]
+   982 0000034A 01DA                       	add	dx,bx
+   983 0000034C 41                      	inc	cx		; CL = 6
+   984 0000034D F6E1                    	mul	cl		; AX = (M/5)*6
+   985 0000034F 01D0                    	add	ax,dx		; AX = sum
+   986 00000351 31D2                    	xor	dx,dx
+   987 00000353 41                      	inc	cx		; CX = 7
+   988 00000354 40                      	inc	ax		; bias by 2
+   989 00000355 40                      	inc	ax		; **
+   990 00000356 F7F1                    	div	cx		; SUM div 7
+   991 00000358 89D0                    	mov	ax,dx		; result to AX
+   992 0000035A C3                      	ret
+   993                                  
+   994                                  dow_tab:
+   995 0000035B 001F3D5C7A              	db	0,31,61,92,122;153
+   996                                  
+   997                                  
+   998                                  %if DEBUG
+   999                                  segment CONST
+  1000 00000000 8DD6                    	dw	ttime		; 54925 == 0_D68Dh
+  1001 00000002 8DD6                    	dw	54925 ; ms.
+  1002 00000004 BA001800                	dd	tick		; 1573050
+  1003 00000008 BA001800                	dd	1573050 ; ticks/day
+  1004                                  %endif

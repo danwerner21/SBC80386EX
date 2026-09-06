@@ -1,0 +1,231 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; uart_det.asm -- detect UART type
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+;
+; This program is free software: you can redistribute it and/or modify
+; it under the terms of the GNU General Public License as published by
+; the Free Software Foundation, either version 3 of the License, or
+; (at your option) any later version.
+;
+; This program is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program in the file COPYING in the topmost source
+; directory.  If not, see <http://www.gnu.org/licenses/>.
+;
+;
+; SBC-386 board revisions:
+;       SBC386-0   prototype / concept testing
+;	SBC-386EX 2.0	production / January 2017
+;
+; Assembly by NASM 2.08 is preferred
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%include "seg_def.inc"
+%include "macro.inc"
+
+%macro	wait	0.nolist
+	jmp $+2
+%endmacro
+
+DLL	equ	0
+DLH	equ	1
+IER	equ	1
+LCR	equ	3
+MCR	equ	4
+LSR	equ	5
+MSR	equ	6
+SCR	equ	7
+
+
+segment	_TEXT
+;
+;	word uart_detect(word device_code);
+;
+;  Returns:
+;	0	None
+;	1	8250
+;	2	16450/8250A
+;	3	16550
+;	4	16550A
+;	5	16550C
+;	6	16650
+;	7	16750
+;	8	16850	can't distinguish from 16650 yet
+;
+	global	uart_det_	; Watcom calling convention
+uart_det_:
+	pushm	bx,cx,dx,si,di
+
+	mov	si,ax		; base device code to SI
+	xor	di,di		; zero return value
+
+	lea	dx,[IER+si]
+	mov	al,0
+	out	dx,al		; [IER] = 0
+	wait
+
+	inc	dx
+	inc	dx		; DX = LCR
+	mov	al,0x80
+	out	dx,al		; [LCR] = 0x80, set DLAB bit
+
+	dec	dx
+	dec	dx		; DLH
+	mov	bx,0x5A3C
+	mov	al,bh
+	out	dx,al		; [DLH] = 0x5A
+	wait
+
+	dec	dx		; DLL
+	mov	al,bl
+	out	dx,al		; [DLL] = 0x3C
+	wait
+
+	inc	dx		; DLH
+	in	al,dx
+	wait
+
+	mov	ch,al		; DLH readback in CH:CL
+	dec	dx		; DLL
+	in	al,dx
+	wait
+	mov	cl,al		; CX is divisor read back
+
+	lea	dx,[LCR+si]
+	mov	al,0
+	out	dx,al
+	wait			; [LCR] = 0, remove DLAB
+
+	dec	dx
+	dec	dx		; IER (DLH)
+	in	al,dx
+	wait
+	cmp	bh,al		; is it still 0x5A
+	je	.99
+
+	cmp	cx,bx		; divisor read back okay?
+	je	.1
+
+	or	cx,cx		; is it zero (16c754B)
+	jnz	.99
+
+	or	di,0x40		; mark 754
+.1:
+	inc	di		; UART is at least 8250    (1)
+
+; Test for the scratch register presence
+
+	lea	dx,[SCR+si]	;
+	mov	al,bh		;
+	out	dx,al		; [SCR] = 0x5A
+	wait
+
+	mov	cl,dl		; CL = SCR
+
+%if 0
+	xchg	dl,cl		; DX = IER   CL = SCR
+	in	al,dx
+	wait
+
+	xchg	dl,cl		; DX = SCR   CL = IER
+%endif
+	in	al,dx
+	wait
+
+	cmp	al,bh		; SCR present?
+	jne	.99
+%if 0
+	je	.2
+
+	or	al,al		; is it Zero
+	jne	.99
+
+	add	di,0x21		; flag it
+	jmp	.21
+%endif
+
+.2:
+	inc	di		; 16450 or 8250A	(2)
+.21:
+	lea	dx,[LCR+si]	; DX = LCR
+	mov	ch,dl		; save LCR in CH
+
+	mov	al,0xBF		; magic number
+	out	dx,al		; [LCR] = 0xBF
+	wait
+
+	mov	dl,cl		; DX = SCR
+	in	al,dx
+	wait
+
+	cmp	al,bh		; still 0x5A in SCR
+	je	.3		; less than a 650
+
+	or	di,0x06		; 16650
+	jmp	.99		; may be 16850 also
+
+; lower than a 16650
+
+.3:
+	inc	di		;
+
+	lea	dx,[LCR+si]	;
+	mov	al,0x80
+	out	dx,al		; [LCR] = DLAB set again
+	wait
+
+	dec	dx		; FCR/IIR
+	mov	al,0xE7
+	out	dx,al		; [FCR] = 0xE7
+	wait
+
+	in	al,dx		; read back IIR/FCR
+	wait
+	mov	cl,al		; save in CL
+
+	inc	dx		; LCR
+	mov	al,0
+	out	dx,al		; [LCR] = reset DLAB
+	wait
+
+	test	cl, 1<<6	; test bit 6, the FIFO enable bit
+	jz	.99
+
+	inc	di		; higher than 16450
+	test	cl, 1<<7	; test bit 7
+	jz	.99		; signal 16550
+
+	inc	di		;
+	test	cl, 1<<5	; 64-bit FIFO
+	jz	.AC
+
+	or	di,7		; it is a 16750
+	jmp	.99
+
+; Distinguish between a 16550A & 16550C
+
+.AC:
+	inc	di		; at least 16550A
+
+	inc	dx		; MCR
+	mov	ax,0x2020
+	out	dx,al		; set AFE bit
+	wait
+
+	in	al,dx		;
+	test	al,ah
+	jz	.99		; is a 16550A
+
+	inc	di		; is a 16550C
+
+.99:
+	mov	ax,di		; return parameter
+	popm	bx,cx,dx,si,di
+
+	ret			; return UART level in AX

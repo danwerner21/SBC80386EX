@@ -1,0 +1,870 @@
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-1
+
+
+				TITLE BIOS ----- 06/10/85 BIOS ROUTINES
+				.286C
+				.LIST
+ 0000				CODE	SEGMENT	BYTE PUBLIC
+				
+					PUBLIC	EQUIPMENT_1
+					PUBLIC	MEMORY_SIzE_DET_1
+					PUBLIC	NMI_INT_1
+				
+					EXTRN	C8042:NEAR	; POST SEND 804
+				2 COMMAND ROUTINE
+					EXTRN	CMOS_READ:NEAR	; READ CMOS LOC
+				ATION ROUTINE
+					EXTRN	D1:NEAR		; "PARITY CHECK
+				 1" MESSAGE
+					EXTRN	D2:NEAR		; "PARITY CHECK
+				 2" MESSAGE
+					EXTRN	D2A:NEAR	; "?????" UNKNO
+				WN ADDRESS MESSAGE
+					EXTRN	DDS:NEAR	; LOAD (DS) WIT
+				H DATA SEGMENT SELECTOR
+					EXTRN	OBF_42:NEAR	; POST WAIT 804
+				2 RESPONSE ROUTINE
+					EXTRN	PRT_HEX:NEAR	; DISPLAY CHARA
+				CTER ROUTINE
+					EXTRN	PRT_SEG:NEAR	; DISPLAY FIVE 
+				CHARACTER ADDRESS ROUTINE	
+					EXTRN	P_MSG:NEAR	; DISPLAY MESSA
+				GE STRING ROUTINE
+				
+				;--- INT 12 H ---------------------------------
+				--------------------------------
+				; MEMORY_SIZE_DETERMINE			
+								: 
+				;	THIS ROUTINE RETURNS THE AMOUNT OF MEMO
+				RY IN THE SYSTEM AS		:
+				;	DETERMINED BY THE POST ROUTINES. (UP TO
+				 640K) 				:
+				;	NOTE THAT THE SYSTEM MAY NOT BE ABLE TO
+				 USE I/O MEMORY UNLESS		:
+				;	THERE IS A FULL COMPLEMENT OF 512K BYTE
+				S ON THE PLANAR.			:
+				; INPUT					
+								:
+				;	NO REGISTERS			
+								:
+				;	THE @MEMORY_SIZE VARIABLE IS SET DURING
+				 POWER ON DIAGNOSTICS		:
+				;	ACCORDING TO THE FOLLOWING ASSUMPTIONS:
+									
+					:
+				;					
+								:
+				;       1. CONFIGURATION RECORD IN NON-VOLATILE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-2
+
+
+				 MEMORY EQUALS THE ACTUAL	:
+				;          MEMORY SIZE INSTALLED.	
+									
+					:
+				;					
+								:
+				;       2. ALL INSTALLED MEMORY IS FUNCTIONAL. 
+				IF THE MEMORY TEST DURING	:
+				;          POST INDICATES LESS, THEN THIS VALUE
+				 BECOMES THE DEFAULT.		:
+				;          IF NON-VOLATILE MEMORY IS NOT VALID 
+				(NOT INITIALIZED OR BATTERY	:
+				;          FAILURE) THEN ACTUAL MEMORY DETERMIN
+				ED BECOMES THE DEFAULT.		:
+				;					
+								:
+				;       3. ALL MEMORY FROM 0 TO 640K MUST BE CO
+				NTIGUOUS.				:
+				;					
+								:
+				; OUTPUT				
+									:
+				;       	(AX) = NUMBER OF CONTIGUOUS 1K 
+				BLOCKS OF MEMORY			
+					:
+				;----------------------------------------------
+				--------------------------------
+					ASSUME CS:CODE,DS:DATA
+				
+ 0000				MEMORY_SIZE_DET_1  PROC FAR
+ 0000  FB				STI			; INTERRUPTS BA
+				CK ON
+ 0001  1E				PUSH	DS		; SAVE SEGMENT
+ 0002  E8 0000 E			CALL	DDS		; ESTABLISH ADD
+				RESSING
+ 0005  A1 0000 U			MOV	AX,@MEMORY_SIZE	; GET VALUE
+bios.asm(51): error A2009: Symbol not defined: @MEMORY_SIZE
+ 0008  1F				POP	DS		; RECOVER SEGME
+				NT
+ 0009  CF				IRET			; RETURN TO CAL
+				LER
+ 000A				MEMORY_SIZE_DET_1  ENDP
+				
+				;--- INT 11 H ---------------------------------
+				--------------------------------
+				; EQUIPMENT DETERMINATION		
+									:
+				;       THIS ROUTINE ATTEMPTS TO DETERMINE WHAT
+				 OPTIONAL				:
+				;       DEVICES ARE ATTACHED TO THE SYSTEM.
+									
+					:
+				; INPUT					
+								:
+				;       NO REGISTERS			
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-3
+
+
+								:
+				;       THE @EQUIP_FLAG VARIABLE IS SET DURING 
+				THE POWER ON				:
+				;       DIAGNOSTICS USING THE FOLLOWING HARDWAR
+				E ASSUMPTIONS:			:
+				;       PORT 03FA = INTERRUPT ID REGISTER OF 82
+				50 (PRIMARY)				:
+				;            02FA = INTERRUPT ID REGISTER OF 82
+				50 (SECONDARY)			:
+				;               BITS 7-3 ARE ALWAYS 0	
+									
+					:
+				;       PORT 0378 = OUTPUT PORT OF PRINTER (PRI
+				MARY)					:
+				;            0278 = OUTPUT PORT OF PRINTER (SEC
+				ONDARY)				:
+				;            03BC = OUTPUT PORT OF PRINTER (MON
+				OCHROME-PRINTER)			:
+				; OUTPUT				
+									:
+				;       (AX) IS SET, BIT SIGNIFICANT, TO INDICA
+				TE ATTACHED I/O			:
+				;       BIT 15,14 = NUMBER OF PRINTERS ATTACHED
+									
+					:
+				;       BIT 13 = INTERNAL MODEM INSTALLED
+									
+						:
+				;       BIT 12 NOT USED			
+								:
+				;       BIT 11,10,9 = NUMBER OF RS232 CARDS ATT
+				ACHED					:
+				;       BIT 8 = NOT USED		
+									:
+				;       BIT 7,6 = NUMBER OF DISKETTE DRIVES
+									
+					:
+				;               00=1, 01=2 ONLY IF BIT 0 = 1
+									
+					:
+				;       BIT 5,4 = INITIAL VIDEO MODE	
+									
+					:
+				;                       00 - UNUSED	
+									
+					:
+				;                       01 - 40X25 BW USING COL
+				OR CARD				:
+				;                       10 - 80X25 BW USING COL
+				OR CARD				:
+				;                       11 - 80X25 BW USING BW 
+				CARD					:
+				;       BIT 3 = NOT USED		
+									:
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-4
+
+
+				;       BIT 2 = NOT USED		
+									:
+				;       BIT 1 = MATH COPROCESSOR	
+									
+					:
+				;       BIT 0 = 1 (IPL DISKETTE INSTALLED)
+									
+					:
+				;       NO OTHER REGISTERS AFFECTED	
+									
+					:
+				;----------------------------------------------
+				--------------------------------
+				
+ 000A				EQUIPMENT_1	PROC FAR	; ENTRY POINT F
+				OR ORG 0F84DH
+ 000A  FB				STI			; INTERRUPTS BA
+				CK ON
+ 000B  1E				PUSH	DS		; SAVE SEGMENT 
+				REGISTER
+ 000C  E8 0000 E			CALL	DDS		; ESTABLISH ADD
+				RESSING
+ 000F  A1 0000 U			MOV	AX,@EQUIP_FLAG	; GET THE CURRE
+				NT SETTINGS
+bios.asm(95): error A2009: Symbol not defined: @EQUIP_FLAG
+ 0012  1F				POP	DS		; RECOVER SEGME
+				NT
+ 0013  CF				IRET			; RETURN TO CAL
+				LER
+ 0014				EQUIPMENT_1	ENDP
+				
+				
+				;-- HARDWARE INT 02 H -- ( NMI LEVEL ) --------
+				--------------------------------
+				; NON-MASKABLE INTERRUPT ROUTINE (REAL MODE)
+									
+					:
+				;       THIS ROUTINE WILL PRINT A "PARITY CHECK
+				 1 OR 2" MESSAGE AND ATTEMPT	:
+				;       TO FIND THE STORAGE LOCATION IN BASE 64
+				OK CONTAINING THE BAD PARITY.	:
+				;       IF FOUND, THE SEGMENT ADDRESS WILL BE P
+				RINTED.  IF NO PARITY ERROR	:
+				;       CAN BE FOUND (INTERMITTENT READ PROBLEM
+				)  ?????  WILL BE DISPLAYED	:
+				;       WHERE THE ADDRESS WOULD NORMALLY GO.
+									
+					:
+				;					
+								:
+				;       PARITY CHECK 1 = PLANAR BOARD MEMORY FA
+				ILURE.					:
+				;       PARITY CHECK 2 = OFF PLANAR BOARD MEMOR
+				Y FAILURE.				:
+				;----------------------------------------------
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-5
+
+
+				--------------------------------
+				
+ 0014				NMI_INT_1  PROC	NEAR
+ 0014  50				PUSH	AX		; SAVE ORIGINAL
+				 CONTENTS OF (AX)
+				
+ 0015  E4 00				IN	AL,PORT_B	; READ STATUS P
+				ORT
+bios.asm(116): error A2009: Symbol not defined: PORT_B
+ 0017  84 06 0000 U			TEST	AL,PARITY_ERR	; PARITY CHECK 
+				OR I/O CHECK ?
+bios.asm(117): error A2009: Symbol not defined: PARITY_ERR
+ 001B  75 00				JNZ	NMI_1		; GO TO ERROR H
+				ALTS IF HARDWARE ERROR
+bios.asm(118): error A2009: Symbol not defined: NMI_1
+				
+ 001D  A0 0000 U			MOV	AL,CMCS_REG_D	; ELSE ?? - LEA
+				VE NMI ON
+bios.asm(120): error A2009: Symbol not defined: CMCS_REG_D
+ 0020  E8 0000 E			CALL	CMOS_READ	; TOGGLE NMI US
+				ING COMMON READ ROUTINE
+ 0023  58				POP	AX		; RESTORE ORIGI
+				NAL CONTENTS OF (AX)
+ 0024  CF				IRET			; EXIT NMI HAND
+				LER BACK TO PROGRAM
+				
+				
+ 0025				NMI_1:					; HARDW
+				ARE ERROR
+ 0025  50				PUSH	AX			; SAVE 
+				INITIAL CHECK MASK IN (AL)
+ 0026  A0 0000 U			MOV	AL,CMOS_REG_D+NMI	; MASK 
+				TRAP (NMI) INTERRUPTS OFF
+bios.asm(128): error A2009: Symbol not defined: CMOS_REG_D
+ 0029  E6 00				OUT	CMOS_PORT,AL
+bios.asm(129): error A2009: Symbol not defined: CMOS_PORT
+ 002B  A0 0000 U			MOV	AL,DIS_KBD		; DISAB
+				LE THE KEYBOARD
+bios.asm(130): error A2009: Symbol not defined: DIS_KBD
+ 002E  E8 0000 E			CALL	C8042			; SEND 
+				COMMAND TO ADAPTER
+ 0031  E8 0000 E			CALL	DDS			; ADDRE
+				SS DATA SEGMENT
+ 0034  B4 00				MOV	AH,0			; INITI
+				ALIZE AND BET MODE FOR VIDEO
+ 0036  A0 0000 U			MOV	AL,@CRT_MODE		; GET C
+				URRENT MODE
+bios.asm(134): error A2009: Symbol not defined: @CRT_MODE
+ 0039  CD 10				INT	10H			; CALL 
+				VIDEO_IO TO CLEAR SCREEN
+				
+				;-----	DISPLAY "PARITY CHECK ?" ERROR MESSAGES
+ 003B  58				POP	AX		; RECOVER INITI
+				AL CHECK STATUS
+ 003C  BE 0007 R			MOV	SI,OFFSET DI	; PLANAR ERROR,
+				 ADDRESS "PARITY CHECK 1"
+bios.asm(139): error A2049: Illegal use of register
+ 003F  84 06 0000 U			TEST	AL,PARITY_CHECK	; CHECK FOR PLA
+				NAR ERROR
+bios.asm(140): error A2009: Symbol not defined: PARITY_CHECK
+ 0043  74 00				JZ	NMI_2		; SKIP IF NOT
+bios.asm(141): error A2009: Symbol not defined: NMI_2
+				
+ 0045  50				PUSH	AX		; SAVE STATUS
+ 0046  E8 0000 E			CALL	P_MSG		; DISPLAY "PARI
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-6
+
+
+				TY CHECK 1" MESSAGE
+ 0049  58				POP	AX		; AND RECOVER S
+				TATUS
+ 004A				NMI_2:
+ 004A  BE 0000 E			MOV	SI,OFFSET D2	; ADDRESS OF "P
+				ARITY CHECK 2" MESSAGE
+ 004D  84 06 0000 U			TEST	AL,IO_CHECK	; I/O PARITY CH
+				ECK ?
+bios.asm(148): error A2009: Symbol not defined: IO_CHECK
+ 0051  74 00				JZ	NMI_3		; SKIP IF CORRE
+				CT ERROR DISPLAYED
+bios.asm(149): error A2009: Symbol not defined: NMI_3
+ 0053  E8 0000 E			CALL	P_MSG		; DISPLAY "PARI
+				TY CHECK 2" ERROR
+				
+				;-----	TEST FOR HOT NMI ON PLANAR PARITY LINE
+ 0056				NMI_3:
+ 0056  E4 00				IN	AL,PORT_B
+bios.asm(154): error A2009: Symbol not defined: PORT_B
+ 0058  0A 06 0000 U			OR	AL,RAM_PAR_OFF	; TOGGLE PARITY
+				 CHECK ENABLES
+bios.asm(155): error A2009: Symbol not defined: RAM_PAR_OFF
+ 005C  E6 00				OUT	PORT_B,AL
+bios.asm(156): error A2009: Symbol not defined: PORT_B
+ 005E  22 06 0000 U			AND	AL,RAM_PAR_ON	; TO CLEAR THE 
+				PENDING CHECK
+bios.asm(157): error A2009: Symbol not defined: RAM_PAR_ON
+ 0062  E6 00				OUT 	PORT_B,AL
+bios.asm(158): error A2009: Symbol not defined: PORT_B
+				
+ 0064  FC				CLD			; SET DIRECTION
+				 FLAG TO INCREMENT
+ 0065  2B D2				SUB	DX,DX		; POINT (DX) AT
+				 START OF REAL MEMORY
+ 0067  2B F6				SUB	SI,SI		; SET (SI) TO S
+				TART OF	(DS:)
+ 0069  E4 00				IN	AL,PORT_B	; READ CURRENT 
+				PARITY CHECK LATCH
+bios.asm(163): error A2009: Symbol not defined: PORT_B
+ 006B  84 06 0000 U			TEST	AL,PARITY_ERR	; CHECK FOR HOT
+				 NMI SOURCE
+bios.asm(164): error A2009: Symbol not defined: PARITY_ERR
+ 006F  75 00				JNZ	NMI_5		; SKIP IF ERROR
+				 NOT RESET (DISPLAY ???)
+bios.asm(165): error A2009: Symbol not defined: NMI_5
+				
+				;-----	SEE IF LOCATION THAT CAUSED PARITY CHEC
+				K CAN BE FOUND IN BASE MEMORY
+				
+ 0071  8B 1E 0000 U			MOV	BX,@MEMORY_SIZE	; GET BASE MEMO
+				RY SIZE WORD
+bios.asm(169): error A2009: Symbol not defined: @MEMORY_SIZE
+ 0075				NMI_4:
+ 0075  8E DA				MOV	DS,DX		; POINT TO 64K 
+				SEGMENT
+ 0077  B9 8000				MOV	CX,4000H*2	; SET WORD COUN
+				T FOR 64 KB SCAN
+ 007A  F3/ AD				REP	LODSW		; READ 64 KB OF
+				 MEMORY
+ 007C  E4 00				IN	AL,PORT_B	; READ PARITY C
+				HECK LATCHES
+bios.asm(174): error A2009: Symbol not defined: PORT_B
+ 007E  84 06 0000 U			TEST	AL,PARITY_ERR	; CHECK FOR ANY
+				 PARITY ERROR PENDING
+bios.asm(175): error A2009: Symbol not defined: PARITY_ERR
+ 0082  75 00				JNZ	NMI_6		; GO PRINT SEGM
+				ENT ADDRESS IF ERROR
+bios.asm(176): error A2009: Symbol not defined: NMI_6
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-7
+
+
+				
+ 0084  80 C6 10				ADD	DH,010H		; POINT TO NEXT
+				 64K BLOCK
+ 0087  2D 0040				SUB	AX,16D*4	; DECREMENT COU
+				NT OF 1024 BYTE SEGMENTS
+ 008A  77 E9				JA	NMI_4		; LOOP TILL ALL
+				 64K SEGMENTS DONE
+				
+ 008C  BE 0000 E		NMI_5:	MOV	SI,OFFSET D2A	; PRINT ROW OF 
+				????? IF PARITY
+ 008F  E8 0000 E			CALL	P_MSG		; CHECK COULD N
+				OT BE RE-CREATED
+ 0092  FA				CLI
+ 0093  F4				HLT			; HALT SYSTEM
+				
+				
+ 0094  E8 0000 E		NMI_6:	CALL	PRT_SEG		; PRINT SEGMENT
+				 VALUE (IN DX)
+ 0097  B0 28				MOV	AL,'('		; PRINT (S)
+ 0099  E8 0000 E			CALL	PRT_HEX
+ 009C  B0 53				MOV	AL,'S'
+ 009E  E8 0000 E			CALL	PRT_HEX
+ 00A1  B0 29				MOV	AL,')'
+ 00A3  E8 0000 E			CALL	PRT_HEX
+ 00A6  FA				CLI			; HALT SYSTEM
+ 00A7  F4				HLT
+				
+ 00A8				NMI_INT_1  ENDP
+				
+ 00A8					CODE	ENDS
+					END
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-1
+
+
+				TITLE BIOS ----- 06/10/85 BIOS ROUTINES
+				.286C
+				.LIST
+ 0000				CODE	SEGMENT	BYTE PUBLIC
+				
+					PUBLIC	EQUIPMENT_1
+					PUBLIC	MEMORY_SIzE_DET_1
+					PUBLIC	NMI_INT_1
+				
+					EXTRN	C8042:NEAR	; POST SEND 804
+				2 COMMAND ROUTINE
+					EXTRN	CMOS_READ:NEAR	; READ CMOS LOC
+				ATION ROUTINE
+					EXTRN	D1:NEAR		; "PARITY CHECK
+				 1" MESSAGE
+					EXTRN	D2:NEAR		; "PARITY CHECK
+				 2" MESSAGE
+					EXTRN	D2A:NEAR	; "?????" UNKNO
+				WN ADDRESS MESSAGE
+					EXTRN	DDS:NEAR	; LOAD (DS) WIT
+				H DATA SEGMENT SELECTOR
+					EXTRN	OBF_42:NEAR	; POST WAIT 804
+				2 RESPONSE ROUTINE
+					EXTRN	PRT_HEX:NEAR	; DISPLAY CHARA
+				CTER ROUTINE
+					EXTRN	PRT_SEG:NEAR	; DISPLAY FIVE 
+				CHARACTER ADDRESS ROUTINE	
+					EXTRN	P_MSG:NEAR	; DISPLAY MESSA
+				GE STRING ROUTINE
+				
+				;--- INT 12 H ---------------------------------
+				--------------------------------
+				; MEMORY_SIZE_DETERMINE			
+								: 
+				;	THIS ROUTINE RETURNS THE AMOUNT OF MEMO
+				RY IN THE SYSTEM AS		:
+				;	DETERMINED BY THE POST ROUTINES. (UP TO
+				 640K) 				:
+				;	NOTE THAT THE SYSTEM MAY NOT BE ABLE TO
+				 USE I/O MEMORY UNLESS		:
+				;	THERE IS A FULL COMPLEMENT OF 512K BYTE
+				S ON THE PLANAR.			:
+				; INPUT					
+								:
+				;	NO REGISTERS			
+								:
+				;	THE @MEMORY_SIZE VARIABLE IS SET DURING
+				 POWER ON DIAGNOSTICS		:
+				;	ACCORDING TO THE FOLLOWING ASSUMPTIONS:
+									
+					:
+				;					
+								:
+				;       1. CONFIGURATION RECORD IN NON-VOLATILE
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-2
+
+
+				 MEMORY EQUALS THE ACTUAL	:
+				;          MEMORY SIZE INSTALLED.	
+									
+					:
+				;					
+								:
+				;       2. ALL INSTALLED MEMORY IS FUNCTIONAL. 
+				IF THE MEMORY TEST DURING	:
+				;          POST INDICATES LESS, THEN THIS VALUE
+				 BECOMES THE DEFAULT.		:
+				;          IF NON-VOLATILE MEMORY IS NOT VALID 
+				(NOT INITIALIZED OR BATTERY	:
+				;          FAILURE) THEN ACTUAL MEMORY DETERMIN
+				ED BECOMES THE DEFAULT.		:
+				;					
+								:
+				;       3. ALL MEMORY FROM 0 TO 640K MUST BE CO
+				NTIGUOUS.				:
+				;					
+								:
+				; OUTPUT				
+									:
+				;       	(AX) = NUMBER OF CONTIGUOUS 1K 
+				BLOCKS OF MEMORY			
+					:
+				;----------------------------------------------
+				--------------------------------
+					ASSUME CS:CODE,DS:DATA
+bios.asm(45): error A2009: Symbol not defined: DATA
+				
+ 0000				MEMORY_SIZE_DET_1  PROC FAR
+ 0000  FB				STI			; INTERRUPTS BA
+				CK ON
+ 0001  1E				PUSH	DS		; SAVE SEGMENT
+ 0002  E8 0000 E			CALL	DDS		; ESTABLISH ADD
+				RESSING
+ 0005  A1 0000 U			MOV	AX,@MEMORY_SIZE	; GET VALUE
+bios.asm(51): error A2009: Symbol not defined: @MEMORY_SIZE
+ 0008  1F				POP	DS		; RECOVER SEGME
+				NT
+ 0009  CF				IRET			; RETURN TO CAL
+				LER
+ 000A				MEMORY_SIZE_DET_1  ENDP
+				
+				;--- INT 11 H ---------------------------------
+				--------------------------------
+				; EQUIPMENT DETERMINATION		
+									:
+				;       THIS ROUTINE ATTEMPTS TO DETERMINE WHAT
+				 OPTIONAL				:
+				;       DEVICES ARE ATTACHED TO THE SYSTEM.
+									
+					:
+				; INPUT					
+								:
+				;       NO REGISTERS			
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-3
+
+
+								:
+				;       THE @EQUIP_FLAG VARIABLE IS SET DURING 
+				THE POWER ON				:
+				;       DIAGNOSTICS USING THE FOLLOWING HARDWAR
+				E ASSUMPTIONS:			:
+				;       PORT 03FA = INTERRUPT ID REGISTER OF 82
+				50 (PRIMARY)				:
+				;            02FA = INTERRUPT ID REGISTER OF 82
+				50 (SECONDARY)			:
+				;               BITS 7-3 ARE ALWAYS 0	
+									
+					:
+				;       PORT 0378 = OUTPUT PORT OF PRINTER (PRI
+				MARY)					:
+				;            0278 = OUTPUT PORT OF PRINTER (SEC
+				ONDARY)				:
+				;            03BC = OUTPUT PORT OF PRINTER (MON
+				OCHROME-PRINTER)			:
+				; OUTPUT				
+									:
+				;       (AX) IS SET, BIT SIGNIFICANT, TO INDICA
+				TE ATTACHED I/O			:
+				;       BIT 15,14 = NUMBER OF PRINTERS ATTACHED
+									
+					:
+				;       BIT 13 = INTERNAL MODEM INSTALLED
+									
+						:
+				;       BIT 12 NOT USED			
+								:
+				;       BIT 11,10,9 = NUMBER OF RS232 CARDS ATT
+				ACHED					:
+				;       BIT 8 = NOT USED		
+									:
+				;       BIT 7,6 = NUMBER OF DISKETTE DRIVES
+									
+					:
+				;               00=1, 01=2 ONLY IF BIT 0 = 1
+									
+					:
+				;       BIT 5,4 = INITIAL VIDEO MODE	
+									
+					:
+				;                       00 - UNUSED	
+									
+					:
+				;                       01 - 40X25 BW USING COL
+				OR CARD				:
+				;                       10 - 80X25 BW USING COL
+				OR CARD				:
+				;                       11 - 80X25 BW USING BW 
+				CARD					:
+				;       BIT 3 = NOT USED		
+									:
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-4
+
+
+				;       BIT 2 = NOT USED		
+									:
+				;       BIT 1 = MATH COPROCESSOR	
+									
+					:
+				;       BIT 0 = 1 (IPL DISKETTE INSTALLED)
+									
+					:
+				;       NO OTHER REGISTERS AFFECTED	
+									
+					:
+				;----------------------------------------------
+				--------------------------------
+				
+ 000A				EQUIPMENT_1	PROC FAR	; ENTRY POINT F
+				OR ORG 0F84DH
+ 000A  FB				STI			; INTERRUPTS BA
+				CK ON
+ 000B  1E				PUSH	DS		; SAVE SEGMENT 
+				REGISTER
+ 000C  E8 0000 E			CALL	DDS		; ESTABLISH ADD
+				RESSING
+ 000F  A1 0000 U			MOV	AX,@EQUIP_FLAG	; GET THE CURRE
+				NT SETTINGS
+bios.asm(95): error A2009: Symbol not defined: @EQUIP_FLAG
+ 0012  1F				POP	DS		; RECOVER SEGME
+				NT
+ 0013  CF				IRET			; RETURN TO CAL
+				LER
+ 0014				EQUIPMENT_1	ENDP
+				
+				
+				;-- HARDWARE INT 02 H -- ( NMI LEVEL ) --------
+				--------------------------------
+				; NON-MASKABLE INTERRUPT ROUTINE (REAL MODE)
+									
+					:
+				;       THIS ROUTINE WILL PRINT A "PARITY CHECK
+				 1 OR 2" MESSAGE AND ATTEMPT	:
+				;       TO FIND THE STORAGE LOCATION IN BASE 64
+				OK CONTAINING THE BAD PARITY.	:
+				;       IF FOUND, THE SEGMENT ADDRESS WILL BE P
+				RINTED.  IF NO PARITY ERROR	:
+				;       CAN BE FOUND (INTERMITTENT READ PROBLEM
+				)  ?????  WILL BE DISPLAYED	:
+				;       WHERE THE ADDRESS WOULD NORMALLY GO.
+									
+					:
+				;					
+								:
+				;       PARITY CHECK 1 = PLANAR BOARD MEMORY FA
+				ILURE.					:
+				;       PARITY CHECK 2 = OFF PLANAR BOARD MEMOR
+				Y FAILURE.				:
+				;----------------------------------------------
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-5
+
+
+				--------------------------------
+				
+ 0014				NMI_INT_1  PROC	NEAR
+ 0014  50				PUSH	AX		; SAVE ORIGINAL
+				 CONTENTS OF (AX)
+				
+ 0015  E4 00				IN	AL,PORT_B	; READ STATUS P
+				ORT
+bios.asm(116): error A2009: Symbol not defined: PORT_B
+ 0017  84 06 0000 U			TEST	AL,PARITY_ERR	; PARITY CHECK 
+				OR I/O CHECK ?
+bios.asm(117): error A2009: Symbol not defined: PARITY_ERR
+ 001B  75 08				JNZ	NMI_1		; GO TO ERROR H
+				ALTS IF HARDWARE ERROR
+				
+ 001D  A0 0000 U			MOV	AL,CMCS_REG_D	; ELSE ?? - LEA
+				VE NMI ON
+bios.asm(120): error A2009: Symbol not defined: CMCS_REG_D
+ 0020  E8 0000 E			CALL	CMOS_READ	; TOGGLE NMI US
+				ING COMMON READ ROUTINE
+ 0023  58				POP	AX		; RESTORE ORIGI
+				NAL CONTENTS OF (AX)
+ 0024  CF				IRET			; EXIT NMI HAND
+				LER BACK TO PROGRAM
+				
+				
+ 0025				NMI_1:					; HARDW
+				ARE ERROR
+ 0025  50				PUSH	AX			; SAVE 
+				INITIAL CHECK MASK IN (AL)
+ 0026  A0 0000 U			MOV	AL,CMOS_REG_D+NMI	; MASK 
+				TRAP (NMI) INTERRUPTS OFF
+bios.asm(128): error A2009: Symbol not defined: CMOS_REG_D
+ 0029  E6 00				OUT	CMOS_PORT,AL
+bios.asm(129): error A2009: Symbol not defined: CMOS_PORT
+ 002B  A0 0000 U			MOV	AL,DIS_KBD		; DISAB
+				LE THE KEYBOARD
+bios.asm(130): error A2009: Symbol not defined: DIS_KBD
+ 002E  E8 0000 E			CALL	C8042			; SEND 
+				COMMAND TO ADAPTER
+ 0031  E8 0000 E			CALL	DDS			; ADDRE
+				SS DATA SEGMENT
+ 0034  B4 00				MOV	AH,0			; INITI
+				ALIZE AND BET MODE FOR VIDEO
+ 0036  A0 0000 U			MOV	AL,@CRT_MODE		; GET C
+				URRENT MODE
+bios.asm(134): error A2009: Symbol not defined: @CRT_MODE
+ 0039  CD 10				INT	10H			; CALL 
+				VIDEO_IO TO CLEAR SCREEN
+				
+				;-----	DISPLAY "PARITY CHECK ?" ERROR MESSAGES
+ 003B  58				POP	AX		; RECOVER INITI
+				AL CHECK STATUS
+ 003C  BE 0007 R			MOV	SI,OFFSET DI	; PLANAR ERROR,
+				 ADDRESS "PARITY CHECK 1"
+bios.asm(139): error A2049: Illegal use of register
+ 003F  84 06 0000 U			TEST	AL,PARITY_CHECK	; CHECK FOR PLA
+				NAR ERROR
+bios.asm(140): error A2009: Symbol not defined: PARITY_CHECK
+ 0043  74 05				JZ	NMI_2		; SKIP IF NOT
+				
+ 0045  50				PUSH	AX		; SAVE STATUS
+ 0046  E8 0000 E			CALL	P_MSG		; DISPLAY "PARI
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-6
+
+
+				TY CHECK 1" MESSAGE
+ 0049  58				POP	AX		; AND RECOVER S
+				TATUS
+ 004A				NMI_2:
+ 004A  BE 0000 E			MOV	SI,OFFSET D2	; ADDRESS OF "P
+				ARITY CHECK 2" MESSAGE
+ 004D  84 06 0000 U			TEST	AL,IO_CHECK	; I/O PARITY CH
+				ECK ?
+bios.asm(148): error A2009: Symbol not defined: IO_CHECK
+ 0051  74 03				JZ	NMI_3		; SKIP IF CORRE
+				CT ERROR DISPLAYED
+ 0053  E8 0000 E			CALL	P_MSG		; DISPLAY "PARI
+				TY CHECK 2" ERROR
+				
+				;-----	TEST FOR HOT NMI ON PLANAR PARITY LINE
+ 0056				NMI_3:
+ 0056  E4 00				IN	AL,PORT_B
+bios.asm(154): error A2009: Symbol not defined: PORT_B
+ 0058  0A 06 0000 U			OR	AL,RAM_PAR_OFF	; TOGGLE PARITY
+				 CHECK ENABLES
+bios.asm(155): error A2009: Symbol not defined: RAM_PAR_OFF
+ 005C  E6 00				OUT	PORT_B,AL
+bios.asm(156): error A2009: Symbol not defined: PORT_B
+ 005E  22 06 0000 U			AND	AL,RAM_PAR_ON	; TO CLEAR THE 
+				PENDING CHECK
+bios.asm(157): error A2009: Symbol not defined: RAM_PAR_ON
+ 0062  E6 00				OUT 	PORT_B,AL
+bios.asm(158): error A2009: Symbol not defined: PORT_B
+				
+ 0064  FC				CLD			; SET DIRECTION
+				 FLAG TO INCREMENT
+ 0065  2B D2				SUB	DX,DX		; POINT (DX) AT
+				 START OF REAL MEMORY
+ 0067  2B F6				SUB	SI,SI		; SET (SI) TO S
+				TART OF	(DS:)
+ 0069  E4 00				IN	AL,PORT_B	; READ CURRENT 
+				PARITY CHECK LATCH
+bios.asm(163): error A2009: Symbol not defined: PORT_B
+ 006B  84 06 0000 U			TEST	AL,PARITY_ERR	; CHECK FOR HOT
+				 NMI SOURCE
+bios.asm(164): error A2009: Symbol not defined: PARITY_ERR
+ 006F  75 1B				JNZ	NMI_5		; SKIP IF ERROR
+				 NOT RESET (DISPLAY ???)
+				
+				;-----	SEE IF LOCATION THAT CAUSED PARITY CHEC
+				K CAN BE FOUND IN BASE MEMORY
+				
+ 0071  8B 1E 0000 U			MOV	BX,@MEMORY_SIZE	; GET BASE MEMO
+				RY SIZE WORD
+bios.asm(169): error A2009: Symbol not defined: @MEMORY_SIZE
+ 0075				NMI_4:
+ 0075  8E DA				MOV	DS,DX		; POINT TO 64K 
+				SEGMENT
+ 0077  B9 8000				MOV	CX,4000H*2	; SET WORD COUN
+				T FOR 64 KB SCAN
+ 007A  F3/ AD				REP	LODSW		; READ 64 KB OF
+				 MEMORY
+ 007C  E4 00				IN	AL,PORT_B	; READ PARITY C
+				HECK LATCHES
+bios.asm(174): error A2009: Symbol not defined: PORT_B
+ 007E  84 06 0000 U			TEST	AL,PARITY_ERR	; CHECK FOR ANY
+				 PARITY ERROR PENDING
+bios.asm(175): error A2009: Symbol not defined: PARITY_ERR
+ 0082  75 10				JNZ	NMI_6		; GO PRINT SEGM
+				ENT ADDRESS IF ERROR
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Page     1-7
+
+
+				
+ 0084  80 C6 10				ADD	DH,010H		; POINT TO NEXT
+				 64K BLOCK
+ 0087  2D 0040				SUB	AX,16D*4	; DECREMENT COU
+				NT OF 1024 BYTE SEGMENTS
+ 008A  77 E9				JA	NMI_4		; LOOP TILL ALL
+				 64K SEGMENTS DONE
+				
+ 008C  BE 0000 E		NMI_5:	MOV	SI,OFFSET D2A	; PRINT ROW OF 
+				????? IF PARITY
+ 008F  E8 0000 E			CALL	P_MSG		; CHECK COULD N
+				OT BE RE-CREATED
+ 0092  FA				CLI
+ 0093  F4				HLT			; HALT SYSTEM
+				
+				
+ 0094  E8 0000 E		NMI_6:	CALL	PRT_SEG		; PRINT SEGMENT
+				 VALUE (IN DX)
+ 0097  B0 28				MOV	AL,'('		; PRINT (S)
+ 0099  E8 0000 E			CALL	PRT_HEX
+ 009C  B0 53				MOV	AL,'S'
+ 009E  E8 0000 E			CALL	PRT_HEX
+ 00A1  B0 29				MOV	AL,')'
+ 00A3  E8 0000 E			CALL	PRT_HEX
+ 00A6  FA				CLI			; HALT SYSTEM
+ 00A7  F4				HLT
+				
+ 00A8				NMI_INT_1  ENDP
+				
+ 00A8					CODE	ENDS
+					END
+Microsoft (R) Macro Assembler Version 5.10                  6/24/17 11:04:02
+BIOS ----- 06/10/85 BIOS ROUTINES                           Symbols-1
+
+
+Segments and Groups:
+
+                N a m e         	Length	 Align	Combine Class
+
+CODE . . . . . . . . . . . . . .  	00A8	BYTE	PUBLIC	
+DATA . . . . . . . . . . . . . .  	0000	FAR	NONE	
+
+Symbols:            
+
+                N a m e         	Type	 Value	 Attr
+
+C8042  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+CMOS_READ  . . . . . . . . . . .  	L NEAR	0000	CODE	External
+
+D1 . . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+D2 . . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+D2A  . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+DDS  . . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+
+EQUIPMENT_1  . . . . . . . . . .  	F PROC	000A	CODE	Global	Length = 000A
+
+MEMORY_SIZE_DET_1  . . . . . . .  	F PROC	0000	CODE	Global	Length = 000A
+
+NMI_1  . . . . . . . . . . . . .  	L NEAR	0025	CODE
+NMI_2  . . . . . . . . . . . . .  	L NEAR	004A	CODE
+NMI_3  . . . . . . . . . . . . .  	L NEAR	0056	CODE
+NMI_4  . . . . . . . . . . . . .  	L NEAR	0075	CODE
+NMI_5  . . . . . . . . . . . . .  	L NEAR	008C	CODE
+NMI_6  . . . . . . . . . . . . .  	L NEAR	0094	CODE
+NMI_INT_1  . . . . . . . . . . .  	N PROC	0014	CODE	Global	Length = 0094
+
+OBF_42 . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+
+PRT_HEX  . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+PRT_SEG  . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+P_MSG  . . . . . . . . . . . . .  	L NEAR	0000	CODE	External
+
+@CPU . . . . . . . . . . . . . .  	TEXT  1287		
+@FILENAME  . . . . . . . . . . .  	TEXT  bios		
+@VERSION . . . . . . . . . . . .  	TEXT  510		
+
+
+    201 Source  Lines
+    201 Total   Lines
+     26 Symbols
+
+  46122 + 419778 Bytes symbol space free
+
+      0 Warning Errors
+     23 Severe  Errors

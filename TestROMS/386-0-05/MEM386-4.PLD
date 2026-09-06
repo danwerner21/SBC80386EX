@@ -1,0 +1,49 @@
+Name     MEM386-4 ;
+PartNo   044 ;
+Date     11/19/2017 ;
+Revision 04 ;
+Designer JRCoffman ;
+Company  Coffman Consulting ;
+Assembly SBC386-0 ;
+Location  ;
+Device   g16v8 ;
+
+/* *************** INPUT PINS *********************/
+PIN  1  =  !CS1                   ; /*  LOCAL I/O (ON-BOARD)           */
+PIN  2  =  !UCS                   ; /*  !ROM SELECT                    */ 
+PIN  3  =  !CS2                   ; /*  !DRAM, NEEDS QUALIFIERS        */ 
+PIN  4  =  !CS3                   ; /*  !XMEM EXTERNAL MEMORY          */ 
+PIN  5  =  DT_R                   ; /*  W/~R   WRITE OR /READ CYCLE    */ 
+PIN  6  =  D_C                    ; /*  D/~C   DATE OR /CODE           */
+PIN  7  =  !BHE                   ; /*  HIGH BYTE SELECT               */
+PIN  8  =  !ADS                   ; /*  ADDRESS STROBE FROM CPU        */
+PIN  9  =  !CS0                   ; /*  EXTERNAL I/O                   */ 
+PIN 11  =  !BLE                   ; /*   LOW BYTE SELECT               */ 
+PIN 12  =  !CS4                   ; /*  !SRAM SELECT                   */
+
+/*  !CS1 IS LOCAL I/O SELECT */
+
+/* *************** OUTPUT PINS *********************
+PIN 13  =    unused               ; /*                                 */ 
+PIN 14  =  !BS8                   ; /*  BUS SIZE 8-BIT                 */ 
+PIN 15  =  !DAT_EN                ; /*  DATA ENABLE ON ECB BUS         */
+PIN 16  =  HALT                   ; /*  HALT STATE                     */ 
+PIN 17  =  !CS_SRAML              ; /*  SRAM LOW BYTE ENABLE           */ 
+PIN 18  =  !CS_SRAMH              ; /*  SRAM HIGH BYTE ENABLE          *
+PIN 19  =    unused               ; /*                                 */
+
+
+
+ROM	=	UCS		; /*  BOOT ROM		*/
+XMEM	=	CS3		; /*  EXTERNAL MEMORY	*/
+XIO	=	CS0		; /*  EXTERNAL I/O		*/
+LIO	=	CS1		; /*  ON-BOARD (LOCAL) I/O	*/
+SRAM	=	CS4 & !ROM & !XMEM 				; /*  SRAM SELECT	*/
+
+
+CS_SRAML  =	SRAM & BLE				; /* LOW SRAM SELECT */
+CS_SRAMH  =	SRAM & BHE				; /* HIGH SRAM SELECT */
+/*DRAM	=	CS2 & !ROM & !XMEM & !SRAM            	; /* DRAM ALWAYS SELECTS ON REFRESH */
+BS8	=	ROM # XMEM # XIO # LIO			; /*  BUS IS 8 BITS WIDE */
+DAT_EN	=	XMEM # XIO				; /*  ENABLE 74LS245 ECB BUS DATA DRIVER */	
+HALT	=	DT_R & !D_C				; /* SHUTDOWN OR HALT CYCLE */

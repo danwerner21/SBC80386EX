@@ -39,6 +39,7 @@ void lites(int);
 int install_SIO0(int);
 void unmask_interrupt(int);
 void testmain(void);
+void kbd_init(void);	/* in 16h_kbd.asm */
 void *ebda_alloc(word nbytes);
 word uart_det(word sio_dev);
 
@@ -133,6 +134,26 @@ jleds(code);
 		return 0xF;
 	}
 
+	/* Bring up the video state.  Mode 3 with bit 7 set initialises the
+	   BDA fields -- mode, columns, cursor table -- without clearing the
+	   terminal, which already has POST output on it.
+
+	   equip_flag bits 5:4 say which display the machine came up in;
+	   10b is 80x25 colour, which is what INT 10h presents.  DOS reads
+	   it to choose its initial mode. */
+	ASM {
+		mov	ax,0x0083
+		int	0x10
+	}
+	bda.equip_flag = (bda.equip_flag & ~0x0030) | 0x0020;
+
+
+	/* Set the keyboard ring buffer up and turn the SIO0 receive
+	   interrupt on.  From here the UART is drained by the ISR the
+	   moment a character arrives, so nothing may poll INT 14h for
+	   input any more -- KBD_getchar goes through INT 16h instead. */
+	kbd_init();
+
 
 	unmask_interrupt(0);	/* turn on the 18.2hz timer */
 	pr_lic();	/* print the Copyright & GPL license */
@@ -188,10 +209,26 @@ jleds(code);
 
 #define KEY_STRUCK 0x10
 
-	if (serial_port_status(0) & 0x0100) {
-		getchar(0);
-		printf("got a character\n");
-		code |= KEY_STRUCK;
+	/* Was the SETUP key struck while the licence scrolled past?
+	   Ask INT 16h, not the line status: the receive interrupt has
+	   already emptied the UART into the ring buffer, so INT 14h
+	   would report nothing however hard the operator typed. */
+	{
+		word waiting = 0;
+
+		ASM {
+			mov	ah,1		; is a key waiting?
+			int	0x16
+			jz	no_setup_key
+			mov	word ptr [waiting],1
+		no_setup_key:
+		}
+
+		if (waiting) {
+			getchar(0);
+			printf("got a character\n");
+			code |= KEY_STRUCK;
+		}
 	}
 
 	if (code) set_top(code & ~KEY_STRUCK);

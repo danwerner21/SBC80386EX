@@ -60,14 +60,14 @@ global	clear_irq5	;		int_gen_prot_fault
 global	clear_irq6	; (FDC)		int_page_fault
 global	clear_irq7	;
 
-global	int_10h		; (video)	int_FPU_error
+; int_10h now lives in 10h_video.asm
 ;;global	int_11h		; (equip. config)  see "11h_12h.asm"
 ;;global	int_12h		; (conv. memory size)   ditto
 ;;global	int_13h		; (disk I/O)
 ;;global	int_14h		; (serial I/O)	see "14h_sio0.asm"
 ;;global	int_15h		; (cassette I/O + much more)
-global	int_16h		; (keyboard)
-global	int_17h		; (parallel port)
+; int_16h and int_irq4 now live in 16h_kbd.asm
+; int_17h now lives in 17h_prn.asm
 
 ; int_18h now lives in 19h_boot.asm
 ; int_19h now lives in 19h_boot.asm
@@ -140,7 +140,6 @@ int_irq0:
 int_irq1:
 int_irq2:
 int_irq3:
-int_irq4:
 int_irq5:
 int_irq6:
 int_irq7:
@@ -161,14 +160,11 @@ clear_irq7:
 
 
 
-int_10h:
 ;;int_11h:
 ;;int_12h:
 ;;int_13h:
 ;;int_14h:
 ;;int_15h:
-int_16h:
-int_17h:
 
 int_1Ah:
 int_1Bh:
@@ -242,14 +238,22 @@ _small_code_:
 VIDEO_putchar_:
 @VIDEO_putchar:
 @CVDU_putchar:
+; POST and DOS now share one output path: this goes through INT 10h
+; teletype rather than straight to INT 14h, so the BDA cursor stays in
+; step with what has actually been printed.
 %define VSHOW 0
 %if VSHOW
 	mov	dx,0x4ff
 	out	dx,al
 %endif
-	mov	ah,1		; write to serial line
-	mov	dx,0		; COM1
-	int	0x14		; SIO0 write
+	push	bx		; cprintf keeps the character in BX across the
+				;  putch(CR) that precedes putch(LF) -- the old
+				;  form of this routine only touched AX and DX,
+				;  and clobbering BX cost every line feed
+	mov	ah,0x0E		; teletype
+	xor	bx,bx		; page 0
+	int	0x10
+	pop	bx
 %if VSHOW
 	mov	al,ah
 	mov	dx,0x4ff
@@ -264,20 +268,18 @@ VIDEO_putchar_:
 
 KBD_getchar_:
 @KBD_getchar:
-.1:
-	mov	ah,2		; read from serial line
-	mov	dx,0		; COM1
-	int	0x14		; SIO0 write
-%if VSHOW
-;;	xchg	al,ah
-	mov	dx,0x4ff
-	out	dx,al
-;;	xchg	al,ah
-%endif
-	test	ah,0xFF		; any error bit set?
-	jnz	.1
-	and	al,0x7F		; mask to 7 bits
-	ret
+; This MUST go through INT 16h, not INT 14h.
+;
+; The SIO0 receive interrupt now drains the UART into the ring buffer
+; the moment a character arrives, so a polled INT 14h read here would
+; wait forever for data that has already been taken.  Everything that
+; reads the console -- getline, SETUP, the monitor -- comes through
+; this one routine, so this is the only place it has to change.
+	xor	ah,ah		; read a key, waiting for one
+	int	0x16
+	and	al,0x7F		; mask to 7 bits, as before
+	xor	ah,ah		; the caller wants the character, not the
+	ret			;  scan code INT 16h returns alongside it
 
 
 	global	FDC_stop_motor

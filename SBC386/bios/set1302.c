@@ -35,6 +35,7 @@
 #include "getline.h"
 #include "disk.h"
 #include "debugmon.h"
+#include "hdinit.h"	/* HD_GEO_NVRAM */
 
 void testmain(void);	/* the POST self test, in testmain.c */
 
@@ -216,11 +217,84 @@ T_STR fixed_disks[] = {
 
 
 
+/*
+ * Read a decimal number.  An empty line, or anything that is not a
+ * plain number in range, leaves the value alone and returns -1.
+ *
+ * Decimal rather than hex: geometry reads as 4 heads and 32 sectors
+ * everywhere else in the world, and SETUP is not the monitor.
+ */
+static int get_dec( char *prompt, int now, int limit )
+{
+	char	line[16];
+	int	i, v;
+
+	printf("%s [%d]: ", prompt, now);
+	if( !getline(line,sizeof(line)) )
+		return( -1 );
+
+	v = 0;
+	for( i = 0; line[i]; i++ ) {
+		if( line[i] < '0' || line[i] > '9' )
+			return( -1 );
+		v = v*10 + (line[i] - '0');
+		if( v > limit )
+			return( -1 );
+	}
+	return( i ? v : -1 );
+}
+
+
+/*
+ * Fixed disk geometry.
+ *
+ * These are the heads and sectors INT 13h reports, and the numbers the
+ * MBR uses to locate the boot record.  They have to agree with whatever
+ * partitioned the card -- which is often NOT what the card reports
+ * about itself, because the machine that imaged it applied its own
+ * translation.  A mismatch shows up as "Missing operating system" from
+ * an MBR that is perfectly intact.
+ *
+ * Zero heads means no override: the card's own geometry is used, and
+ * failing that an LBA-assist translation.
+ */
 int set_fixed(void)
 {
-	printf("\nFixed disk setup is not implemented\n");
-	return 0;
+	int	unit, v, modified = 0;
+	int	h, s;
+
+	printf("\nFixed disk geometry\n");
+	printf("\nThese must match the machine that partitioned the card,\n");
+	printf("not necessarily what the card reports.  Zero = use the\n");
+	printf("card's own geometry.  Empty line leaves a value alone.\n");
+
+	for( unit = 0; unit < 2; unit++ ) {
+
+		h = bda.nvram_unused[HD_GEO_NVRAM + unit*2];
+		s = bda.nvram_unused[HD_GEO_NVRAM + unit*2 + 1];
+
+		printf("\n%s\n", unit ? "Slave" : "Master");
+
+		v = get_dec("  heads  ", h, 255);
+		if( v >= 0 ) {
+			bda.nvram_unused[HD_GEO_NVRAM + unit*2] = (byte)v;
+			modified = 1;
+		}
+
+		v = get_dec("  sectors", s, 63);
+		if( v >= 0 ) {
+			bda.nvram_unused[HD_GEO_NVRAM + unit*2 + 1] = (byte)v;
+			modified = 1;
+		}
+	}
+
+	if( modified )
+		printf("\nStored.  The new geometry takes effect at the next boot.\n");
+
+	return modified;
 }
+
+
 int set_floppy(void)
 {
 	printf("\nFloppy disk setup is not implemented\n");

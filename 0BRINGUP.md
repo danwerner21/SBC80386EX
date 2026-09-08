@@ -1,7 +1,7 @@
 # SBC-386EX BIOS Bring-Up
 
-**An assessment of the work-in-progress BIOS as it stands today, the specific defects
-blocking a DOS boot, and a phased plan to close them.**
+**The plan that took this BIOS from "has never executed INT 13h" to a DOS 6 prompt, what
+was found on the way, and what is left.**
 
 | | |
 |---|---|
@@ -9,34 +9,32 @@ blocking a DOS boot, and a phased plan to close them.**
 | Board | RetroBrew SBC-386EX v2.0 |
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
-| Assessed | 2026-09-06, by code inspection — findings unverified on hardware |
+| Assessed | 2026-09-06, by code inspection |
+| Last updated | 2026-09-07, **against hardware** |
 
 ---
 
 ## The short version
 
-The hardware-facing half of this BIOS is in good shape. POST is thorough and genuinely
-works: chip selects, DRAM sizing, protected-mode extended-memory sizing, ROM CRC, CPU
-clock measurement, FPU probe, RTC/NVRAM, an 18.2 Hz tick, and a complete INT 14h serial
-driver.
+**The board boots MS-DOS 6 to a `C:\>` prompt over the serial console, and the keyboard
+works.** Phases 0 through 3 are complete and verified on hardware. What remains is
+Phase 4 — the INT 15h calls DOS's standard drivers want — and a short list of smaller
+items collected in section 09.
 
-**The operating-system-facing half does not exist yet.** There is no bootstrap —
-`_main_()` ends by calling `testmain()` and then powers the CPU down. INT 19h, INT 10h,
-INT 16h, and INT 17h all fall through `stub.asm` into a shared "invalid function" return
-that sets carry and `AH=01`. INT 13h exists as scaffolding but has never been executed
-successfully — it contains at least five independent bugs, any one of which is fatal, and
-the POST never populates the drive tables it depends on.
+The original assessment held up: nothing was architecturally wrong, and the work went in
+the predicted order. What it could not predict was the hardware, and most of the time
+spent went there rather than on the code. Section 04a records what the board and the
+media actually turned out to do; several of those findings contradict what the source
+comments and the datasheet-derived guesses said.
 
-Nothing here is architecturally wrong; it is unfinished, in a predictable order. About
-52K of the 64K ROM window is still free, which is more than enough room for everything
-below.
+| Metric | Then | Now | |
+|---|---:|---:|---|
+| ROM image | 12,896 B | 30,592 B | of 65,536 — 53% free |
+| Writable data segment | 0 B | 0 B | `_DATA` + `_BSS` still empty, as required |
+| INT vectors that work | 4 | 12 | 10h, 11h, 12h, 13h, 14h, 15h*, 16h, 17h, 18h, 19h, 1Ah, IRQ0, IRQ4 |
+| Blocking defects | 11 | 0 | all eleven fixed and confirmed on hardware |
 
-| Metric | Value | |
-|---|---:|---|
-| ROM image today | 12,896 B | of 65,536 — 80% free |
-| Writable data segment | 0 B | `_DATA` + `_BSS` are empty |
-| INT vectors that work | 4 | 11h, 12h, 14h, 1Ah (+ IRQ0) |
-| Blocking defects | 11 | across 13h_disk, diskide, main |
+\* INT 15h is still partial — see Phase 4.
 
 ---
 
@@ -80,115 +78,75 @@ real code, not placeholders.
 - **C runtime** — `printf` over INT 14h, `getchar`/`getline`, and `option_get` (a
   numbered-choice prompt). These are assembled into `set_top()`, a genuinely interactive
   SETUP menu reached by pressing a key during the POST scroll, backed by a CRC-protected
-  31-byte NVRAM image. Two of its four entries — Fixed Disks and Floppy Disks — are
-  `printf("...not implemented")` stubs.
+  31-byte NVRAM image. It now has six entries: Fixed Disks (geometry override, written),
+  Floppy Disks (still a stub — there is no FDC), RS-232 Serial, Date/Time/Battery, Debug
+  Monitor and Self test.
 
-> **There is no command monitor.**
-> `testmain()` is a straight-line test *script*, not a monitor: what it runs is fixed at
-> compile time by the `#define` block at the top of `testmain.c`, and it returns when it
-> reaches the end. There is no prompt and no command dispatch anywhere in the ROM. The
-> pieces one would be built from all exist and work — the console, the line editor, the
-> menu loop — so Phase 0 below assembles them into one, and hangs it off the
-> `set_fixed()` stub that is already in the SETUP tree.
+> **This section describes the tree as first assessed.** What follows in 02, 03 and 04a
+> is what changed. The one structural claim here that is no longer true is the note that
+> there was no command monitor: `debugmon.c` is now the largest single source file in the
+> tree and the instrument most of the rest of this document was proven with. It hangs off
+> SETUP entry 5, not off `set_fixed()` as originally suggested — `set_fixed()` turned out
+> to be the natural home for the disk geometry override instead.
 
 ---
 
 ## 02 · The interrupt map
 
-This is the clearest picture of where the BIOS stands. Note the block of entries that
-share one fall-through in `stub.asm`: they do not `IRET` quietly — they return
-`CF=1, AH=01`, which is what DOS will see when it tries to print a character or read a
-key.
+Everything the original assessment listed as missing or returning an error now works.
+The remaining stubs are deliberate.
 
 | Vector | Service | State | Notes |
 |---|---|---|---|
-| `00–07` | CPU exceptions | stub | All alias to a single `IRET`. |
+| `00–07` | CPU exceptions | stub | All alias to a single `IRET`. Unchanged. |
 | `08` | IRQ0 — timer tick | **working** | 18.2066 Hz, chains INT 1Ch, maintains BDA counters. |
-| `09–0F` | IRQ1–7 | EOI only | Non-specific EOI then `IRET`. Fine until you use them. |
-| `10` | Video | **returns error** | Falls into the invalid-command return. Every DOS console write fails. |
-| `11` | Equipment list | **working** | Video and floppy bits are never set, though. |
+| `0C` | IRQ4 — SIO0 receive | **working** | New. Drains the UART into the BDA ring buffer. |
+| `09–0F` | other IRQs | EOI only | Non-specific EOI then `IRET`. |
+| `10` | Video | **working** | `10h_video.asm`. Serial-only, ANSI/VT100. See section 04a. |
+| `11` | Equipment list | **working** | Video bits now set; floppy bits still not. |
 | `12` | Conventional memory | **working** | Reports 640K. |
-| `13` | Disk | **non-functional** | Only 41h/42h are written, and both fail. See section 03. |
-| `14` | Serial | **complete** | The strongest module in the tree. |
-| `15` | Misc / system | partial | Only AH=86h (delays ≥250 ms) and a 4Fh stub. 87h/88h/C0h/C1h missing. |
-| `16` | Keyboard | **returns error** | COMMAND.COM cannot read input at all. |
-| `17` | Printer | **returns error** | Should report "not present" cleanly instead. |
-| `18` | ROM BASIC / boot failure | **returns error** | Should land in the monitor. |
-| `19` | Bootstrap loader | **missing** | Nothing in the image ever attempts a boot. |
+| `13` | Disk | **working** | CHS 00/02/03/04/08/15 and packet 41–44/47/48. `4Eh` still stubbed. |
+| `14` | Serial | **complete** | Console port now protected from re-initialisation. |
+| `15` | Misc / system | partial | Still only AH=86h (≥250 ms) and 4Fh. **Phase 4.** |
+| `16` | Keyboard | **working** | `16h_kbd.asm`. Interrupt-driven, 00/01/02 + 10h/11h/12h. |
+| `17` | Printer | **working** | `17h_prn.asm`. Returns a clean not-present status. |
+| `18` | Boot failure | **working** | Prints, drops into the monitor, retries on exit. |
+| `19` | Bootstrap loader | **working** | `19h_boot.asm`. Loads and enters the boot sector. |
 | `1A` | Time / RTC | **working** | Plus the DS1302 extension group. |
 | `1B` / `1C` | Break / user tick | IRET | Correct as-is. |
-| `1D` / `1E` / `1F` | Parameter tables | **not tables** | Vectors point at code, not at the tables DOS may read. |
-| `40` | Floppy | invalid cmd | Correct — there is no FDC on the board. |
-| `41` / `46` | Fixed disk parameter tables | **not tables** | Both point at an `IRET` instruction. INT 13h dereferences them as `T_DISKTAB`. |
+| `1D` / `1E` / `1F` | Parameter tables | **not tables** | Still vectors to code. **Phase 4.** |
+| `40` | Floppy | invalid cmd | Correct — no FDC. `floppy_call` now returns `RETF 2`. |
+| `41` / `46` | Fixed disk parameter tables | **working** | Real `T_DISKTAB`s in the BDA, written at POST. |
 | `70–77` | IRQ8–15 | EOI only | Cascade EOI handled correctly. |
 
-*Source: `page0vectors` in start.asm, cross-referenced against stub.asm fall-through order.*
 
----
+## 03 · Defects found by inspection — all fixed
 
-## 03 · Defects found by inspection
+Eleven defects were found by reading the source before any of it had run. **All eleven
+were real**, and all are now fixed and confirmed on hardware. The list is kept because
+it is a fair record of what a careful read can and cannot find: every one of these was
+genuine, and none of the problems that actually cost the most time are on it.
 
-These are code-reading findings, not observed failures — confirm each on hardware as you
-go. Taken together they say the same thing: **the INT 13h path has never successfully
-executed.**
+| # | Where | Defect | Fix |
+|---|---|---|---|
+| 1 | `main.c` | Drive registration ran only when `code` was non-zero — the condition was inverted, so a healthy board registered no disk | Removed; `hd_enumerate()` does it unconditionally |
+| 2 | POST | `bda.hd_number` never written, so `get_disk_table` rejected every call | Written by `hd_enumerate()` |
+| 3 | `13h_disk.asm` | `dtab_vectors` is a `db` table read as a word — index 0 returned `4641h` and the following `LES` built a garbage far pointer | Zero-extended byte load |
+| 4 | `13h_disk.asm` | `fn41` tested `[bx+disk_flags]` with BX still holding the caller's `55AA` magic | `[di+disk_flags]` |
+| 5 | `13h_disk.asm` | `fn42` hard-coded driver index 1, selecting the null DualSD slot | Derived from `disk_tab[]` via a new `drv_index` table |
+| 6 | `13h_disk.asm` | `floppy_call` used a near `RET 2` inside an interrupt handler | `RETF 2` |
+| 7 | `13h_disk.asm` | CHS entry points all aliased to invalid-command | Ported from `HardDisk/DIDE.ASM`; packet calls written |
+| 8 | `diskide.asm` | DRQ polled once *before* the sector loop; ATA raises it per sector | Wait moved inside the loop, both directions |
+| 9 | `diskide.asm` | Every failure collapsed to `AX=-1` | `ide_error` reads status + error registers, maps to BIOS codes, records `bda.hd_status` |
+| 10 | `diskide.asm` | `loopnz CX=0FFFFh` timeouts — clock-dependent and milliseconds long | 5-second deadlines off the 18.2 Hz tick |
+| 11 | `main.c` | `_main_()` ended in `testmain()` then powered down; no `INT 19h` anywhere | Tail replaced with `hd_enumerate()` then `INT 19h` |
 
-**1. `main.c` — `if (code) bda.disk_tab[0] = FX_IDEm;`** — *blocker*
-Drives are registered only when `code` is non-zero — that is, only when the NVRAM
-checksum is *bad*, the clock is stopped, or charging is disabled. On a healthy board no
-disk is ever registered. The condition is inverted.
+Two more were found while working on the above, and are worth recording separately
+because inspection had missed them:
 
-**2. POST — `bda.hd_number` is never written** — *blocker*
-Nothing in the image assigns it, so it stays 0. `get_disk_table` compares the drive number
-against it and rejects every call, including 41h and 42h. There is no disk enumeration
-step at all.
+- **`13h_disk.asm` — the packet dispatch range test was inverted.** `cmp ah,len_packet_call_tab / jb ret_invalid_command` rejected every valid packet call and let anything above the table jump through an out-of-range index. Now `jnb`.
+- **`disktab.h` ended inside an unterminated comment.** Line 97 opened `/*IDE Command Constants...` and nothing closed it, so the file ran to EOF mid-comment. Harmless to `copt`, which does line-pattern rewriting, but no C file could ever have included it.
 
-**3. `13h_disk.asm` — `get_disk_table`, `mov di,[di+dtab_vectors]`** — *blocker*
-`dtab_vectors` is a table of *bytes* (`db 0x41,0x46,...`) but is read as a word. Index 0
-yields `0x4641` instead of `0x41`, so the subsequent `shl di,2` / `les di,[di]` loads a
-garbage far pointer. Needs a byte load, zero-extended.
-
-**4. `13h_disk.asm` — `fn41_check_extensions_present`** — *blocker*
-After `get_disk_table` returns the table in `ES:DI`, the flags test uses
-`[bx+disk_flags]`. `BX` at that point is still the caller's `0x55AA` magic number. Should
-be `[di+disk_flags]`.
-
-**5. `13h_disk.asm` — `fn42_read_sector`, `mov bx,1`** — *blocker*
-`read_tab` is `{ microSD=0, DualSD=0, IDE_READ_SECTOR }`. With `bx=1`, `add bx,bx` gives
-byte offset 2 — word index 1 — which is the *null* DualSD entry. The call target must be
-derived from `disk_tab[]`, not hard-coded; for IDE it needs to select index 2.
-
-**6. `13h_disk.asm` — `floppy_call`, `ret 2`** — *bug*
-Inside an interrupt handler this is a *near* return: it pops IP, discards CS, and leaves
-the caller's flags on the stack. Must be `retf 2`. Latent today because there is no
-floppy, but it will bite the moment something calls INT 13h with `DL<0x80` — which DOS
-does while probing.
-
-**7. `13h_disk.asm` — CHS entry points** — *blocker*
-Functions 00, 02, 03, 04, 08, 15 and packet calls 43, 44, 47, 48 are all aliased to
-`ret_invalid_command`. AH=02h (CHS read) is what a DOS boot sector and IO.SYS actually
-use; without it nothing loads.
-
-**8. `diskide.asm` — `IDE_READ_SECTOR` / `IDE_WRITE_SECTOR`** — *blocker*
-DRQ is polled once *before* the sector loop. ATA raises DRQ per sector during
-multi-sector PIO, so any transfer of more than one sector will run ahead of the drive and
-desynchronise. DOS reads multiple sectors constantly. The DRQ wait belongs inside the
-loop.
-
-**9. `diskide.asm` — error handling** — *bug*
-The ERR bit and the error register are never read, so every failure collapses to `AX=-1`.
-INT 13h cannot produce meaningful status codes, and DOS's retry logic keys off them.
-
-**10. `diskide.asm` — timeouts** — *bug*
-`ide_wait_not_busy` and `ide_wait_drq` spin on `CX=0FFFFh` with `loopnz`. That is both
-clock-dependent (16–33 MHz) and far too short for drive spin-up or a reset. Use the 1 MHz
-Timer 1 that POST already sets up.
-
-**11. `main.c` — end of `_main_()`** — *blocker*
-`testmain(); printf("\nShutdown.\n"); return 8;` — control returns to `exit_` in
-start.asm, which enters PWRCON power-down and halts. There is no `int 19h` anywhere in
-the ROM.
-
----
 
 ## 04 · Constraints that shape the work
 
@@ -211,7 +169,8 @@ are easy to violate accidentally.
   most likely to need iteration.
 - **IDE is wired 8-bit.** CS1 is configured with the bus-size bit clear, which is why
   `IDE_INITIALIZE` issues `SET FEATURES 01h`. Only drives that honour the 8-bit transfer
-  feature will work. CompactFlash cards do; most spinning IDE drives do not. Plan on CF.
+  feature will work.  Plan on CF -- but see 04a: the IDENTIFY bit that reports the
+  feature turned out not to predict which cards actually work on this board.
 - **The POST stack sits at `A800:0000`.** Because CS4 is disabled at `HALF_MEM=0`, that
   address is actually served by DRAM through CS2. It is above the 640K the BIOS reports,
   so it will not collide with DOS — worth keeping that way deliberately rather than by
@@ -221,6 +180,93 @@ are easy to violate accidentally.
   lever.
 
 ---
+## 04a · What the hardware actually does
+
+Everything in this section was learned by measurement, on the board, after the original
+assessment. Several items contradict what the source comments, the plan, or a reasonable
+datasheet guess said — which is why they are written down.
+
+### The IDE interface
+
+- **The board is 8-bit only, and this is now proven rather than inferred.** A 16-bit
+  `IN AX,DX` from the data port returns the low byte correct and **D8–D15 as zero**,
+  while the card advances a full word — so half the sector is lost. `SET FEATURES 01h`
+  is mandatory, not an optimisation.
+- **`CFA-8bit` in IDENTIFY word 83 does not predict whether a card will work.** A
+  SanDisk-class card reporting `no` reads flawlessly; two others reporting the same
+  value return a fixed `XX XX XX 60` pattern with no disk content in it. Whatever
+  separates working cards from broken ones on this board, it is not that bit. Test each
+  card; do not trust the flag.
+- **Some cards deliver 511 bytes per sector and drop DRQ a byte early.** An STI Flash
+  card read bytes 0–510 perfectly and never presented byte 511, so every sector came
+  back with its last byte missing — enough to fail the `AA55h` signature test while
+  looking otherwise healthy. Not the board: another card in the same socket delivers 512.
+  Ruled out with evidence: the transfer loop, DRQ gating, the SRAM buffer, byte
+  alignment, a latching adapter, and 16-bit transfers.
+- **CS1 wait states were 3**, against 7 for the other external peripheral on `CS0`. Not
+  the cause of anything found so far, but thin for a CF card. Still `3` in `wtab1`.
+
+### Timers and interrupts
+
+- **Timer 1 is not running.** `start_timer0_` in `1Ah_time.asm` writes
+  `TIMER_STOP + BIT1`, which opens counter 0's gate only. Anywhere this plan says "use
+  the 1 MHz Timer 1", it must be enabled first. The IDE timeouts use the 18.2 Hz tick
+  instead, which is coarse but running and clock-independent.
+- **PSCLK is nearer 400 kHz than 1 MHz.** `CLKPRS` is set to 48 in `start.asm`, and by
+  the divider in that comment `(CLK2/2)/(denom+2)` gives 400 kHz at a 20 MHz core. The
+  "1 MHz Timer 1" in Phase 4 needs checking before it is relied on.
+- **SIO0 receive is on IRQ4 — INT 0Ch.** Measured with the monitor's `IRQFIND`, which
+  samples the ICU request registers with all masks closed. The vector table already
+  labelled `int_irq4` "(COM1)", so wiring and measurement agree.
+
+### The toolchain
+
+- **Open Watcom will not reinterpret an integer as a far pointer.** The obvious idiom
+  for writing an interrupt vector,
+  `*(void **)(((dword)seg << 16) | off) = addr`, produced a **DS-relative** address —
+  the write went into ROM at `DGROUP:0104` and did nothing, silently, while
+  `bda.hd_number` written through the real far pointer in `bda_ptr` worked fine. Build
+  far pointers through a union. This cost a long detour: INT 41h pointed at ROM, so
+  `cv_lba` read its geometry out of code and every INT 13h read timed out.
+- **`cprintf` keeps the character in BX across the `putch(CR)` that precedes
+  `putch(LF)`.** It is in the prebuilt `lib/sbc386.lib`, so the callee has to
+  accommodate it: `VIDEO_putchar_` must preserve BX. Adding an innocuous `xor bx,bx`
+  cost every line feed in the BIOS. Watcom's register convention says BX is scratch, so
+  this is `cprintf` relying on something it should not — worth remembering if
+  `sbc386.lib` is ever rebuilt.
+- **A makefile rule inserted between a target and its recipe silently breaks both.**
+  `stub.o` lost its recipe and stub's command became the second line of `19h_boot.o`'s,
+  so building `19h_boot.o` assembled `19h_boot.asm` and then overwrote it with
+  `stub.asm`. The object's THEADR record is what gives this away.
+
+### DOS and the media
+
+- **DOS reprograms COM1 during SYSINIT.** Its AUX device initialisation calls INT 14h
+  `AH=00`, and on this board AUX *is* the console — so the divisor latch changed and
+  every byte after it arrived at the wrong rate. `init_sio` now leaves the console port
+  alone. Function 4, the extended init, is deliberately still open because that is what
+  `install_serial_console()` uses at POST.
+- **CHS geometry must match whatever partitioned the card, not what the card reports.**
+  A card reporting 492/8/16 held an image built as 492/4/32; the MBR locates the boot
+  record by the CHS in the partition entry, so it read LBA 16 instead of 32 and printed
+  "Missing operating system" while being entirely intact. Both geometries are exact for
+  the card — CHS on a translating BIOS is a convention, not a property of the medium.
+  SETUP now stores an override in NVRAM.
+- **`ebda_alloc()` does not exist.** It is declared in `main.c` and has never been
+  written. The fixed-disk parameter tables live in `bda.rsvd_unused[]` instead — two
+  20-byte `T_DISKTAB`s in 41 bytes, with one byte spare. A third drive will not fit.
+
+### Method
+
+The single most valuable thing built was the monitor, and the most valuable habit was
+**measuring instead of reasoning**. Every problem in this section that resisted
+inspection — the missing sector byte, the IRQ number, the lost line feeds, the INT 41h
+vector — was settled by adding a command that reported what the hardware was actually
+doing, usually in one build cycle. Several confident diagnoses made from the source
+alone turned out to be wrong.
+
+---
+
 
 ## 05 · The plan
 
@@ -229,7 +275,7 @@ tested with; disk comes next, because with that instrument in hand you can prove
 storage over the serial console you already have, before taking on the much fuzzier
 console emulation. Effort figures assume you already know this codebase.
 
-### Phase 0 · Ground truth and a monitor — *~1 day*
+### Phase 0 · Ground truth and a monitor — **DONE**
 
 > Before changing anything, make the build reproducible and build the instrument you will
 > diagnose everything else with. You are about to do a lot of surgery on code that has
@@ -252,7 +298,7 @@ console emulation. Effort figures assume you already know this codebase.
   any line buffer or parsed argument has to be a local on the stack.
 - **log** — Capture a serial log of the current POST as a baseline to diff against.
 
-### Phase 1 · Make INT 13h real — *2–3 days*
+### Phase 1 · Make INT 13h real — **DONE**
 
 > The deepest work in the plan. Target: `AH=02h` CHS reads and `AH=08h` geometry queries
 > that a DOS boot sector will accept, backed by an IDE driver that survives multi-sector
@@ -279,7 +325,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **status** — Record the last operation's result in `bda.hd_status` and implement fn01
   (get status); DOS reads it after failures.
 
-### Phase 2 · Bootstrap and hand-off — *~1 day*
+### Phase 2 · Bootstrap and hand-off — **DONE**
 
 > Small, and it makes the machine feel like a PC for the first time. Prove it with a
 > hand-written boot sector that prints through INT 14h — that isolates the boot path from
@@ -298,7 +344,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **setup** — Implement `set_fixed()`; currently it prints "not implemented". A
   boot-device byte in NVRAM plus the drive table it already has room for.
 
-### Phase 3 · Console — INT 10h, 16h, 17h — *3–5 days, and the most likely to overrun*
+### Phase 3 · Console — INT 10h, 16h, 17h — **DONE except VT100 escape translation**
 
 > A serial terminal pretending to be a PC display and keyboard. Scope this to what IO.SYS
 > and COMMAND.COM actually call; resist building a full VGA BIOS.
@@ -325,7 +371,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **plumbing** — Point `VIDEO_putchar_` in `stub.asm` at INT 10h so POST messages and DOS
   output share one path. Set the video bits (4:5) and floppy bits in `equip_flag`.
 
-### Phase 4 · INT 15h and the parameter tables — *~1 day*
+### Phase 4 · INT 15h and the parameter tables — **NEXT**
 
 > The remaining calls DOS and its standard drivers make. None are needed for a bare boot;
 > all are needed before the system feels finished.
@@ -340,7 +386,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **tables** — Point INT 1Eh at a real disk base table. Verify the INT 41h/46h tables from
   Phase 1 are what DOS expects to find.
 
-### Phase 5 · Hardening — *as needed*
+### Phase 5 · Hardening — **not started**
 
 > After DOS boots. None of this blocks the milestone.
 
@@ -360,6 +406,15 @@ console emulation. Effort figures assume you already know this codebase.
 Each rung is independently observable on the serial console, and each one only depends on
 the rungs below it. Do not skip ahead — a failure at rung 9 with rungs 1–8 unverified is
 very hard to diagnose.
+
+**All ten rungs are climbed except rung 3.** The multi-sector comparison was built as the
+monitor's `SEC2` command and never run. The CHS transfer loop calls the driver one sector
+at a time and so sidesteps it, but `fn42` and `fn43` pass the block count straight through
+and do depend on it — it is the only thing below the DOS boot that remains unverified.
+
+The ladder earned its keep. Rungs 7 and 8 in particular — a hand-written boot sector
+printing through INT 14h, then the same sector printing through INT 10h — were what
+separated a boot-path fault from a console fault at the moment both were unproven.
 
 1. **IDENTIFY dump** — Words 1/3/6 and 60–61 from the monitor. Proves the CF card, the
    8-bit feature negotiation, and CS1 timing.
@@ -453,7 +508,7 @@ backup snapshots.
 | `diskide.asm` | linked | 8-bit PIO IDE driver: read, write, IDENTIFY, and the SET FEATURES 01h init. Defects 08–10 live here. |
 | `13h_disk.asm` | linked | INT 13h dispatcher, driver tables and packet validation. Defects 03–07 live here. |
 | `14h_sio0.asm` | linked | INT 14h serial driver plus `install_SIO0()` and the baud divisor table. |
-| `15h_misc.asm` | linked | INT 15h dispatcher. Only AH=86h is written, and only for delays over 250 ms. |
+| `15h_misc.asm` | linked | INT 15h dispatcher. Still only AH=86h, and only for delays over 250 ms. **Phase 4.** |
 | `1Ah_time.asm` | linked | INT 1Ah, the IRQ0 tick handler, and the entire DS1302 RTC/NVRAM bit-banger. The largest module in the tree. |
 | `11h_12h.asm` | linked | INT 11h equipment word and INT 12h conventional memory size. Both trivial, both correct. |
 | `icu.asm` | linked | `mask_interrupt` / `unmask_interrupt` for the 8259 pair, callable from C. |
@@ -548,3 +603,62 @@ The dependency variables are stale in both directions. `INCLUDES` still lists `z
 and `CINCL` still lists `zero.h` and `sbc188.h`, none of which anything includes any more.
 More usefully, **`serial.inc` appears in no dependency list at all** even though
 14h_sio0.asm includes it — edit that file today and the build will not notice.
+
+---
+
+## 09 · Open items
+
+Small things that are known, deliberate, or simply not done yet. None of them block the
+DOS prompt.
+
+### Functional gaps
+
+- **VT100 escape translation.** Arrow keys, Home/End and the function keys arrive as
+  `ESC [ A` and reach the ring buffer as three separate characters. DOS's command-line
+  editing uses arrows and F1/F3, so this is felt at every prompt. Needs a small state
+  machine in the IRQ4 handler. Last item of Phase 3.
+- **INT 10h function 08h cannot report screen contents.** There is no display buffer —
+  a deliberate choice, since real memory-mapped video is planned for this board and a
+  pretend buffer at `B800:0000` would only have to be torn out again. `08h` returns a
+  space in attribute `07h`; `09h`/`0Ah` write to the terminal and restore the cursor
+  rather than editing a buffer. Everything DOS leans on is honest.
+- **INT 13h `4Eh`** (set hardware configuration) still returns invalid-command. Normal.
+- **`equip_flag` floppy bits** are still never set. Video bits now are.
+- **Multi-sector transfers are unverified** — see the ladder note above.
+
+### Housekeeping
+
+- **IDE wait states are still `3`** in `wtab1`. `C007` (7 wait states, matching `CS0`)
+  has been run successfully at runtime via the monitor but never made permanent.
+- **The `0rom128.HEX` copy rule is still missing** from the makefile. It was removed
+  while `all:` still listed the target, which made every build fail at the last step;
+  the target was dropped from `all:`, so nothing regenerates that file now. Whatever you
+  burn, do not burn `0rom128.HEX` expecting it to be current.
+- **SETUP halts instead of rebooting.** After saving NVRAM, `set_top()` prints
+  "Reboot required!" and calls `exit(15)`, which lands in `exit_` and enters power-down.
+  A jump to the reset vector would be friendlier.
+- **The makefile dependency block** still needs the cleanup described above — stale
+  entries, and `serial.inc` in no list at all.
+
+### Files added during this work
+
+| File | Purpose |
+|---|---|
+| `debugmon.c` | The command monitor. Grew into the main diagnostic instrument. |
+| `monitor.asm` | `go_call` — far-call an arbitrary address for the `GO` command. |
+| `hdinit.c` / `.h` | IDE reset, IDENTIFY, geometry translation, enumeration, INT 41h/46h. |
+| `strtoint.c` / `.h` | Hex string parsing for the monitor. `strtoint.h` did not exist; the function was being called with no declaration, so its `unsigned long` return was truncated. |
+| `19h_boot.asm` | INT 19h bootstrap and INT 18h boot-failure handler. |
+| `10h_video.asm` | INT 10h over ANSI/VT100. |
+| `16h_kbd.asm` | INT 16h, the IRQ4 receive ISR, and the ASCII→scan-code table. |
+| `17h_prn.asm` | INT 17h. |
+
+### Monitor commands
+
+`DUMP` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST` `MKBOOT`
+`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `EXIT`
+
+Several were written to answer one question and kept because they answered it — `IRQFIND`
+found the SIO0 interrupt line, `SECRAW` proved a card was short a byte per sector,
+`MKBOOT` separated the boot path from the console, and `GEO` let a geometry be tried
+without a rebuild.

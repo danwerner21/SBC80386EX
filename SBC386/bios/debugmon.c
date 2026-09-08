@@ -252,36 +252,38 @@ static void io_dump( word port, word count, int wide )
 /*
  * True if the operator has typed Ctrl-C.  A long dump at 9600 baud takes
  * a while, so Ctrl-C stops it.  Anything else typed is swallowed rather
- * than left in the UART, where it would turn up in the next MON> prompt.
+ * than left in the buffer, where it would turn up at the next MON>
+ * prompt.
  *
- * The status call comes first so this never blocks when nothing has been
- * typed.  The character is then taken with INT 14h directly rather than
- * through KBD_getchar(), because that routine retries whenever a line
- * error bit is set -- it would sit and wait for the next keystroke,
- * which is the opposite of what an abort check should do.
+ * INT 16h function 01h reports whether a key is waiting without taking
+ * it, so this never blocks.  It has to be INT 16h rather than the INT
+ * 14h line status this used to read: the receive interrupt empties the
+ * UART into the ring buffer as characters arrive, so the line status
+ * shows nothing even when a key has been struck.
  */
 static int abort_requested( void )
 {
-	word status;
+	word	waiting, key;
 
+	waiting = 0;
 	ASM {
-		xor	dx,dx
-		mov	ah,3
-		int	0x14		; get serial port status
-		mov	[status],ax
+		mov	ah,1		; is a key waiting?
+		int	0x16
+		jz	no_key
+		mov	word ptr [waiting],1
+	no_key:
 	}
 
-	if( !(status & 0x0100) )	/* no character waiting */
+	if( !waiting )
 		return( 0 );
 
 	ASM {
-		xor	dx,dx
-		mov	ah,2		; a character is ready: this returns at once
-		int	0x14
-		mov	[status],ax
+		xor	ah,ah		; take it; cannot block, one is there
+		int	0x16
+		mov	[key],ax
 	}
 
-	return( (status & 0x7F) == ASCII_CTRLC );	/* AL, masked to 7 bits */
+	return( (key & 0x7F) == ASCII_CTRLC );
 }
 
 
@@ -634,6 +636,65 @@ void DumpSector( dword lba, int drive )
 }
 
 
+/*
+ * A test boot sector, hand assembled.  It prints through INT 14h and
+ * stops, so it proves the INT 19h hand-off on its own -- no INT 10h, no
+ * console, nothing from Phase 3 involved.
+ *
+ * Entered at 0000:7C00 with DL = 80h.  The listing below is the whole
+ * of it, so the bytes can be checked by eye:
+ *
+ *   0000  FA           cli
+ *   0001  31 C0        xor  ax,ax
+ *   0003  8E D0        mov  ss,ax          ; our own stack, as an MBR does
+ *   0005  BC 00 7C     mov  sp,7C00
+ *   0008  8E D8        mov  ds,ax
+ *   000A  8E C0        mov  es,ax
+ *   000C  FB           sti
+ *   000D  FC           cld
+ *   000E  BE 21 7C     mov  si,7C21        ; the message, just past the code
+ *   0011  AC       .1: lodsb
+ *   0012  08 C0        or   al,al
+ *   0014  74 08        jz   .2             ; -> 001E
+ *   0016  B4 01        mov  ah,1           ; write character
+ *   0018  31 D2        xor  dx,dx          ; COM1
+ *   001A  CD 14        int  14h
+ *   001C  EB F3        jmp  .1             ; -> 0011
+ *   001E  F4       .2: hlt
+ *   001F  EB FD        jmp  .2             ; -> 001E
+ *   0021           msg: the text, NUL terminated
+ */
+static const byte bootcode[] = {
+	0xFA,
+	0x31, 0xC0,
+	0x8E, 0xD0,
+	0xBC, 0x00, 0x7C,
+	0x8E, 0xD8,
+	0x8E, 0xC0,
+	0xFB,
+	0xFC,
+	0xBE, 0x21, 0x7C,
+	0xAC,
+	0x08, 0xC0,
+	0x74, 0x08,
+	0xB4, 0x01,
+	0x31, 0xD2,
+	0xCD, 0x14,
+	0xEB, 0xF3,
+	0xF4,
+	0xEB, 0xFD,
+	/* 0021: the message */
+	0x0D, 0x0A,
+	'*','*','*',' ','T','E','S','T',' ','B','O','O','T',' ',
+	'S','E','C','T','O','R',' ','R','U','N','N','I','N','G',' ','*','*','*',
+	0x0D, 0x0A,
+	'I','N','T',' ','1','9','h',' ','h','a','n','d','e','d',' ',
+	'o','v','e','r',' ','c','o','r','r','e','c','t','l','y','.',
+	0x0D, 0x0A,
+	0x00
+};
+
+
 void debugmon(void)
 {
 	char line[LINE], *cp;
@@ -661,9 +722,179 @@ void debugmon(void)
 			continue;
 		}
 
+		if( is_cmd(&cp,"IRQFIND") )
+		{
+			word	base_m, base_s, new_m, new_s;
+			word	start, oldier, lsr;
+
+			/* Which ICU input does the SIO0 receive interrupt
+			 * land on?
+			 *
+			 * The 386EX routes internal peripherals to the ICU
+			 * through INTCFG, and nothing in this BIOS has ever
+			 * used the SIO interrupt, so the mapping is not
+			 * recorded anywhere.  Rather than guess it, ask the
+			 * hardware: the ICU request registers show a pending
+			 * request whether or not it is masked, so this is
+			 * safe with every mask still closed.
+			 *
+			 * Sample first with the interrupt off to learn which
+			 * bits are already busy -- IRQ0, the 18.2hz tick, is
+			 * always among them -- then enable SIO0 receive and
+			 * sample again while a key is typed and deliberately
+			 * NOT read.  The bits that appear are SIO0.
+			 */
+			printf("sampling the ICU with SIO0 receive OFF ...\n");
+			base_m = base_s = 0;
+			start = bda.timer_count_low;
+			do {
+				io_write(0x20,0x0A,0);
+				base_m |= io_read(0x20,0);
+				io_write(0xA0,0x0A,0);
+				base_s |= io_read(0xA0,0);
+			} while( (word)(bda.timer_count_low - start) < 18 );
+
+			oldier = io_read(0x3F9,0);
+			io_write(0x3F9,0x01,0);	/* receive data available */
+
+			printf("baseline master %02X slave %02X\n",
+				base_m, base_s);
+			printf("NOW TYPE ONE KEY -- it will not be read, so the\n"
+			       "request stays asserted.  Five seconds ...\n");
+
+			new_m = new_s = 0;
+			start = bda.timer_count_low;
+			do {
+				io_write(0x20,0x0A,0);
+				new_m |= io_read(0x20,0);
+				io_write(0xA0,0x0A,0);
+				new_s |= io_read(0xA0,0);
+			} while( (word)(bda.timer_count_low - start) < 5*18 );
+
+			lsr = io_read(0x3FD,0);
+
+			io_write(0x3F9,oldier,0);	/* put IER0 back */
+			if( lsr & 0x01 )
+				io_read(0x3F8,0);	/* drain the character */
+
+			printf("with RX on   master %02X slave %02X   LSR %02X\n",
+				new_m, new_s, lsr);
+			printf("new bits     master %02X slave %02X",
+				(word)(new_m & ~base_m),
+				(word)(new_s & ~base_s));
+			printf("   <-- that is SIO0\n");
+			continue;
+		}
+
+		if( is_cmd(&cp,"GEO") )
+		{
+			dword		v, h, s;
+			T_DISKTAB	*dt = (T_DISKTAB *)(bda.rsvd_unused);
+
+			/* Override the translated geometry in the live disk
+			   table, without a rebuild.
+			 *
+			 * CHS on a translating BIOS is a convention, not a
+			 * property of the card: any heads x sectors that
+			 * divides the sector count is equally valid.  What
+			 * matters is agreeing with whatever partitioned the
+			 * media -- the CHS in the partition entry and the
+			 * heads/sectors in the BPB were written by that
+			 * machine, and the MBR reads the boot sector by CHS.
+			 */
+			if( !parse_val(&cp,&h) || !parse_val(&cp,&s)
+			 || h < 1 || h > 255 || s < 1 || s > 63 ) {
+				printf("usage: GEO <heads> <sectors>\n");
+				printf("current %u/%u/%u  LBA %lu\n",
+					dt->ncylinders, (word)dt->n__heads,
+					(word)dt->nsectors, dt->max_lba);
+				continue;
+			}
+
+			v = dt->max_lba / (h * s);
+			if( v == 0 || v > 1024UL ) {
+				printf("GEO: %lu/%lu/%lu needs %lu cylinders,"
+				       " outside 1..1024\n", v, h, s, v);
+				continue;
+			}
+
+			dt->n__heads   = (byte)h;
+			dt->nsectors   = (byte)s;
+			dt->ncylinders = (word)v;
+			dt->control_bits = (byte)((h > 8) ? 0x08 : 0x00);
+
+			printf("INT 13h geometry now %u/%u/%u"
+			       "  (covers %lu of %lu sectors)\n",
+				dt->ncylinders, (word)dt->n__heads,
+				(word)dt->nsectors,
+				v * h * s, dt->max_lba);
+			continue;
+		}
+
 		if( is_cmd(&cp,"BDA") )
 		{
 			DumpBDA();
+			continue;
+		}
+
+		if( is_cmd(&cp,"MKBOOT") )
+		{
+			dword	lba;
+			word	i, bad;
+			byte	*b = SecBuffer;
+
+			/* *** THIS DESTROYS THE SECTOR IT IS GIVEN ***
+			 *
+			 * Lay down the test boot sector.  Written to LBA 0 it
+			 * becomes what INT 19h loads, and it reports itself
+			 * through INT 14h -- so if it speaks, the whole boot
+			 * path is proven without anything from Phase 3 being
+			 * involved.  If it stays silent the fault is in the
+			 * hand-off, not in the console.
+			 */
+			if( !parse_val(&cp,&lba) ) {
+				printf("usage: MKBOOT <lba>"
+				       "   *** OVERWRITES that sector ***\n"
+				       "       write it to 0 to make it"
+				       " the boot sector\n");
+				continue;
+			}
+
+			for( i = 0; i < SECTOR_SIZE; i++ )
+				b[i] = 0;
+			for( i = 0; i < sizeof(bootcode); i++ )
+				b[i] = bootcode[i];
+			b[510] = 0x55;
+			b[511] = 0xAA;
+
+			if( IDE_WRITE_SECTOR(0,b,lba,1) ) {
+				printf("write of LBA %lu failed\n", lba);
+				continue;
+			}
+
+			/* Read it back before trusting it.  A bad write here
+			   would look exactly like a bad hand-off later. */
+			for( i = 0; i < SECTOR_SIZE; i++ )
+				b[i] = 0;
+			if( IDE_READ_SECTOR(0,b,lba,1) ) {
+				printf("read back of LBA %lu failed\n", lba);
+				continue;
+			}
+
+			bad = 0;
+			for( i = 0; i < sizeof(bootcode); i++ )
+				if( b[i] != bootcode[i] )
+					++bad;
+			if( b[510] != 0x55 || b[511] != 0xAA )
+				++bad;
+
+			printf("test boot sector -> LBA %lu, %u bytes of code,"
+			       " verify %s\n",
+				lba, (word)sizeof(bootcode),
+				bad ? "FAILED" : "ok");
+			printf("first bytes %02X %02X %02X   signature %02X %02X\n",
+				(word)b[0], (word)b[1], (word)b[2],
+				(word)b[510], (word)b[511]);
 			continue;
 		}
 

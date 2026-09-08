@@ -332,7 +332,30 @@ int hd_probe( int drive )
 static void hd_translate( T_DISKTAB *dt )
 {
 	dword	lba = dt->max_lba;
-	word	h;
+	word	h, s;
+
+	/* A geometry stored in SETUP wins over everything else.
+	 *
+	 * CHS on a translating BIOS is a convention, not a property of the
+	 * medium, and the convention that matters is whichever one
+	 * partitioned the card: the MBR finds the boot record by CHS, and
+	 * the BPB records the heads and sectors DOS will then use.  Cards
+	 * imaged on another machine routinely disagree with what they
+	 * report about themselves, and there is no way to tell from the
+	 * drive alone which is right.
+	 *
+	 * Zero heads means no override -- fall through to the drive's own
+	 * numbers, then to LBA-assist. */
+	h = bda.nvram_unused[HD_GEO_NVRAM + dt->unit_number*2];
+	s = bda.nvram_unused[HD_GEO_NVRAM + dt->unit_number*2 + 1];
+
+	if( h >= 1 && h <= 255 && s >= 1 && s <= 63 && lba != 0UL ) {
+		dt->n__heads = (byte)h;
+		dt->nsectors = (byte)s;
+		lba /= (dword)h * (dword)s;
+		dt->ncylinders = (lba > 1024UL) ? 1024 : (word)lba;
+		return;
+	}
 
 	if( dt->phys_cylinders >= 1 && dt->phys_cylinders <= 1024
 	 && dt->phys_heads     >= 1

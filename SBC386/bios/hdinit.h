@@ -14,6 +14,16 @@
 #undef XXX
 #endif
 
+/*
+ * Where the SETUP geometry overrides live: the first four spare bytes
+ * of the 31-byte NVRAM block, two per unit -- heads then sectors.  A
+ * heads value of zero means no override for that unit.
+ *
+ * nvram_unused[] has 17 bytes, so there is room for six more drives
+ * before this becomes a problem.
+ */
+#define HD_GEO_NVRAM	0
+
 /* hd_probe() results */
 #define HD_ABSENT	0
 #define HD_ATA		1

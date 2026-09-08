@@ -83,7 +83,7 @@ OBJECTS = start.o sizer.o crc16.o diskide.o errno.o \
 	11h_12h.o 13h_disk.o 14h_sio0.o 15h_misc.o 1Ah_time.o \
 	main.o signon.o getline.o set1302.o icu.o \
 	strtobcd.o strtoint.o testmain.o stub.o debugmon.o monitor.o hdinit.o \
-	19h_boot.o
+	19h_boot.o 17h_prn.o 10h_video.o 16h_kbd.o
 
 TEST = test.o cprintf.o
 
@@ -199,6 +199,15 @@ stub.o:		stub.asm $(INCLUDES)
 
 19h_boot.o:	19h_boot.asm $(INCLUDES)
 	$(ASM) $(NOPT) -o$@ -l19h_boot.lst   19h_boot.asm
+
+17h_prn.o:	17h_prn.asm $(INCLUDES)
+	$(ASM) $(NOPT) -o$@ -l17h_prn.lst   17h_prn.asm
+
+10h_video.o:	10h_video.asm $(INCLUDES)
+	$(ASM) $(NOPT) -o$@ -l10h_video.lst   10h_video.asm
+
+16h_kbd.o:	16h_kbd.asm $(INCLUDES)
+	$(ASM) $(NOPT) -o$@ -l16h_kbd.lst   16h_kbd.asm
 
 
 crc7.o:	crc.asm $(INCLUDES)

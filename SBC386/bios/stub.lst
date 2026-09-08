@@ -492,14 +492,14 @@
     60                                  global	clear_irq6	; (FDC)		int_page_fault
     61                                  global	clear_irq7	;
     62                                  
-    63                                  global	int_10h		; (video)	int_FPU_error
+    63                                  ; int_10h now lives in 10h_video.asm
     64                                  ;;global	int_11h		; (equip. config)  see "11h_12h.asm"
     65                                  ;;global	int_12h		; (conv. memory size)   ditto
     66                                  ;;global	int_13h		; (disk I/O)
     67                                  ;;global	int_14h		; (serial I/O)	see "14h_sio0.asm"
     68                                  ;;global	int_15h		; (cassette I/O + much more)
-    69                                  global	int_16h		; (keyboard)
-    70                                  global	int_17h		; (parallel port)
+    69                                  ; int_16h and int_irq4 now live in 16h_kbd.asm
+    70                                  ; int_17h now lives in 17h_prn.asm
     71                                  
     72                                  ; int_18h now lives in 19h_boot.asm
     73                                  ; int_19h now lives in 19h_boot.asm
@@ -572,149 +572,151 @@
    140                                  int_irq1:
    141                                  int_irq2:
    142                                  int_irq3:
-   143                                  int_irq4:
-   144                                  int_irq5:
-   145                                  int_irq6:
-   146                                  int_irq7:
-   147                                  
-   148                                  clear_irq0:
-   149                                  clear_irq1:
-   150                                  ;;clear_irq2:	;cascade (see below)
-   151                                  clear_irq3:
-   152                                  clear_irq4:
-   153                                  clear_irq5:
-   154                                  clear_irq6:
-   155                                  clear_irq7:
-   156 00000001 50                      	push	ax
-   157 00000002 B020                    	mov	al,NS_EOI
-   158 00000004 E620                    	out	OCW2M_AT,al
-   159 00000006 58                      	pop	ax
-   160 00000007 CF                      	iret
+   143                                  int_irq5:
+   144                                  int_irq6:
+   145                                  int_irq7:
+   146                                  
+   147                                  clear_irq0:
+   148                                  clear_irq1:
+   149                                  ;;clear_irq2:	;cascade (see below)
+   150                                  clear_irq3:
+   151                                  clear_irq4:
+   152                                  clear_irq5:
+   153                                  clear_irq6:
+   154                                  clear_irq7:
+   155 00000001 50                      	push	ax
+   156 00000002 B020                    	mov	al,NS_EOI
+   157 00000004 E620                    	out	OCW2M_AT,al
+   158 00000006 58                      	pop	ax
+   159 00000007 CF                      	iret
+   160                                  
    161                                  
    162                                  
-   163                                  
-   164                                  int_10h:
-   165                                  ;;int_11h:
-   166                                  ;;int_12h:
-   167                                  ;;int_13h:
-   168                                  ;;int_14h:
-   169                                  ;;int_15h:
-   170                                  int_16h:
-   171                                  int_17h:
-   172                                  
-   173                                  int_1Ah:
-   174                                  int_1Bh:
-   175                                  int_1Ch		equ	int_nop	; streamlined return
-   176                                  int_1Dh:
-   177                                  int_1Eh:
-   178                                  int_1Fh:
-   179                                  
-   180                                  
-   181                                  %define INVALID_COMMAND		1
-   182                                  int_EMM:
-   183                                  int_msdos:
-   184                                  int_40h:	; floppy disk handler
-   185 00000008 FB                      	sti
-   186 00000009 B401                    	mov	ah,INVALID_COMMAND
-   187 0000000B F9                      	stc
-   188 0000000C CA0200                  	retf	2
-   189                                  
-   190                                  
-   191                                  param_hd0:
-   192                                  int_42h:
-   193                                  param_VGA:
-   194                                  param_font:
-   195                                  param_hd1:
-   196                                  int_4Ah:
-   197 0000000F CF                      	iret
-   198                                  
-   199                                  int_irq8:
-   200                                  int_irq9:
-   201                                  int_irq10:
-   202                                  int_irq11:
-   203                                  int_irq12:
-   204                                  int_irq13:
-   205                                  int_irq14:
-   206                                  int_irq15:
-   207                                  
-   208                                  clear_irq8:
-   209                                  clear_irq9:
-   210                                  clear_irq10:
-   211                                  clear_irq11:
-   212                                  clear_irq12:
-   213                                  clear_irq13:
-   214                                  clear_irq14:
-   215                                  clear_irq15:
-   216 00000010 50                      	push	ax
-   217 00000011 B020                    	mov	al,NS_EOI
-   218 00000013 E6A0                    	out	OCW2S_AT,al
-   219 00000015 EB01                    	jmp	$+3
-   220                                  clear_irq2:
-   221 00000017 50                      	push	ax
-   222                                  ; jmp $+3 comes here
-   223 00000018 B062                    	mov	al,0x62		; specific EOI to irq2 on Master
-   224 0000001A E620                    	out	OCW2M_AT,al
-   225 0000001C 58                      	pop	ax
-   226 0000001D CF                      	iret
+   163                                  ;;int_11h:
+   164                                  ;;int_12h:
+   165                                  ;;int_13h:
+   166                                  ;;int_14h:
+   167                                  ;;int_15h:
+   168                                  
+   169                                  int_1Ah:
+   170                                  int_1Bh:
+   171                                  int_1Ch		equ	int_nop	; streamlined return
+   172                                  int_1Dh:
+   173                                  int_1Eh:
+   174                                  int_1Fh:
+   175                                  
+   176                                  
+   177                                  %define INVALID_COMMAND		1
+   178                                  int_EMM:
+   179                                  int_msdos:
+   180                                  int_40h:	; floppy disk handler
+   181 00000008 FB                      	sti
+   182 00000009 B401                    	mov	ah,INVALID_COMMAND
+   183 0000000B F9                      	stc
+   184 0000000C CA0200                  	retf	2
+   185                                  
+   186                                  
+   187                                  param_hd0:
+   188                                  int_42h:
+   189                                  param_VGA:
+   190                                  param_font:
+   191                                  param_hd1:
+   192                                  int_4Ah:
+   193 0000000F CF                      	iret
+   194                                  
+   195                                  int_irq8:
+   196                                  int_irq9:
+   197                                  int_irq10:
+   198                                  int_irq11:
+   199                                  int_irq12:
+   200                                  int_irq13:
+   201                                  int_irq14:
+   202                                  int_irq15:
+   203                                  
+   204                                  clear_irq8:
+   205                                  clear_irq9:
+   206                                  clear_irq10:
+   207                                  clear_irq11:
+   208                                  clear_irq12:
+   209                                  clear_irq13:
+   210                                  clear_irq14:
+   211                                  clear_irq15:
+   212 00000010 50                      	push	ax
+   213 00000011 B020                    	mov	al,NS_EOI
+   214 00000013 E6A0                    	out	OCW2S_AT,al
+   215 00000015 EB01                    	jmp	$+3
+   216                                  clear_irq2:
+   217 00000017 50                      	push	ax
+   218                                  ; jmp $+3 comes here
+   219 00000018 B062                    	mov	al,0x62		; specific EOI to irq2 on Master
+   220 0000001A E620                    	out	OCW2M_AT,al
+   221 0000001C 58                      	pop	ax
+   222 0000001D CF                      	iret
+   223                                  
+   224                                  ;
+   225                                  ;  Reserved locations INT 80h..0F0h for Basic
+   226                                  ;  Locations 0F1h..0FFh not assigned
    227                                  
-   228                                  ;
-   229                                  ;  Reserved locations INT 80h..0F0h for Basic
-   230                                  ;  Locations 0F1h..0FFh not assigned
-   231                                  
-   232                                  
-   233                                  ; do this to shut up WATCOM 1.9
-   234                                  	global	_small_code_
-   235                                  	global	VIDEO_putchar_
-   236                                  	global	@VIDEO_putchar
-   237                                  	global	@CVDU_putchar
-   238                                  _small_code_:
-   239 0000001E 90                      	nop
-   240 0000001F C3                      	ret
-   241                                  ;/* this is just a stub for the moment */
-   242                                  VIDEO_putchar_:
-   243                                  @VIDEO_putchar:
-   244                                  @CVDU_putchar:
-   245                                  %define VSHOW 0
-   246                                  %if VSHOW
-   247                                  	mov	dx,0x4ff
-   248                                  	out	dx,al
-   249                                  %endif
-   250 00000020 B401                    	mov	ah,1		; write to serial line
-   251 00000022 BA0000                  	mov	dx,0		; COM1
-   252 00000025 CD14                    	int	0x14		; SIO0 write
-   253                                  %if VSHOW
-   254                                  	mov	al,ah
-   255                                  	mov	dx,0x4ff
-   256                                  	out	dx,al
-   257                                  %endif
-   258 00000027 C3                      	ret
-   259                                  
-   260                                  
-   261                                  
-   262                                  	global	KBD_getchar_
-   263                                  	global	@KBD_getchar
+   228                                  
+   229                                  ; do this to shut up WATCOM 1.9
+   230                                  	global	_small_code_
+   231                                  	global	VIDEO_putchar_
+   232                                  	global	@VIDEO_putchar
+   233                                  	global	@CVDU_putchar
+   234                                  _small_code_:
+   235 0000001E 90                      	nop
+   236 0000001F C3                      	ret
+   237                                  ;/* this is just a stub for the moment */
+   238                                  VIDEO_putchar_:
+   239                                  @VIDEO_putchar:
+   240                                  @CVDU_putchar:
+   241                                  ; POST and DOS now share one output path: this goes through INT 10h
+   242                                  ; teletype rather than straight to INT 14h, so the BDA cursor stays in
+   243                                  ; step with what has actually been printed.
+   244                                  %define VSHOW 0
+   245                                  %if VSHOW
+   246                                  	mov	dx,0x4ff
+   247                                  	out	dx,al
+   248                                  %endif
+   249 00000020 53                      	push	bx		; cprintf keeps the character in BX across the
+   250                                  				;  putch(CR) that precedes putch(LF) -- the old
+   251                                  				;  form of this routine only touched AX and DX,
+   252                                  				;  and clobbering BX cost every line feed
+   253 00000021 B40E                    	mov	ah,0x0E		; teletype
+   254 00000023 31DB                    	xor	bx,bx		; page 0
+   255 00000025 CD10                    	int	0x10
+   256 00000027 5B                      	pop	bx
+   257                                  %if VSHOW
+   258                                  	mov	al,ah
+   259                                  	mov	dx,0x4ff
+   260                                  	out	dx,al
+   261                                  %endif
+   262 00000028 C3                      	ret
+   263                                  
    264                                  
-   265                                  KBD_getchar_:
-   266                                  @KBD_getchar:
-   267                                  .1:
-   268 00000028 B402                    	mov	ah,2		; read from serial line
-   269 0000002A BA0000                  	mov	dx,0		; COM1
-   270 0000002D CD14                    	int	0x14		; SIO0 write
-   271                                  %if VSHOW
-   272                                  ;;	xchg	al,ah
-   273                                  	mov	dx,0x4ff
-   274                                  	out	dx,al
-   275                                  ;;	xchg	al,ah
-   276                                  %endif
-   277 0000002F F6C4FF                  	test	ah,0xFF		; any error bit set?
-   278 00000032 75F4                    	jnz	.1
-   279 00000034 247F                    	and	al,0x7F		; mask to 7 bits
-   280 00000036 C3                      	ret
-   281                                  
-   282                                  
-   283                                  	global	FDC_stop_motor
-   284                                  	global	FDC_stop_motor_
-   285                                  FDC_stop_motor_:
-   286                                  FDC_stop_motor:
-   287                                  ; totally a dummy routine
-   288 00000037 C3                      	ret
+   265                                  
+   266                                  	global	KBD_getchar_
+   267                                  	global	@KBD_getchar
+   268                                  
+   269                                  KBD_getchar_:
+   270                                  @KBD_getchar:
+   271                                  ; This MUST go through INT 16h, not INT 14h.
+   272                                  ;
+   273                                  ; The SIO0 receive interrupt now drains the UART into the ring buffer
+   274                                  ; the moment a character arrives, so a polled INT 14h read here would
+   275                                  ; wait forever for data that has already been taken.  Everything that
+   276                                  ; reads the console -- getline, SETUP, the monitor -- comes through
+   277                                  ; this one routine, so this is the only place it has to change.
+   278 00000029 30E4                    	xor	ah,ah		; read a key, waiting for one
+   279 0000002B CD16                    	int	0x16
+   280 0000002D 247F                    	and	al,0x7F		; mask to 7 bits, as before
+   281 0000002F 30E4                    	xor	ah,ah		; the caller wants the character, not the
+   282 00000031 C3                      	ret			;  scan code INT 16h returns alongside it
+   283                                  
+   284                                  
+   285                                  	global	FDC_stop_motor
+   286                                  	global	FDC_stop_motor_
+   287                                  FDC_stop_motor_:
+   288                                  FDC_stop_motor:
+   289                                  ; totally a dummy routine
+   290 00000032 C3                      	ret

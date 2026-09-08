@@ -878,9 +878,9 @@
     85 00000022 FECC                    	dec	ah
     86 00000024 743A                    	jz	read		; function 2
     87 00000026 FECC                    	dec	ah
-    88 00000028 0F849B00                	jz	status		; function 3
+    88 00000028 0F84A100                	jz	status		; function 3
     89 0000002C FECC                    	dec	ah
-    90 0000002E 0F849B00                	jz	ext_init_sio	; function 4  PS/2
+    90 0000002E 0F84A100                	jz	ext_init_sio	; function 4  PS/2
     91                                  
     92                                  ;
     93                                  ; the other PS/2 functions are not implemented
@@ -1030,177 +1030,195 @@
    237                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    238                                  
    239                                  init_sio:
-   240 00000096 89C6                    	mov	si,ax		; index to SI
-   241 00000098 81E6E000                	and	si,0x00E0	; mask to 3 bits
-   242 0000009C C1EE04                  	shr	si,4		; form WORD index
-   243 0000009F 83E01F                  	and	ax,00011111b	;mask for status bits
-   244 000000A2 B102                    	mov	cl,SHIFT	;
-   245                                  ; AL is LCR to-be
-   246                                  ; SI is baud rate index
-   247                                  ; CL is baud rate shift for 1.84mhz clock (2), 7.37mhz clk (0)
-   248                                  do_init:
-   249 000000A4 88C4                    	mov	ah,al		; save LCR value in AH
-   250 000000A6 4A                      	dec	dx
-   251 000000A7 0C80                    	or	al,80h		; set DLAB
-   252 000000A9 4A                      	dec	dx		; DX = LCR address
-   253 000000AA EE                      	out	dx,al		; set DLAB & LCR
-   254 000000AB 52                      	push	DX
-   255 000000AC 89DA                    	mov	dx,bx		; DX is DLL address
-   256 000000AE 2E8BBC[3B00]               cs	mov	di,[sio_divisors + si]
-   257 000000B3 D3EF                       	shr	di,cl
-   258 000000B5 89F9                    	mov	cx,di
-   259 000000B7 88C8                    	mov	al,cl
-   260 000000B9 EE                         	out	dx,al		; set low byte
-   261 000000BA 42                      	inc	dx   		; address DLH
-   262 000000BB 88E8                    	mov	al,ch
-   263 000000BD EE                      	out	dx,al		; set high byte
-   264 000000BE 5A                      	pop	DX		; get LCR
-   265 000000BF 88E0                    	mov	al,ah		; set to clear DLAB
-   266 000000C1 EE                      	out	dx,al		; clear DLAB, set LCR bits
-   267 000000C2 42                      	inc	dx		; DX = MCR
-   268 000000C3 B003                    	mov	al,0x03		; set RTS & DTR
-   269 000000C5 EE                      	out	dx,al		; **
-   270 000000C6 42                      	inc	dx		; DX = LSR
-   271                                  ; just fall into the Status return
-   272                                  ;;	call	get_status
-   273                                  ;;	jmp	return_AX
-   274                                  
-   275                                  
-   276                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   277                                  ; status
-   278                                  ;
-   279                                  ;    Enter with:
-   280                                  ;	BX	base port address
-   281                                  ;	DX	LSR port address
-   282                                  ;
-   283                                  ;    Exit with:
-   284                                  ;	AH	port (line) status
-   285                                  ;	AL	modem status
-   286                                  ;	BX,DX	unchanged
-   287                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   288                                  
-   289                                  status:
-   290 000000C7 E88DFF                  	call	get_status
-   291 000000CA E968FF                  	jmp	return_AX
+   240                                  ; Leave the console line settings alone.
+   241                                  ;
+   242                                  ; DOS initialises its AUX device during SYSINIT, and on this board AUX
+   243                                  ; is COM1 -- which is the console.  Honouring that call reprograms the
+   244                                  ; divisor latch out from under the terminal, and every byte after it
+   245                                  ; arrives at the wrong rate.  The console speed belongs to SETUP, not to
+   246                                  ; an application, so the request is acknowledged with a normal status
+   247                                  ; and the hardware is not touched.
+   248                                  ;
+   249                                  ; DX no longer holds the port number here -- it was replaced with the
+   250                                  ; LSR address above -- so the console is recognised by its device code.
+   251                                  ;
+   252                                  ; Function 4, the extended init, is deliberately NOT guarded: that is
+   253                                  ; the one install_serial_console() uses at POST to set the console up in
+   254                                  ; the first place.
+   255 00000096 3B1E0000                	cmp	bx,[serial_dev]
+   256 0000009A 7431                    	je	status		; the console: report status, change nothing
+   257                                  
+   258 0000009C 89C6                    	mov	si,ax		; index to SI
+   259 0000009E 81E6E000                	and	si,0x00E0	; mask to 3 bits
+   260 000000A2 C1EE04                  	shr	si,4		; form WORD index
+   261 000000A5 83E01F                  	and	ax,00011111b	;mask for status bits
+   262 000000A8 B102                    	mov	cl,SHIFT	;
+   263                                  ; AL is LCR to-be
+   264                                  ; SI is baud rate index
+   265                                  ; CL is baud rate shift for 1.84mhz clock (2), 7.37mhz clk (0)
+   266                                  do_init:
+   267 000000AA 88C4                    	mov	ah,al		; save LCR value in AH
+   268 000000AC 4A                      	dec	dx
+   269 000000AD 0C80                    	or	al,80h		; set DLAB
+   270 000000AF 4A                      	dec	dx		; DX = LCR address
+   271 000000B0 EE                      	out	dx,al		; set DLAB & LCR
+   272 000000B1 52                      	push	DX
+   273 000000B2 89DA                    	mov	dx,bx		; DX is DLL address
+   274 000000B4 2E8BBC[3B00]               cs	mov	di,[sio_divisors + si]
+   275 000000B9 D3EF                       	shr	di,cl
+   276 000000BB 89F9                    	mov	cx,di
+   277 000000BD 88C8                    	mov	al,cl
+   278 000000BF EE                         	out	dx,al		; set low byte
+   279 000000C0 42                      	inc	dx   		; address DLH
+   280 000000C1 88E8                    	mov	al,ch
+   281 000000C3 EE                      	out	dx,al		; set high byte
+   282 000000C4 5A                      	pop	DX		; get LCR
+   283 000000C5 88E0                    	mov	al,ah		; set to clear DLAB
+   284 000000C7 EE                      	out	dx,al		; clear DLAB, set LCR bits
+   285 000000C8 42                      	inc	dx		; DX = MCR
+   286 000000C9 B003                    	mov	al,0x03		; set RTS & DTR
+   287 000000CB EE                      	out	dx,al		; **
+   288 000000CC 42                      	inc	dx		; DX = LSR
+   289                                  ; just fall into the Status return
+   290                                  ;;	call	get_status
+   291                                  ;;	jmp	return_AX
    292                                  
-   293                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   294                                  ; ext_init_sio		PS/2 extended init
-   295                                  ;
-   296                                  ;    Enter in the stack:
-   297                                  ;	AL	break flag 0 or 1
-   298                                  ;
-   299                                  ;    SBC-386EX extension:
-   300                                  ;	AL.765 are protocol bits
-   301                                  ;
-   302                                  ;	BH	parity
-   303                                  ;			0 none
-   304                                  ;			1 odd
-   305                                  ;			2 even
-   306                                  ;			3 stick parity odd
-   307                                  ;			4 stick parity even
-   308                                  ;	BL	stop bits
-   309                                  ;			0 one stop bit
-   310                                  ;			1 two stop bits (1.5 if CH==0)
-   311                                  ;	CH	word length
-   312                                  ;			0  5-bits
-   313                                  ;			1  6-bits
-   314                                  ;			2  7-bits
-   315                                  ;			3  8-bits
-   316                                  ;	CL	bit rate
-   317                                  ;			0..8  (see table, 110 to 19200
-   318                                  ;		386EX extension:
-   319                                  ;			9..11 (38400,57600,115200)
-   320                                  ;	DX	port number
-   321                                  ;
-   322                                  ;    Exit with:
-   323                                  ;	AH	port (line) status
-   324                                  ;	AL	modem status
-   325                                  ;	BX,CX,DX	unchanged
-   326                                  ;
-   327                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   328                                  ext_init_sio:
-   329 000000CD 8B4E0C                  	mov	cx,[bp + offset_cx]
-   330                                  ; CL is the baud rate index
-   331 000000D0 89CE                    	mov	si,cx		; index to SI
-   332 000000D2 83E60F                  	and	si,0x000F
-   333 000000D5 01F6                    	add	si,si		; SI is WORD index
-   334                                  
-   335 000000D7 88C4                    	mov	ah,al		; save protocol bits in AH
-   336                                  
-   337 000000D9 2401                    	and	al,1		; mask to 1 bit
-   338 000000DB C0E006                  	shl	al,6		; break bit to bit 6
-   339 000000DE 80E503                  	and	ch,3		; mask word length
-   340 000000E1 08E8                    	or	al,ch		; break|nbits
-   341                                  ; BX is the parity & stop bits
-   342 000000E3 8B4E08                  	mov	cx,[bp + offset_bx]
-   343 000000E6 80E101                  	and	cl,1		; mask stop bits
-   344 000000E9 C0E102                  	shl	cl,2
-   345 000000EC 08C8                    	or	al,cl		; break|stop|nbits
-   346 000000EE 88E9                    	mov	cl,ch
-   347 000000F0 83E107                  	and	cx,7
-   348 000000F3 89CF                    	mov	di,cx
-   349 000000F5 2E0A85[0501]               cs	or	al,[par_tab + di] ; break|parity|stop|nbits
-   350 000000FA B102                    	mov	cl,2
-   351 000000FC F6C420                  	test	ah,CLK_737	; test 7.37 clock flag
-   352 000000FF 74A3                    	jz	do_init
-   353 00000101 30C9                    	xor	cl,cl
-   354 00000103 EB9F                    	jmp	do_init
-   355                                  ; SI is word index to bit rate
-   356                                  ; AL is LCR value
-   357                                  ; CL is shift (2)
-   358                                  ; BX is base port
-   359                                  ; DX is LSR (will be decremented to LCR)
-   360                                  
-   361                                  
-   362                                  par_tab:
-   363 00000105 00                      	db	0	;none
-   364 00000106 08                      	db	1<<3	;odd
-   365 00000107 18                      	db	3<<3	;even
-   366 00000108 28                      	db	5<<3	;stick one
-   367 00000109 38                      	db	7<<3	;stick zero
-   368 0000010A 00                      	db	0
-   369 0000010B 00                      	db	0
-   370 0000010C 00                      	db	0
-   371                                  
-   372                                  
-   373                                  
-   374                                  
-   375                                  
-   376                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   377                                  ; install_SIO0_		install the system board SIO0 (internal) 386EX port
-   378                                  ;
-   379                                  ;    Enter with:
-   380                                  ;	AX	device code to install
-   381                                  ;	direction flag clear
-   382                                  ;
-   383                                  ;    Exit with:
-   384                                  ;	AX	0 if successful
-   385                                  ;		non-Zero if error
-   386                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   387                                  
-   388                                  	global	install_SIO0_
-   389                                  segment _TEXT			; this routine is C-callable
+   293                                  
+   294                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   295                                  ; status
+   296                                  ;
+   297                                  ;    Enter with:
+   298                                  ;	BX	base port address
+   299                                  ;	DX	LSR port address
+   300                                  ;
+   301                                  ;    Exit with:
+   302                                  ;	AH	port (line) status
+   303                                  ;	AL	modem status
+   304                                  ;	BX,DX	unchanged
+   305                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   306                                  
+   307                                  status:
+   308 000000CD E887FF                  	call	get_status
+   309 000000D0 E962FF                  	jmp	return_AX
+   310                                  
+   311                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   312                                  ; ext_init_sio		PS/2 extended init
+   313                                  ;
+   314                                  ;    Enter in the stack:
+   315                                  ;	AL	break flag 0 or 1
+   316                                  ;
+   317                                  ;    SBC-386EX extension:
+   318                                  ;	AL.765 are protocol bits
+   319                                  ;
+   320                                  ;	BH	parity
+   321                                  ;			0 none
+   322                                  ;			1 odd
+   323                                  ;			2 even
+   324                                  ;			3 stick parity odd
+   325                                  ;			4 stick parity even
+   326                                  ;	BL	stop bits
+   327                                  ;			0 one stop bit
+   328                                  ;			1 two stop bits (1.5 if CH==0)
+   329                                  ;	CH	word length
+   330                                  ;			0  5-bits
+   331                                  ;			1  6-bits
+   332                                  ;			2  7-bits
+   333                                  ;			3  8-bits
+   334                                  ;	CL	bit rate
+   335                                  ;			0..8  (see table, 110 to 19200
+   336                                  ;		386EX extension:
+   337                                  ;			9..11 (38400,57600,115200)
+   338                                  ;	DX	port number
+   339                                  ;
+   340                                  ;    Exit with:
+   341                                  ;	AH	port (line) status
+   342                                  ;	AL	modem status
+   343                                  ;	BX,CX,DX	unchanged
+   344                                  ;
+   345                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   346                                  ext_init_sio:
+   347 000000D3 8B4E0C                  	mov	cx,[bp + offset_cx]
+   348                                  ; CL is the baud rate index
+   349 000000D6 89CE                    	mov	si,cx		; index to SI
+   350 000000D8 83E60F                  	and	si,0x000F
+   351 000000DB 01F6                    	add	si,si		; SI is WORD index
+   352                                  
+   353 000000DD 88C4                    	mov	ah,al		; save protocol bits in AH
+   354                                  
+   355 000000DF 2401                    	and	al,1		; mask to 1 bit
+   356 000000E1 C0E006                  	shl	al,6		; break bit to bit 6
+   357 000000E4 80E503                  	and	ch,3		; mask word length
+   358 000000E7 08E8                    	or	al,ch		; break|nbits
+   359                                  ; BX is the parity & stop bits
+   360 000000E9 8B4E08                  	mov	cx,[bp + offset_bx]
+   361 000000EC 80E101                  	and	cl,1		; mask stop bits
+   362 000000EF C0E102                  	shl	cl,2
+   363 000000F2 08C8                    	or	al,cl		; break|stop|nbits
+   364 000000F4 88E9                    	mov	cl,ch
+   365 000000F6 83E107                  	and	cx,7
+   366 000000F9 89CF                    	mov	di,cx
+   367 000000FB 2E0A85[0B01]               cs	or	al,[par_tab + di] ; break|parity|stop|nbits
+   368 00000100 B102                    	mov	cl,2
+   369 00000102 F6C420                  	test	ah,CLK_737	; test 7.37 clock flag
+   370 00000105 74A3                    	jz	do_init
+   371 00000107 30C9                    	xor	cl,cl
+   372 00000109 EB9F                    	jmp	do_init
+   373                                  ; SI is word index to bit rate
+   374                                  ; AL is LCR value
+   375                                  ; CL is shift (2)
+   376                                  ; BX is base port
+   377                                  ; DX is LSR (will be decremented to LCR)
+   378                                  
+   379                                  
+   380                                  par_tab:
+   381 0000010B 00                      	db	0	;none
+   382 0000010C 08                      	db	1<<3	;odd
+   383 0000010D 18                      	db	3<<3	;even
+   384 0000010E 28                      	db	5<<3	;stick one
+   385 0000010F 38                      	db	7<<3	;stick zero
+   386 00000110 00                      	db	0
+   387 00000111 00                      	db	0
+   388 00000112 00                      	db	0
+   389                                  
    390                                  
-   391                                  install_SIO0_:
-   392 0000010D 1E565152                	pushm	DX,CX,SI,DS
-   393 00000111 89C2                    	mov	dx,ax		; use device code in DX
-   394 00000113 6A401F                  	get_bda	DS		; get BIOS Data Area segment pointer
-   395 00000116 8D360000                	lea	SI,[serial_dev]
-   396 0000011A B90400                  	mov	cx,4
-   397                                  .1:
-   398 0000011D AD                      	lodsw			; get a device code
-   399 0000011E 39D0                       	cmp	ax,dx		; is it already there
-   400 00000120 7412                    	je	.8
-   401 00000122 09C0                    	or	ax,ax		; is the slot empty
-   402 00000124 7404                    	jz	.3		; empty if 0, install here
-   403 00000126 E2F5                    	loop	.1
-   404 00000128 EB0A                    	jmp	.8		; no empty slot
+   391                                  
+   392                                  
+   393                                  
+   394                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   395                                  ; install_SIO0_		install the system board SIO0 (internal) 386EX port
+   396                                  ;
+   397                                  ;    Enter with:
+   398                                  ;	AX	device code to install
+   399                                  ;	direction flag clear
+   400                                  ;
+   401                                  ;    Exit with:
+   402                                  ;	AX	0 if successful
+   403                                  ;		non-Zero if error
+   404                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    405                                  
-   406                                  ; empty slot found SI is already incremented
-   407 0000012A 8954FE                  .3:	mov	[si-2],dx	;set device code
-   408 0000012D 8006110002              	add	byte [equip_flag+1], 1<<(9-8)	; increment at bit 9
-   409 00000132 EB03                    	jmp	.9		; AX is already zero
-   410                                  
-   411 00000134 B88E00                  .8:	mov	ax,0x8E		;
-   412 00000137 5A595E1F                .9:	popm	DX,CX,SI,DS
-   413 0000013B C3                      	ret
+   406                                  	global	install_SIO0_
+   407                                  segment _TEXT			; this routine is C-callable
+   408                                  
+   409                                  install_SIO0_:
+   410 00000113 1E565152                	pushm	DX,CX,SI,DS
+   411 00000117 89C2                    	mov	dx,ax		; use device code in DX
+   412 00000119 6A401F                  	get_bda	DS		; get BIOS Data Area segment pointer
+   413 0000011C 8D360000                	lea	SI,[serial_dev]
+   414 00000120 B90400                  	mov	cx,4
+   415                                  .1:
+   416 00000123 AD                      	lodsw			; get a device code
+   417 00000124 39D0                       	cmp	ax,dx		; is it already there
+   418 00000126 7412                    	je	.8
+   419 00000128 09C0                    	or	ax,ax		; is the slot empty
+   420 0000012A 7404                    	jz	.3		; empty if 0, install here
+   421 0000012C E2F5                    	loop	.1
+   422 0000012E EB0A                    	jmp	.8		; no empty slot
+   423                                  
+   424                                  ; empty slot found SI is already incremented
+   425 00000130 8954FE                  .3:	mov	[si-2],dx	;set device code
+   426 00000133 8006110002              	add	byte [equip_flag+1], 1<<(9-8)	; increment at bit 9
+   427 00000138 EB03                    	jmp	.9		; AX is already zero
+   428                                  
+   429 0000013A B88E00                  .8:	mov	ax,0x8E		;
+   430 0000013D 5A595E1F                .9:	popm	DX,CX,SI,DS
+   431 00000141 C3                      	ret

@@ -237,6 +237,24 @@ write:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 init_sio:
+; Leave the console line settings alone.
+;
+; DOS initialises its AUX device during SYSINIT, and on this board AUX
+; is COM1 -- which is the console.  Honouring that call reprograms the
+; divisor latch out from under the terminal, and every byte after it
+; arrives at the wrong rate.  The console speed belongs to SETUP, not to
+; an application, so the request is acknowledged with a normal status
+; and the hardware is not touched.
+;
+; DX no longer holds the port number here -- it was replaced with the
+; LSR address above -- so the console is recognised by its device code.
+;
+; Function 4, the extended init, is deliberately NOT guarded: that is
+; the one install_serial_console() uses at POST to set the console up in
+; the first place.
+	cmp	bx,[serial_dev]
+	je	status		; the console: report status, change nothing
+
 	mov	si,ax		; index to SI
 	and	si,0x00E0	; mask to 3 bits
 	shr	si,4		; form WORD index

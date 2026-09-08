@@ -32,6 +32,7 @@
 ; ASCII_CR and ASCII_LF come from i386EX.inc -- "ascii.h" is a C
 ; header and NASM cannot read it
 
+	global	int_18h
 	global	int_19h
 
 segment	_TEXT
@@ -119,8 +120,9 @@ int_19h:
 
 .give_up:
 	call	boot_msg
-; INT 18h is where the PC/AT went when nothing would boot.  It is still
-; a stub here, so if it returns there is nothing further to try.
+; INT 18h is where the PC/AT went when nothing would boot.  Here it
+; prints and drops into the debug monitor, and retries the boot when the
+; monitor is left -- so this call does not normally come back.
 	int	0x18
 .hang:
 	hlt
@@ -160,9 +162,66 @@ boot_msg:
 	ret
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; INT 18h -- no bootable device
+;
+; On a PC/AT this went to ROM BASIC.  There is none here, and halting
+; leaves a failed boot silent and costs a power cycle to get back to
+; SETUP.  Drop into the debug monitor instead: at this point the machine
+; itself is healthy -- it is the disk that would not boot -- so
+; everything the monitor needs is already working.
+;
+; Reached from INT 19h when the boot sector cannot be read or carries no
+; signature, and from a boot sector in its own right: the MBR on a
+; partitioned card issues INT 18h when it finds no active partition.
+;
+; Leaving the monitor retries the boot.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	extern	debugmon_
+
+int_18h:
+	cli
+	xor	ax,ax
+	mov	ss,ax			; a stack of our own: whatever called
+	cnop				;  us may have moved SS:SP somewhere
+	mov	sp,BOOT_OFF		;  unhelpful, and a boot sector that
+	sti				;  failed is not to be trusted with it
+	cld
+
+	mov	si,msg_nodisk
+	call	boot_msg
+
+	mov	ax,DGROUP		; the C code addresses through DGROUP
+	mov	ds,ax
+	cnop
+	mov	es,ax
+	cnop
+
+	call	debugmon_
+
+; The operator has left the monitor.  Try the disk again -- a card may
+; have been changed, or SETUP used, in the meantime.
+	mov	si,msg_retry
+	call	boot_msg
+	int	0x19
+
+; INT 19h does not return.  If its vector were wrong we would arrive
+; here rather than running off into memory.
+.hang:
+	hlt
+	jmp	.hang
+
 msg_booting:
 	db	ASCII_CR,ASCII_LF,"Booting from drive 80h ...",ASCII_CR,ASCII_LF,0
 msg_noread:
 	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
 msg_nosig:
 	db	ASCII_CR,ASCII_LF,"INT 19h: no AA55h signature -- not bootable",ASCII_CR,ASCII_LF,0
+msg_nodisk:
+	db	ASCII_CR,ASCII_LF
+	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
+	db	"Dropping into the debug monitor -- EXIT retries the boot."
+	db	ASCII_CR,ASCII_LF,0
+msg_retry:
+	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0

@@ -11,9 +11,5 @@
     11                                  bootstrap:
     12 00000000 EA000000F0                      jmp     SEGBASE:0000	; 5 byte real-mode far call
     13                                  %include "date.inc"
-    14                              <1> ; date.inc
-    15                              <1> ;
-    16                              <1> ; must be exactly 8 characters
-    17                              <1> ;
-    18 00000005 30392F32362F3236    <1> 	db	"09/26/26"
+    14 00000005 30392F30382F3236    <1> 	db	"09/08/26"
     14 0000000D FFFC00                  	db	0xFF, 0xFC, 0x00	; PC/AT

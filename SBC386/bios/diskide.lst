@@ -842,410 +842,587 @@
    214                              <1> ; */
    215                              <1> endstruc
    215          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
-    86                                  %undef XXX
-    87                                  
-    88                                  %define ARG(n) [bp+2+(n)*2]
-    89                                  
-    90                                  	SEGMENT	_TEXT
-    91                                  
-    92                                  ; -----------------------------------------------------------------------------
-    93                                  ;  IDE_READ_SECTOR
-    94                                  ; -----------------------------------------------------------------------------
-    95                                  ; read a sector, specified by the 4 bytes in "lba",
-    96                                  ; Return, acc is zero on success, non-zero for an error
-    97                                  ;
-    98                                  ;  int IDE_READ_SECTOR(byte master_slave,byte far *buffer, dword sector_start,byte nsectors);
-    99                                  ;
+    86                                  %include "error.inc"		; BIOS status codes for ide_error
+    87                              <1> XXX
+    88                              <1> ; error.h -- defines for disk-specific error codes */
+    89                              <1> ; */
+    90                              <1> %define NO_ERROR	0
+    91                              <1> %define INVALID_COMMAND		1
+    92                              <1> %define ADDRESS_MARK_NOT_FOUND	2	; F */
+    93                              <1> %define WRITE_PROTECTED		3	; F, SD */
+    94                              <1> %define SECTOR_NOT_FOUND	4
+    95                              <1> %define RESET_FAILED	5		; H */
+    96                              <1> ; */
+    97                              <1> %define DISK_REMOVED	6		; F, SD */
+    98                              <1> %define	MEDIA_CHANGED	6
+    99                              <1> ; */
+   100                              <1> %define BAD_PARAMETER_TABLE	7
+   101                              <1> %define DMA_OVERRUN		8		; F, H */
+   102                              <1> ; */
+   103                              <1> %define DMA_CROSSED_64K_BOUND	9
+   104                              <1> %define DMA_BOUNDARY	9
+   105                              <1> ; */
+   106                              <1> %define BAD_SECTOR_FLAG	0x0A
+   107                              <1> %define BAD_TRACK_FLAG	0x0B
+   108                              <1> %define MEDIA_TYPE_NOT_FOUND	0x0C	; F */
+   109                              <1> %define INVALID_NUMBER_OF_SECTORS	0x0D	; H */
+   110                              <1> %define CONTROL_DATA_ADDRESS_MARK_DETECTED	0x0E	; H */
+   111                              <1> %define DMA_ARBITRATION_LEVEL_OUT_OF_RANGE	0x0F	; H */
+   112                              <1> %define BAD_CRC			0x10	; F */
+   113                              <1> %define ECC_CORRECTED_DATA_ERROR	0x11	; H */
+   114                              <1> %define CONTROLLER_FAILED		0x20
+   115                              <1> %define BAD_SEEK		0x40
+   116                              <1> %define TIME_OUT		0x80
+   117                              <1> ; */
+   118                              <1> %define DRIVE_NOT_READY		0xAA	; SD, H */
+   119                              <1> %define UNDEFINED_ERROR		0xBB
+   120                              <1> %define WRITE_FAULT		0xCC	; H */
+   121                              <1> %define STATUS_REGISTER_ERROR	0xE0	; H */
+   122                              <1> %define SENSE_OPERATION_FAILED	0xFF	; H */
+   123                              <1> ; */
+   124                              <1> ; */
+   125                              <1> ; */
+   126                              <1> ;---------- DISKETTE ERROR -------------------------------------	*/
+   127                              <1> ; TIME_OUT	EQU	080H		; ATTACHMENT FAILED TO RESPOND		*/
+   128                              <1> ; BAD_SEEK	EQU	040H		; SEEK OPERATION FAILED		*/
+   129                              <1> ; BAD_NEC		EQU	020H		; DISKETTE CONTROLLER HAS FAILED		*/
+   130                              <1> ; BAD_CRC		EQU	010H		; BAD CRC ON DISKETTE READ		*/
+   131                              <1> ; DMA_BOUNDARY	EQU	009H		; ATTEMPT TO DMA ACROSS 64K BOUNDARY		*/
+   132                              <1> ; BAD_DMA		EQU	008H		; DMA OVERRUN ON OPERATION		*/
+   133                              <1> ; MEDIA_CHANGE	EQU	006H		; MEDIA REMOVED ON DUAL ATTACH CARD		*/
+   134                              <1> ; RECORD_NOT_FND	EQU	004H		; REQUESTED SECTOR NOT FOUND		*/
+   135                              <1> ; WRITE_PROTECT	EQU	003H		; WRITE ATTEMPTED ON WRITE PROTECT DISK		*/
+   136                              <1> ; BAD_ADDR_MARK	EQU	002H		; ADDRESS MARK NOT FOUND		*/
+   137                              <1> ; BAD_CMD		EQU	001H		; BAD COMMAND PASSED TO DISKETTE I/O		*/
+   138                              <1> ; */
+   139                              <1> ; */
+    87                                  %undef XXX
+    88                                  
+    89                                  %define ARG(n) [bp+2+(n)*2]
+    90                                  
+    91                                  	SEGMENT	_TEXT
+    92                                  
+    93                                  ; -----------------------------------------------------------------------------
+    94                                  ;  IDE_READ_SECTOR
+    95                                  ; -----------------------------------------------------------------------------
+    96                                  ; read a sector, specified by the 4 bytes in "lba",
+    97                                  ; Return, acc is zero on success, non-zero for an error
+    98                                  ;
+    99                                  ;  int IDE_READ_SECTOR(byte master_slave,byte far *buffer, dword sector_start,byte nsectors);
    100                                  ;
-   101                                  ;-----------------------------------------------------------------------------
-   102                                          global  IDE_READ_SECTOR
-   103                                          global  IDE_READ_SECTOR_
-   104                                  IDE_READ_SECTOR:
-   105                                  IDE_READ_SECTOR_:
-   106 00000000 52                      		push 	DX
-   107 00000001 53                      		push    BX
-   108 00000002 51                      		push 	CX
-   109 00000003 55                              push    bp
-   110 00000004 89E5                            mov     bp,sp
-   111 00000006 06                              push 	ES
-   112 00000007 57                              push	DI
-   113                                  
-   114 00000008 E8FE00                  		call	ide_wait_not_busy		; make sure drive is ready
-   115 0000000B 7519                    		jnz	.2
-   116                                  
-   117 0000000D 8A5E0E                          mov     bl,ARG(6) 				; COUNT OF SECTORS
-   118 00000010 88C7                            mov     bh,al	 				; Master/slave INTO BH
-   119 00000012 8B560C                          mov     dx,ARG(5)
-   120 00000015 8B460A                          mov     ax,ARG(4)
-   121 00000018 E85101                  		call	wr_lba					; tell it which sector we want
+   101                                  ;
+   102                                  ;-----------------------------------------------------------------------------
+   103                                          global  IDE_READ_SECTOR
+   104                                          global  IDE_READ_SECTOR_
+   105                                  IDE_READ_SECTOR:
+   106                                  IDE_READ_SECTOR_:
+   107 00000000 52                      		push 	DX
+   108 00000001 53                      		push    BX
+   109 00000002 51                      		push 	CX
+   110 00000003 55                              push    bp
+   111 00000004 89E5                            mov     bp,sp
+   112 00000006 06                              push 	ES
+   113 00000007 57                              push	DI
+   114                                  
+   115                                  ; Master/slave must be taken out of AL BEFORE the wait below:
+   116                                  ;  ide_wait_not_busy returns the drive status in AL, so reading
+   117                                  ;  the argument afterwards always yielded 0 -- the master.  BX
+   118                                  ;  is preserved across the call.
+   119 00000008 88C7                            mov     bh,al                   ; Master/slave INTO BH
+   120 0000000A E80101                  		call	ide_wait_not_busy		; make sure drive is ready
+   121 0000000D 7529                    		jnz	.2
    122                                  
-   123 0000001B B020                            mov     al,IDE_CMD_PIO_READ
-   124 0000001D BAF701                  		mov		dx,IDESTTS
-   125 00000020 EE                      		out		dx,al
-   126                                  
-   127 00000021 E8F900                  		call	ide_wait_drq			; wait until it's got the data
-   128 00000024 7405                    		jz	.3							; NO ERROR, CONTINUE
-   129                                  .2:
-   130 00000026 B8FFFF                     		mov		ax,-1					; MARK ERROR, ABORT
-   131 00000029 EB10                    		jmp	.9
-   132                                  .3:
-   133                                  
-   134 0000002B 8B4E0E                          mov     CX,ARG(6) 				; COUNT OF SECTORS
-   135 0000002E 8E4602                          mov     es,ARG(0) 				; high address INTO es
-   136 00000031 8B5E04                          mov     bx,ARG(1)				; low address into bx
-   137                                  .4:
-   138 00000034 E81301                  		call	read_data				; grab the data
-   139 00000037 E2FB                    		loop	.4
-   140                                  
-   141 00000039 31C0                            xor     ax,ax
-   142                                  
-   143                                  .9:
-   144 0000003B 5F                         		POP 	DI
-   145 0000003C 07                         		POP 	ES
-   146 0000003D C9                              leave
-   147 0000003E 59                              pop 	CX
-   148 0000003F 5B                              pop 	BX
-   149 00000040 5A                              pop 	DX
-   150 00000041 C20600                          ret	6	; was 'ret', but Watcom proc must remove args!!!
-   151                                  
-   152                                  
-   153                                  ; -----------------------------------------------------------------------------
-   154                                  ;  IDE_WRITE_SECTOR
-   155                                  ; -----------------------------------------------------------------------------
-   156                                  ; write a sector, specified by the 4 bytes in "lba",
-   157                                  ; Return, acc is zero on success, non-zero for an error
-   158                                  ;
-   159                                  ;  int IDE_WRITE_SECTOR(byte master_slave,byte far *buffer, dword sector_start,byte nsectors);
-   160                                  ;
-   161                                  ;
-   162                                  ;-----------------------------------------------------------------------------
-   163                                          global  IDE_WRITE_SECTOR
-   164                                          global  IDE_WRITE_SECTOR_
-   165                                  IDE_WRITE_SECTOR:
-   166                                  IDE_WRITE_SECTOR_:
-   167 00000044 52                      		push 	DX
-   168 00000045 53                      		push    BX
-   169 00000046 51                      		push 	CX
-   170 00000047 55                              push    bp
-   171 00000048 89E5                            mov     bp,sp
-   172 0000004A 1E                              push 	DS
-   173 0000004B 56                              push	SI
-   174                                  
-   175 0000004C E8BA00                  		call	ide_wait_not_busy		; make sure drive is ready
-   176 0000004F 7519                    		jnz	.2
-   177                                  
-   178 00000051 8A5E0E                          mov     bl,ARG(6) 				; COUNT OF SECTORS
-   179 00000054 88C7                            mov     bh,al	 				; Master/slave INTO BH
-   180 00000056 8B560C                          mov     dx,ARG(5)
-   181 00000059 8B460A                          mov     ax,ARG(4)
-   182 0000005C E80D01                  		call	wr_lba					; tell it which sector we want
-   183                                  
-   184 0000005F B030                            mov     al,IDE_CMD_PIO_WRITE
-   185 00000061 BAF701                  		mov		dx,IDESTTS
-   186 00000064 EE                      		out		dx,al
+   123 0000000F 8A5E0E                          mov     bl,ARG(6) 				; COUNT OF SECTORS
+   124 00000012 8B560C                          mov     dx,ARG(5)
+   125 00000015 8B460A                          mov     ax,ARG(4)
+   126 00000018 E8EB01                  		call	wr_lba					; tell it which sector we want
+   127                                  
+   128 0000001B B020                            mov     al,IDE_CMD_PIO_READ
+   129 0000001D BAF701                  		mov		dx,IDESTTS
+   130 00000020 EE                      		out		dx,al
+   131                                  
+   132 00000021 8B4E0E                          mov     CX,ARG(6) 				; COUNT OF SECTORS
+   133 00000024 8E4602                          mov     es,ARG(0) 				; high address INTO es
+   134 00000027 8B5E04                          mov     bx,ARG(1)				; low address into bx
+   135                                  .4:
+   136                                  ; ATA raises DRQ once per sector during a multi-sector PIO transfer, so
+   137                                  ; the wait belongs inside this loop.  Polled once before it, the second
+   138                                  ; and later sectors ran ahead of the drive and desynchronised.
+   139 0000002A E80F01                  		call	ide_wait_drq
+   140 0000002D 7509                    		jnz	.2
+   141 0000002F E8B201                  		call	read_data				; grab the data
+   142 00000032 E2F6                    		loop	.4
+   143                                  
+   144 00000034 31C0                            xor     ax,ax
+   145 00000036 EB03                    		jmp	.9
+   146                                  .2:
+   147 00000038 E83901                  		call	ide_error				; real status, not -1
+   148                                  .9:
+   149 0000003B 5F                         		POP 	DI
+   150 0000003C 07                         		POP 	ES
+   151 0000003D C9                              leave
+   152 0000003E 59                              pop 	CX
+   153 0000003F 5B                              pop 	BX
+   154 00000040 5A                              pop 	DX
+   155 00000041 C20600                          ret	6	; was 'ret', but Watcom proc must remove args!!!
+   156                                  
+   157                                  
+   158                                  ; -----------------------------------------------------------------------------
+   159                                  ;  IDE_WRITE_SECTOR
+   160                                  ; -----------------------------------------------------------------------------
+   161                                  ; write a sector, specified by the 4 bytes in "lba",
+   162                                  ; Return, acc is zero on success, non-zero for an error
+   163                                  ;
+   164                                  ;  int IDE_WRITE_SECTOR(byte master_slave,byte far *buffer, dword sector_start,byte nsectors);
+   165                                  ;
+   166                                  ;
+   167                                  ;-----------------------------------------------------------------------------
+   168                                          global  IDE_WRITE_SECTOR
+   169                                          global  IDE_WRITE_SECTOR_
+   170                                  IDE_WRITE_SECTOR:
+   171                                  IDE_WRITE_SECTOR_:
+   172 00000044 52                      		push 	DX
+   173 00000045 53                      		push    BX
+   174 00000046 51                      		push 	CX
+   175 00000047 55                              push    bp
+   176 00000048 89E5                            mov     bp,sp
+   177 0000004A 1E                              push 	DS
+   178 0000004B 56                              push	SI
+   179                                  
+   180                                  ; Master/slave must be taken out of AL BEFORE the wait below:
+   181                                  ;  ide_wait_not_busy returns the drive status in AL, so reading
+   182                                  ;  the argument afterwards always yielded 0 -- the master.  BX
+   183                                  ;  is preserved across the call.
+   184 0000004C 88C7                            mov     bh,al                   ; Master/slave INTO BH
+   185 0000004E E8BD00                  		call	ide_wait_not_busy		; make sure drive is ready
+   186 00000051 752E                    		jnz	.2
    187                                  
-   188 00000065 E8B500                  		call	ide_wait_drq			; wait until it wants the data
-   189 00000068 7405                    		jz	.3							; NO ERROR, CONTINUE
-   190                                  .2:
-   191 0000006A B8FFFF                     		mov		ax,-1					; MARK ERROR, ABORT
-   192 0000006D EB10                    		jmp	.9
-   193                                  .3:
-   194                                  
-   195 0000006F 8B4E0E                          mov     CX,ARG(6) 				; COUNT OF SECTORS
-   196 00000072 8E5E02                          mov     ds,ARG(0) 				; high address INTO ds
-   197 00000075 8B5E04                          mov     bx,ARG(1)				; low address into bx
-   198                                  .4:
-   199 00000078 E8E000                  		call	write_data				; send the data
-   200 0000007B E2FB                    		loop	.4
-   201                                  
-   202 0000007D 31C0                            xor     ax,ax
-   203                                  
-   204                                  .9:
-   205 0000007F 5E                         		POP 	SI
-   206 00000080 1F                         		POP 	DS
-   207 00000081 C9                              leave
-   208 00000082 59                              pop 	CX
-   209 00000083 5B                              pop 	BX
-   210 00000084 5A                              pop 	DX
-   211 00000085 C20600                          ret	6	; was 'ret', but Watcom proc must remove args!!!
-   212                                  
+   188 00000053 8A5E0E                          mov     bl,ARG(6) 				; COUNT OF SECTORS
+   189 00000056 8B560C                          mov     dx,ARG(5)
+   190 00000059 8B460A                          mov     ax,ARG(4)
+   191 0000005C E8A701                  		call	wr_lba					; tell it which sector we want
+   192                                  
+   193 0000005F B030                            mov     al,IDE_CMD_PIO_WRITE
+   194 00000061 BAF701                  		mov		dx,IDESTTS
+   195 00000064 EE                      		out		dx,al
+   196                                  
+   197                                  
+   198 00000065 8B4E0E                          mov     CX,ARG(6) 				; COUNT OF SECTORS
+   199 00000068 8E5E02                          mov     ds,ARG(0) 				; high address INTO ds
+   200 0000006B 8B5E04                          mov     bx,ARG(1)				; low address into bx
+   201                                  .4:
+   202                                  ; DRQ is raised once per sector on the way out too, so the wait goes
+   203                                  ; inside the loop here for the same reason as the read path.
+   204 0000006E E8CB00                  		call	ide_wait_drq
+   205 00000071 750E                    		jnz	.2
+   206 00000073 E87F01                  		call	write_data				; send the data
+   207 00000076 E2F6                    		loop	.4
+   208                                  
+   209                                  ; The drive is still writing the last sector when the loop ends: wait for
+   210                                  ; it to finish so a failure is reported to this caller and not the next.
+   211 00000078 E89300                  		call	ide_wait_not_busy
+   212 0000007B 7504                    		jnz	.2
    213                                  
-   214                                  ; -----------------------------------------------------------------------------
-   215                                  ; IDE_READ_ID
-   216                                  ; -----------------------------------------------------------------------------
-   217                                  ; Read the 512 byte ID information from the attached drive
-   218                                  ;
-   219                                  ;  int DIDE_READ_ID(byte master_slave, byte far *buffer);
-   220                                  ;
-   221                                  ;
-   222                                  ;-----------------------------------------------------------------------------
-   223                                  		global	IDE_READ_ID
-   224                                  		global	IDE_READ_ID_
-   225                                  IDE_READ_ID:
-   226                                  IDE_READ_ID_:
-   227 00000088 52                      		push 	DX
-   228 00000089 53                      		push    BX
-   229 0000008A 51                      		push 	CX
-   230 0000008B 55                              push    bp
-   231 0000008C 89E5                            mov     bp,sp
-   232 0000008E 06                              push 	ES
-   233 0000008F 57                              push	DI
-   234                                  
-   235                                  
-   236 00000090 E87600                  		call	ide_wait_not_busy		; make sure drive is ready
-   237 00000093 7518                    		jnz	.2
-   238                                  
-   239 00000095 B300                            mov     bl,0	 				; COUNT OF SECTORS TO READ INTO BL
-   240 00000097 88C7                            mov     bh,al 					; Master/slave INTO BH
-   241 00000099 B80000                          mov     ax,0
-   242 0000009C BA0000                          mov     dx,0
-   243 0000009F E8CA00                  		call	wr_lba					; tell it which sector we want
-   244                                  
-   245                                  ; GET DRIVE IDENT
-   246 000000A2 B0EC                    		mov	al,IDE_CMD_IDENT
-   247 000000A4 BAF701                  		mov	dx,IDESTTS
-   248 000000A7 EE                      		out	dx,al
+   214 0000007D 31C0                            xor     ax,ax
+   215 0000007F EB03                    		jmp	.9
+   216                                  .2:
+   217 00000081 E8F000                  		call	ide_error				; real status, not -1
+   218                                  .9:
+   219 00000084 5E                         		POP 	SI
+   220 00000085 1F                         		POP 	DS
+   221 00000086 C9                              leave
+   222 00000087 59                              pop 	CX
+   223 00000088 5B                              pop 	BX
+   224 00000089 5A                              pop 	DX
+   225 0000008A C20600                          ret	6	; was 'ret', but Watcom proc must remove args!!!
+   226                                  
+   227                                  
+   228                                  ; -----------------------------------------------------------------------------
+   229                                  ; IDE_READ_ID
+   230                                  ; -----------------------------------------------------------------------------
+   231                                  ; Read the 512 byte ID information from the attached drive
+   232                                  ;
+   233                                  ;  int DIDE_READ_ID(byte master_slave, byte far *buffer);
+   234                                  ;
+   235                                  ;
+   236                                  ;-----------------------------------------------------------------------------
+   237                                  		global	IDE_READ_ID
+   238                                  		global	IDE_READ_ID_
+   239                                  IDE_READ_ID:
+   240                                  IDE_READ_ID_:
+   241 0000008D 52                      		push 	DX
+   242 0000008E 53                      		push    BX
+   243 0000008F 51                      		push 	CX
+   244 00000090 55                              push    bp
+   245 00000091 89E5                            mov     bp,sp
+   246 00000093 06                              push 	ES
+   247 00000094 57                              push	DI
+   248                                  
    249                                  
-   250 000000A8 E87200                  		call	ide_wait_drq			;wait until it's got the data
-   251 000000AB 7405                    		jz	.3
-   252                                  .2:
-   253 000000AD B8FFFF                     		mov		ax,-1					; MARK ERROR, ABORT
-   254 000000B0 EB0B                    		jmp	.9
-   255                                  .3:
-   256                                  
-   257 000000B2 8E4602                          mov     es,ARG(0) 				; high address INTO ax
-   258 000000B5 8B5E04                          mov     bx,ARG(1)				; low address into bx
-   259 000000B8 E87800                  		call	read_dataBE				; grab the data
-   260                                  
-   261 000000BB 31C0                            xor     ax,ax
+   250                                  ; Master/slave must be taken out of AL BEFORE the wait below:
+   251                                  ;  ide_wait_not_busy returns the drive status in AL, so reading
+   252                                  ;  the argument afterwards always yielded 0 -- the master.  BX
+   253                                  ;  is preserved across the call.
+   254 00000095 88C7                            mov     bh,al                   ; Master/slave INTO BH
+   255 00000097 E87400                  		call	ide_wait_not_busy		; make sure drive is ready
+   256 0000009A 7516                    		jnz	.2
+   257                                  
+   258 0000009C B300                            mov     bl,0	 				; COUNT OF SECTORS TO READ INTO BL
+   259 0000009E B80000                          mov     ax,0
+   260 000000A1 BA0000                          mov     dx,0
+   261 000000A4 E85F01                  		call	wr_lba					; tell it which sector we want
    262                                  
-   263                                  .9:
-   264 000000BD 5F                         		POP 	DI
-   265 000000BE 07                         		POP 	ES
-   266 000000BF C9                              leave
-   267 000000C0 59                              pop 	CX
-   268 000000C1 5B                              pop 	BX
-   269 000000C2 5A                              pop 	DX
-   270 000000C3 C3                              ret
-   271                                  
-   272                                  
-   273                                  
-   274                                  ; -----------------------------------------------------------------------------
-   275                                  ;  IDE_INITIALIZE
-   276                                  ; -----------------------------------------------------------------------------
-   277                                  ; IDE INITIALIZE DRIVE FOR OPERATION
-   278                                  ;
-   279                                  ;  int IDE_INITIALIZE(byte master_slave);
-   280                                  ;
-   281                                  ;
-   282                                  ;-----------------------------------------------------------------------------
-   283                                   		global 	IDE_INITIALIZE
-   284                                   		global 	IDE_INITIALIZE_
-   285                                  IDE_INITIALIZE:
-   286                                  IDE_INITIALIZE_:
-   287 000000C4 5152500653                      pushm   bx,es,ax,dx,cx
-   288 000000C9 55                              push    bp
-   289 000000CA 89E5                            mov     bp,sp
-   290 000000CC 575306                          pushm   es,bx,di
+   263                                  ; GET DRIVE IDENT
+   264 000000A7 B0EC                    		mov	al,IDE_CMD_IDENT
+   265 000000A9 BAF701                  		mov	dx,IDESTTS
+   266 000000AC EE                      		out	dx,al
+   267                                  
+   268 000000AD E88C00                  		call	ide_wait_drq			;wait until it's got the data
+   269 000000B0 7405                    		jz	.3
+   270                                  .2:
+   271 000000B2 E8BF00                     		call	ide_error				; real status, not -1
+   272 000000B5 EB0B                    		jmp	.9
+   273                                  .3:
+   274                                  
+   275 000000B7 8E4602                          mov     es,ARG(0) 				; high address INTO ax
+   276 000000BA 8B5E04                          mov     bx,ARG(1)				; low address into bx
+   277 000000BD E80D01                  		call	read_dataBE				; grab the data
+   278                                  
+   279 000000C0 31C0                            xor     ax,ax
+   280                                  
+   281                                  .9:
+   282 000000C2 5F                         		POP 	DI
+   283 000000C3 07                         		POP 	ES
+   284 000000C4 C9                              leave
+   285 000000C5 59                              pop 	CX
+   286 000000C6 5B                              pop 	BX
+   287 000000C7 5A                              pop 	DX
+   288 000000C8 C3                              ret
+   289                                  
+   290                                  
    291                                  
-   292                                  
-   293                                  
-   294 000000CF E83700                  		call	ide_wait_not_busy		; make sure drive is ready
-   295 000000D2 7524                    		jnz	.2
-   296                                  
-   297 000000D4 B300                            mov     bl,0	 				; COUNT OF SECTORS TO READ INTO BL
-   298 000000D6 8A7E02                          mov     bh,ARG(0) 				; Master/slave INTO BH
-   299 000000D9 B80000                          mov     ax,0
-   300 000000DC BA0000                          mov     dx,0
-   301 000000DF E88A00                  		call	wr_lba					; tell it which sector we want
-   302                                  
-   303                                  ; SET 8-BIT MODE
-   304 000000E2 E82400                  	  	call	ide_wait_not_busy		;make sure drive is ready
-   305 000000E5 7511                    		jnz	.2
-   306                                  
-   307 000000E7 B001                    		mov	al,01h
-   308 000000E9 BAF101                  		mov	dx,IDEERR
-   309 000000EC EE                      		out	dx,al
-   310 000000ED B0EF                    		mov	al,IDE_CMD_SET_FEATURE
-   311 000000EF BAF701                  		mov	dx,IDESTTS
-   312 000000F2 EE                      		out	dx,al
-   313 000000F3 E81300                  		call	ide_wait_not_busy		;make sure drive is ready
-   314 000000F6 7405                    		jz	.3
-   315                                  .2:
-   316 000000F8 B8FFFF                  		mov		ax,-1					; MARK ERROR, ABORT
-   317 000000FB EB02                    		jmp	.9
-   318                                  .3:
-   319 000000FD 31C0                            xor     ax,ax
-   320                                  .9:
-   321 000000FF 075B5F                          popm    es,bx,di
-   322 00000102 C9                              leave
-   323 00000103 5B07585A59                      popm    bx,es,ax,dx,cx
-   324 00000108 C3                      		ret
-   325                                  
-   326                                  
-   327                                  
-   328                                  
-   329                                  ;------------------------------------------------------------------------------
-   330                                  ; IDE INTERNAL SUBROUTINES
-   331                                  ;------------------------------------------------------------------------------
-   332                                  ;-----------------------------------------------------------------------------
-   333                                  ;  Wait for RDY to be set
-   334                                  ;
-   335                                  ;  Exit with:
-   336                                  ;       AL contains status
-   337                                  ;       All other registers preserved
-   338                                  ;
-   339                                  ;------------------------------------------------------------------------------
-   340                                  ide_wait_not_busy:
-   341 00000109 515253                          pushm   bx,dx,cx
-   342 0000010C B9FFFF                  		mov	cx,0FFFFh
-   343                                  .1:
-   344 0000010F BAF701                  		mov	dx,IDESTTS
-   345 00000112 EC                      		in	al,dx
+   292                                  ; -----------------------------------------------------------------------------
+   293                                  ;  IDE_INITIALIZE
+   294                                  ; -----------------------------------------------------------------------------
+   295                                  ; IDE INITIALIZE DRIVE FOR OPERATION
+   296                                  ;
+   297                                  ;  int IDE_INITIALIZE(byte master_slave);
+   298                                  ;
+   299                                  ;
+   300                                  ;-----------------------------------------------------------------------------
+   301                                   		global 	IDE_INITIALIZE
+   302                                   		global 	IDE_INITIALIZE_
+   303                                  IDE_INITIALIZE:
+   304                                  IDE_INITIALIZE_:
+   305 000000C9 5152500653                      pushm   bx,es,ax,dx,cx
+   306 000000CE 55                              push    bp
+   307 000000CF 89E5                            mov     bp,sp
+   308 000000D1 575306                          pushm   es,bx,di
+   309                                  
+   310                                  
+   311                                  
+   312 000000D4 E83700                  		call	ide_wait_not_busy		; make sure drive is ready
+   313 000000D7 7524                    		jnz	.2
+   314                                  
+   315 000000D9 B300                            mov     bl,0	 				; COUNT OF SECTORS TO READ INTO BL
+   316 000000DB 8A7E02                          mov     bh,ARG(0) 				; Master/slave INTO BH
+   317 000000DE B80000                          mov     ax,0
+   318 000000E1 BA0000                          mov     dx,0
+   319 000000E4 E81F01                  		call	wr_lba					; tell it which sector we want
+   320                                  
+   321                                  ; SET 8-BIT MODE
+   322 000000E7 E82400                  	  	call	ide_wait_not_busy		;make sure drive is ready
+   323 000000EA 7511                    		jnz	.2
+   324                                  
+   325 000000EC B001                    		mov	al,01h
+   326 000000EE BAF101                  		mov	dx,IDEERR
+   327 000000F1 EE                      		out	dx,al
+   328 000000F2 B0EF                    		mov	al,IDE_CMD_SET_FEATURE
+   329 000000F4 BAF701                  		mov	dx,IDESTTS
+   330 000000F7 EE                      		out	dx,al
+   331 000000F8 E81300                  		call	ide_wait_not_busy		;make sure drive is ready
+   332 000000FB 7405                    		jz	.3
+   333                                  .2:
+   334 000000FD E87400                  		call	ide_error				; real status, not -1
+   335 00000100 EB02                    		jmp	.9
+   336                                  .3:
+   337 00000102 31C0                            xor     ax,ax
+   338                                  .9:
+   339 00000104 075B5F                          popm    es,bx,di
+   340 00000107 C9                              leave
+   341 00000108 5B07585A59                      popm    bx,es,ax,dx,cx
+   342 0000010D C3                      		ret
+   343                                  
+   344                                  
+   345                                  
    346                                  
-   347 00000113 2480                            and     al,10000000b
-   348 00000115 E0F8                    		loopnz	.1
-   349                                  
-   350 00000117 08C0                    		or	al,al
-   351 00000119 5B5A59                          popm    bx,dx,cx
-   352 0000011C C3                      		ret
-   353                                  ;------------------------------------------------------------------------------
-   354                                  ; Wait for the drive to be ready to transfer data (DRQ = data request)
-   355                                  ; Returns the drive's status in Acc
-   356                                  ;
-   357                                  ;  Exit with:
-   358                                  ;       AL contains status
-   359                                  ;       All other registers preserved
-   360                                  ;------------------------------------------------------------------------------
-   361                                  ide_wait_drq:
-   362 0000011D 515253                          pushm   bx,dx,cx
-   363 00000120 B9FFFF                  		mov	cx,0FFFFh
-   364                                  .1:
-   365 00000123 BAF701                     		mov	dx,IDESTTS
-   366 00000126 EC                      		in	al,dx
-   367                                  
-   368 00000127 2488                            and     al,10001000b		; Mask off Busy(7) and DRQ(3)
-   369 00000129 3408                            xor     al,00001000b		; We want Busy(7) to be 0 and DRQ (3) to be 1
-   370                                  
-   371 0000012B E0F6                    		loopnz	.1
-   372                                  
-   373 0000012D 08C0                    		or	al,al
-   374 0000012F 5B5A59                          popm    bx,dx,cx
-   375 00000132 C3                      	ret
-   376                                  ;------------------------------------------------------------------------------
-   377                                  ; Read a sector of 512 bytes into memory at ES:[BX]
-   378                                  ;
-   379                                  ;  Call with:
-   380                                  ;       ES:BX -- pointer to the data block
-   381                                  ;
-   382                                  ;  Exit with:
-   383                                  ;       AX and DX are destroyed; other registers preserved
-   384                                  ;
-   385                                  ; "BE" version is for ide id information
-   386                                  ;-----------------------------------------------------------------------------
-   387                                  read_dataBE:
-   388 00000133 5153                        pushm   bx,cx
-   389 00000135 BAF001                  	mov		dx,IDEDTA
-   390                                  
-   391 00000138 87FB                        xchg    di,bx
+   347                                  ;------------------------------------------------------------------------------
+   348                                  ; IDE INTERNAL SUBROUTINES
+   349                                  ;------------------------------------------------------------------------------
+   350                                  ;-----------------------------------------------------------------------------
+   351                                  ;  ide_wait_not_busy -- wait for BSY to clear
+   352                                  ;
+   353                                  ;  Exit with:
+   354                                  ;       AL      the status register as read
+   355                                  ;       ZF      set on success, clear on timeout
+   356                                  ;       All other registers preserved
+   357                                  ;
+   358                                  ;  The old form of this spun on "mov cx,0FFFFh / loopnz", which is both
+   359                                  ;  clock-dependent and far too short -- a few milliseconds at 20mhz, where
+   360                                  ;  ATA allows seconds for a reset and a card can take hundreds of
+   361                                  ;  milliseconds to come ready.  The 18.2hz BDA tick is used instead: it is
+   362                                  ;  the only clock still running after POST, since start_timer0_ in
+   363                                  ;  1Ah_time.asm gates counters 1 and 2 off.  A single word read of
+   364                                  ;  timer_count_low cannot tear against IRQ0, and the unsigned subtraction
+   365                                  ;  rides through the wrap.
+   366                                  ;------------------------------------------------------------------------------
+   367                                  IDE_TIMEOUT	equ	18*5		; five seconds, in 18.2hz ticks
+   368                                  
+   369                                  ide_wait_not_busy:
+   370 0000010E 06525153                        pushm   bx,cx,dx,es
+   371 00000112 6A4007                  	get_bda	ES
+   372 00000115 268B1E6C00                  es	mov	bx,[timer_count_low]		; when we started
+   373                                  .1:
+   374 0000011A BAF701                  	mov	dx,IDESTTS
+   375 0000011D EC                      	in	al,dx
+   376 0000011E A880                    	test	al,80h				; BSY
+   377 00000120 7413                    	jz	.9				; clear: ZF is already set
+   378                                  
+   379 00000122 268B0E6C00                  es	mov	cx,[timer_count_low]
+   380 00000127 29D9                    	sub	cx,bx
+   381 00000129 83F95A                  	cmp	cx,IDE_TIMEOUT
+   382 0000012C 72EC                    	jb	.1
+   383                                  
+   384 0000012E B90100                  	mov	cx,1
+   385 00000131 09C9                    	or	cx,cx				; ZF clear -- timed out
+   386 00000133 EB02                    	jmp	short .10
+   387                                  .9:
+   388 00000135 31C9                    	xor	cx,cx				; ZF set -- ready
+   389                                  .10:
+   390 00000137 5B595A07                        popm    bx,cx,dx,es
+   391 0000013B C3                      	ret
    392                                  
-   393 0000013A B90001                  	mov     cx,256          ; sector size in words
-   394                                  rdblk2BE:
-   395 0000013D EC                      	in	al,dx
-   396 0000013E 88C4                    	mov ah,al
-   397 00000140 EC                      	in	al,dx
-   398 00000141 AA                      	stosb
-   399 00000142 88E0                    	mov al,ah
-   400 00000144 AA                      	stosb
-   401 00000145 E2F6                        loop    rdblk2BE
-   402 00000147 5B59                        popm    bx,cx
-   403 00000149 C3                      	ret
-   404                                  
-   405                                  read_data:
-   406 0000014A 51                          pushm   cx
-   407 0000014B BAF001                  	mov		dx,IDEDTA
-   408 0000014E 87FB                        xchg    di,bx
-   409 00000150 B90002                  	mov     cx,512          ; sector size in words
-   410                                  rdblk2:
-   411 00000153 EC                      	in	al,dx
-   412 00000154 AA                      	stosb
-   413 00000155 E2FC                        loop    rdblk2
-   414 00000157 87FB                        xchg    di,bx
-   415 00000159 59                          popm    cx
-   416 0000015A C3                      	ret
-   417                                  
-   418                                  ;------------------------------------------------------------------------------
-   419                                  ; Write a sector of 512 bytes from memory at ES:[BX]
-   420                                  ;
-   421                                  ;  Call with:
-   422                                  ;       ES:BX -- pointer to the data block
-   423                                  ;
-   424                                  ;  Exit with:
-   425                                  ;       AX and DX are destroyed; other registers preserved
-   426                                  ;
-   427                                  ;-----------------------------------------------------------------------------
-   428                                  write_data:
-   429 0000015B 51                          pushm   cx
-   430 0000015C BAF001                  	mov		dx,IDEDTA
-   431 0000015F 87F3                        xchg    si,bx
-   432 00000161 B90002                  	mov     cx,512          ; sector size in words
-   433                                  wtblk2:
-   434 00000164 AC                      	lodsb
-   435 00000165 EE                      	out	dx,al
-   436 00000166 E2FC                        loop    wtblk2
-   437 00000168 87F3                        xchg    si,bx
-   438 0000016A 59                          popm    cx
-   439 0000016B C3                      	ret
-   440                                  
-   441                                  
-   442                                  
-   443                                  ;-----------------------------------------------------------------------------
-   444                                  ; write the logical block address to the drive's registers
-   445                                  ;
-   446                                  ;  Call with:
-   447                                  ;       DX:AX = logical block address
-   448                                  ;		BH = Master/Slave selection in bit 4
-   449                                  ;       BL = Sector read count
-   450                                  ;
-   451                                  ;  Exit with:
-   452                                  ;       AX, BX, DX are destroyed
-   453                                  ;
-   454                                  ;-----------------------------------------------------------------------------
-   455                                  wr_lba:
-   456 0000016C 51                      		push 	cx
-   457 0000016D 50                              push    ax
-   458 0000016E 52                              push    dx
-   459 0000016F 89D9                            mov 	CX,BX
-   460                                  
-   461 00000171 B010                            mov     al,10h          ; Master/Slave mask
-   462 00000173 20E8                            and     al,ch           ; mask bit
-   463 00000175 88F3                            mov     bl,dh           ; high order
-   464 00000177 80E30F                          and     bl,00Fh
-   465 0000017A 80CBE0                          or      bl,0E0h         ; mark as LBA
-   466                                  
-   467 0000017D 08D8                    		or		al,bl
-   468 0000017F BAF601                  		mov		dx,IDEDRV
-   469 00000182 EE                      		out		dx,al			; DRV
-   470                                  
-   471 00000183 5B                              pop     bx              ; get DL to BL
-   472                                  
-   473 00000184 88D8                    		mov		al,bl
-   474 00000186 4A                      		dec		dx
-   475 00000187 EE                      		out		dx,al			; LBA - H
-   476                                  
-   477 00000188 5B                              pop     bx
-   478                                  
-   479 00000189 88F8                    		mov		al,bh
-   480 0000018B 4A                      		dec		dx
-   481 0000018C EE                      		out		dx,al			; LBA - M
-   482                                  
-   483 0000018D 88D8                    		mov		al,bl
-   484 0000018F 4A                      		dec		dx
-   485 00000190 EE                      		out		dx,al			; LBA - L
-   486                                  
-   487 00000191 88C8                    		mov		al,cl
-   488 00000193 4A                      		dec		dx
-   489 00000194 EE                      		out		dx,al 			; SET SECTOR COUNT
-   490                                  
-   491 00000195 59                      		POP 	CX
-   492 00000196 C3                      		ret
+   393                                  
+   394                                  ;------------------------------------------------------------------------------
+   395                                  ; ide_wait_drq -- wait for BSY clear and DRQ set
+   396                                  ;
+   397                                  ;  Exit with:
+   398                                  ;       AL      the status register as read
+   399                                  ;       ZF      set on success, clear on timeout or drive error
+   400                                  ;       All other registers preserved
+   401                                  ;
+   402                                  ;  ERR is watched for as well as the timeout, so a drive that rejects the
+   403                                  ;  command is noticed immediately instead of after five seconds.
+   404                                  ;------------------------------------------------------------------------------
+   405                                  ide_wait_drq:
+   406 0000013C 06525153                        pushm   bx,cx,dx,es
+   407 00000140 6A4007                  	get_bda	ES
+   408 00000143 268B1E6C00                  es	mov	bx,[timer_count_low]
+   409                                  .1:
+   410 00000148 BAF701                  	mov	dx,IDESTTS
+   411 0000014B EC                      	in	al,dx
+   412                                  
+   413 0000014C A801                    	test	al,01h				; ERR -- do not wait it out
+   414 0000014E 7516                    	jnz	.8
+   415                                  
+   416 00000150 88C1                    	mov	cl,al
+   417 00000152 80E188                  	and	cl,10001000b			; BSY and DRQ
+   418 00000155 80F908                  	cmp	cl,00001000b			; want BSY=0, DRQ=1
+   419 00000158 7413                    	je	.9
+   420                                  
+   421 0000015A 268B0E6C00                  es	mov	cx,[timer_count_low]
+   422 0000015F 29D9                    	sub	cx,bx
+   423 00000161 83F95A                  	cmp	cx,IDE_TIMEOUT
+   424 00000164 72E2                    	jb	.1
+   425                                  .8:
+   426 00000166 B90100                  	mov	cx,1
+   427 00000169 09C9                    	or	cx,cx				; ZF clear -- failed
+   428 0000016B EB02                    	jmp	short .10
+   429                                  .9:
+   430 0000016D 31C9                    	xor	cx,cx				; ZF set -- data is ready
+   431                                  .10:
+   432 0000016F 5B595A07                        popm    bx,cx,dx,es
+   433 00000173 C3                      	ret
+   434                                  
+   435                                  
+   436                                  ;------------------------------------------------------------------------------
+   437                                  ; ide_error -- turn the drive's status and error registers into a BIOS
+   438                                  ;              status code, and record it where INT 13h fn 01h will find it
+   439                                  ;
+   440                                  ;  Exit with:
+   441                                  ;       AX      the BIOS status code, never zero
+   442                                  ;       bda.hd_status set to the same value
+   443                                  ;       All other registers preserved
+   444                                  ;
+   445                                  ;  Every failure used to collapse to AX=-1, which gave INT 13h nothing to
+   446                                  ;  report and DOS nothing to base a retry on.
+   447                                  ;------------------------------------------------------------------------------
+   448                                  ide_error:
+   449 00000174 06525153                	pushm	bx,cx,dx,es
+   450                                  
+   451 00000178 BAF701                  	mov	dx,IDESTTS
+   452 0000017B EC                      	in	al,dx
+   453 0000017C 88C4                    	mov	ah,al				; keep the status register
+   454                                  
+   455 0000017E A880                    	test	al,80h				; still busy: it never answered
+   456 00000180 7539                    	jnz	.timeout
+   457 00000182 A801                    	test	al,01h				; no ERR either: we timed out
+   458 00000184 7435                    	jz	.timeout
+   459                                  
+   460 00000186 F6C420                  	test	ah,20h				; DF -- device fault
+   461 00000189 7404                    	jz	.decode
+   462 0000018B B3CC                    	mov	bl,WRITE_FAULT
+   463 0000018D EB2E                    	jmp	short .done
+   464                                  
+   465                                  .decode:
+   466 0000018F BAF101                  	mov	dx,IDEERR
+   467 00000192 EC                      	in	al,dx				; the error register
+   468                                  
+   469 00000193 B30A                    	mov	bl,BAD_SECTOR_FLAG
+   470 00000195 A880                    	test	al,80h				; BBK  bad block mark
+   471 00000197 7524                    	jnz	.done
+   472 00000199 B310                    	mov	bl,BAD_CRC
+   473 0000019B A840                    	test	al,40h				; UNC  uncorrectable data
+   474 0000019D 751E                    	jnz	.done
+   475 0000019F B304                    	mov	bl,SECTOR_NOT_FOUND
+   476 000001A1 A810                    	test	al,10h				; IDNF sector id not found
+   477 000001A3 7518                    	jnz	.done
+   478 000001A5 B301                    	mov	bl,INVALID_COMMAND
+   479 000001A7 A804                    	test	al,04h				; ABRT command aborted
+   480 000001A9 7512                    	jnz	.done
+   481 000001AB B340                    	mov	bl,BAD_SEEK
+   482 000001AD A802                    	test	al,02h				; TK0NF track 0 not found
+   483 000001AF 750C                    	jnz	.done
+   484 000001B1 B302                    	mov	bl,ADDRESS_MARK_NOT_FOUND
+   485 000001B3 A801                    	test	al,01h				; AMNF
+   486 000001B5 7506                    	jnz	.done
+   487 000001B7 B3BB                    	mov	bl,UNDEFINED_ERROR
+   488 000001B9 EB02                    	jmp	short .done
+   489                                  
+   490                                  .timeout:
+   491 000001BB B380                    	mov	bl,TIME_OUT
+   492                                  
+   493                                  .done:
+   494 000001BD 6A4007                  	get_bda	ES
+   495 000001C0 26881E7400                  es	mov	[hd_status],bl			; INT 13h fn 01h reads this
+   496 000001C5 0FB6C3                  	movzx	ax,bl
+   497                                  
+   498 000001C8 5B595A07                	popm	bx,cx,dx,es
+   499 000001CC C3                      	ret
+   500                                  
+   501                                  ; Read a sector of 512 bytes into memory at ES:[BX]
+   502                                  ;
+   503                                  ;  Call with:
+   504                                  ;       ES:BX -- pointer to the data block
+   505                                  ;
+   506                                  ;  Exit with:
+   507                                  ;       AX and DX are destroyed; other registers preserved
+   508                                  ;
+   509                                  ; "BE" version is for ide id information
+   510                                  ;-----------------------------------------------------------------------------
+   511                                  read_dataBE:
+   512 000001CD 5153                        pushm   bx,cx
+   513 000001CF BAF001                  	mov		dx,IDEDTA
+   514                                  
+   515 000001D2 87FB                        xchg    di,bx
+   516                                  
+   517 000001D4 B90001                  	mov     cx,256          ; sector size in words
+   518                                  rdblk2BE:
+   519 000001D7 EC                      	in	al,dx
+   520 000001D8 88C4                    	mov ah,al
+   521 000001DA EC                      	in	al,dx
+   522 000001DB AA                      	stosb
+   523 000001DC 88E0                    	mov al,ah
+   524 000001DE AA                      	stosb
+   525 000001DF E2F6                        loop    rdblk2BE
+   526 000001E1 5B59                        popm    bx,cx
+   527 000001E3 C3                      	ret
+   528                                  
+   529                                  read_data:
+   530 000001E4 51                          pushm   cx
+   531 000001E5 BAF001                  	mov		dx,IDEDTA
+   532 000001E8 87FB                        xchg    di,bx
+   533 000001EA B90002                  	mov     cx,512          ; sector size in words
+   534                                  rdblk2:
+   535 000001ED EC                      	in	al,dx
+   536 000001EE AA                      	stosb
+   537 000001EF E2FC                        loop    rdblk2
+   538 000001F1 87FB                        xchg    di,bx
+   539 000001F3 59                          popm    cx
+   540 000001F4 C3                      	ret
+   541                                  
+   542                                  ;------------------------------------------------------------------------------
+   543                                  ; Write a sector of 512 bytes from memory at ES:[BX]
+   544                                  ;
+   545                                  ;  Call with:
+   546                                  ;       ES:BX -- pointer to the data block
+   547                                  ;
+   548                                  ;  Exit with:
+   549                                  ;       AX and DX are destroyed; other registers preserved
+   550                                  ;
+   551                                  ;-----------------------------------------------------------------------------
+   552                                  write_data:
+   553 000001F5 51                          pushm   cx
+   554 000001F6 BAF001                  	mov		dx,IDEDTA
+   555 000001F9 87F3                        xchg    si,bx
+   556 000001FB B90002                  	mov     cx,512          ; sector size in words
+   557                                  wtblk2:
+   558 000001FE AC                      	lodsb
+   559 000001FF EE                      	out	dx,al
+   560 00000200 E2FC                        loop    wtblk2
+   561 00000202 87F3                        xchg    si,bx
+   562 00000204 59                          popm    cx
+   563 00000205 C3                      	ret
+   564                                  
+   565                                  
+   566                                  
+   567                                  ;-----------------------------------------------------------------------------
+   568                                  ; write the logical block address to the drive's registers
+   569                                  ;
+   570                                  ;  Call with:
+   571                                  ;       DX:AX = logical block address
+   572                                  ;		BH = Master/Slave selection in bit 4
+   573                                  ;       BL = Sector read count
+   574                                  ;
+   575                                  ;  Exit with:
+   576                                  ;       AX, BX, DX are destroyed
+   577                                  ;
+   578                                  ;-----------------------------------------------------------------------------
+   579                                  wr_lba:
+   580 00000206 51                      		push 	cx
+   581 00000207 50                              push    ax
+   582 00000208 52                              push    dx
+   583 00000209 89D9                            mov 	CX,BX
+   584                                  
+   585 0000020B B010                            mov     al,10h          ; Master/Slave mask
+   586 0000020D 20E8                            and     al,ch           ; mask bit
+   587 0000020F 88F3                            mov     bl,dh           ; high order
+   588 00000211 80E30F                          and     bl,00Fh
+   589 00000214 80CBE0                          or      bl,0E0h         ; mark as LBA
+   590                                  
+   591 00000217 08D8                    		or		al,bl
+   592 00000219 BAF601                  		mov		dx,IDEDRV
+   593 0000021C EE                      		out		dx,al			; DRV
+   594                                  
+   595 0000021D 5B                              pop     bx              ; get DL to BL
+   596                                  
+   597 0000021E 88D8                    		mov		al,bl
+   598 00000220 4A                      		dec		dx
+   599 00000221 EE                      		out		dx,al			; LBA - H
+   600                                  
+   601 00000222 5B                              pop     bx
+   602                                  
+   603 00000223 88F8                    		mov		al,bh
+   604 00000225 4A                      		dec		dx
+   605 00000226 EE                      		out		dx,al			; LBA - M
+   606                                  
+   607 00000227 88D8                    		mov		al,bl
+   608 00000229 4A                      		dec		dx
+   609 0000022A EE                      		out		dx,al			; LBA - L
+   610                                  
+   611 0000022B 88C8                    		mov		al,cl
+   612 0000022D 4A                      		dec		dx
+   613 0000022E EE                      		out		dx,al 			; SET SECTOR COUNT
+   614                                  
+   615 0000022F 59                      		POP 	CX
+   616 00000230 C3                      		ret

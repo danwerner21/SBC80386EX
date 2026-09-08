@@ -1,0 +1,746 @@
+     1                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; monitor.asm -- assembly support for the debug monitor
+     3                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     4                                  ;
+     5                                  ; Copyright (C) 2026 Dan Werner.  All rights reserved.
+     6                                  ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+     7                                  ;
+     8                                  ; This program is free software: you can redistribute it and/or modify
+     9                                  ; it under the terms of the GNU General Public License as published by
+    10                                  ; the Free Software Foundation, either version 3 of the License, or
+    11                                  ; (at your option) any later version.
+    12                                  ;
+    13                                  ; This program is distributed in the hope that it will be useful,
+    14                                  ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    15                                  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    16                                  ; GNU General Public License for more details.
+    17                                  ;
+    18                                  ; You should have received a copy of the GNU General Public License
+    19                                  ; along with this program in the file COPYING in the topmost source
+    20                                  ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    21                                  ;
+    22                                  ; Assembly by NASM 2.08 is preferred
+    23                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    24                                  %include "seg_def.inc"
+    25                              <1> ; SEG_DEF.inc
+    26                              <1> ;
+    27                              <1> %ifndef SEG_DEF
+    28                              <1> %define SEG_DEF 1
+    29                              <1> 
+    30                              <1> segment _TEXT	use16 	align=16	class=CODE	public
+    31                              <1> 
+    32                              <1> segment CONST		align=16	class=DATA	public
+    33                              <1> segment CONST2		align=2		class=DATA	public
+    34                              <1> segment _DATA		align=16	class=DATA	public
+    35                              <1> segment _BSS		align=16	class=DATA	public
+    36                              <1> ;group DGROUP CONST2 CONST _DATA _BSS
+    37                              <1> 
+    38                              <1> group DGROUP  _TEXT CONST2 CONST _DATA _BSS
+    39                              <1> 
+    40                              <1> 
+    41                              <1> segment BOOT at 0xFFFF	align=16	class=BOOT	use16
+    42                              <1> 
+    43                              <1> %define XXX
+    44                              <1> %endif
+    45                              <1> ;
+    46                              <1> ; end SEG_DEF.inc
+    25                                  %include "i386EX.inc"
+    26                              <1> ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    27                              <1> ; i386EX.inc  --  register definitions for the Intel 80386EX processor
+    28                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    29                              <1> ;
+    30                              <1> ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+    31                              <1> ; Provided for hobbyist use on the RetroBrew SBC-386 board.
+    32                              <1> ;
+    33                              <1> ; This program is free software: you can redistribute it and/or modify
+    34                              <1> ; it under the terms of the GNU General Public License as published by
+    35                              <1> ; the Free Software Foundation, either version 3 of the License, or
+    36                              <1> ; (at your option) any later version.
+    37                              <1> ;
+    38                              <1> ; This program is distributed in the hope that it will be useful,
+    39                              <1> ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    40                              <1> ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    41                              <1> ; GNU General Public License for more details.
+    42                              <1> ;
+    43                              <1> ; You should have received a copy of the GNU General Public License
+    44                              <1> ; along with this program in the file COPYING in the topmost source
+    45                              <1> ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    46                              <1> ;
+    47                              <1> ;
+    48                              <1> ; SBC-386 board revisions:
+    49                              <1> ;       SBC386-0   prototype / concept testing
+    50                              <1> ;	SBC386EX 2.0 production board (Jan 2018, not 2017 as labeled)
+    51                              <1> ;
+    52                              <1> ; Assembly by NASM 2.08 is preferred
+    53                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;*/
+    54                              <1> 
+    55                              <1> ;/* i386EX.inc  --  register definitions for the Intel 80386EX processor
+    56                              <1> ;
+    57                              <1> %define defb
+    58                              <1> %define defw
+    59                              <1> %define defd
+    60                              <1> ;*/
+    61                              <1> 
+    62                              <1> ;/* The Address Configuration register
+    63                              <1> ;*/
+    64                              <1> defb REMAPCFGH  equ     0x0023
+    65                              <1> defb REMAPCFGL  equ     0x0022
+    66                              <1> defw REMAPCFG   equ     0x0022
+    67                              <1> 
+    68                              <1> ;/* The A20gate and fast CPU Reset
+    69                              <1> ;*/
+    70                              <1> defb PORT92     equ     0xF092
+    71                              <1> defb PORT92_AT  equ     0x0092
+    72                              <1> 
+    73                              <1> ;
+    74                              <1> ;/* The DMA Controller and Bus Arbiter
+    75                              <1> ;*/
+    76                              <1> defb DMA0TAR    equ     0xF000
+    77                              <1> defb DMA0TAR_AT equ     0x0000
+    78                              <1> defb DMA0BYC    equ     0xF001
+    79                              <1> defb DMA0BYC_AT equ     0x0001
+    80                              <1> defb DMA1TAR    equ     0xF002
+    81                              <1> defb DMA1TAR_AT equ     0x0002
+    82                              <1> defb DMA1BYC    equ     0xF003
+    83                              <1> defb DMA1BYC_AT equ     0x0003
+    84                              <1> defb DMACMD1    equ     0xF008
+    85                              <1> defb DMACMD1_AT equ     0x0008
+    86                              <1> defb DMASTS     equ     0xF008
+    87                              <1> defb DMASTS_AT  equ     0x0008
+    88                              <1> defb DMASRR     equ     0xF009
+    89                              <1> defb DMASRR_AT  equ     0x0009
+    90                              <1> defb DMAMSK     equ     0xF00A
+    91                              <1> defb DMAMSK_AT  equ     0x000A
+    92                              <1> defb DMAMOD1    equ     0xF00B
+    93                              <1> defb DMAMOD1_AT equ     0x000B
+    94                              <1> defb DMACLRBP   equ     0xF00C
+    95                              <1> defb DMACLRBP_AT equ    0x000C
+    96                              <1> defb DMACLR     equ     0xF00D
+    97                              <1> defb DMACLR_AT  equ     0x000D
+    98                              <1> defb DMACLRMSK  equ     0xF00E
+    99                              <1> defb DMACLRMSK_AT equ   0x000E
+   100                              <1> defb DMAGRPMSK  equ     0xF00F
+   101                              <1> defb DMAGRPMSK_AT equ   0x000F
+   102                              <1> defb DMA0REQ0_1 equ     0xF010
+   103                              <1> defb DMA0REQ2_3 equ     0xF011
+   104                              <1> defb DMA1REQ0_1 equ     0xF012
+   105                              <1> defb DMA1REQ2_3 equ     0xF013
+   106                              <1> defb DMABSR     equ     0xF018
+   107                              <1> defb DMACHR     equ     0xF019
+   108                              <1> defb DMAIS      equ     0xF019
+   109                              <1> defb DMACMD2    equ     0xF01A
+   110                              <1> defb DMAMOD2    equ     0xF01B
+   111                              <1> defb DMAIEN     equ     0xF01C
+   112                              <1> defb DMAOVFE    equ     0xF01D
+   113                              <1> defb DMACLRTC   equ     0xF01E
+   114                              <1> ;
+   115                              <1> ;/* The DMA Page Registers
+   116                              <1> ;*/
+   117                              <1> defb DMA1TAR2    equ    0xF083
+   118                              <1> defb DMA1TAR2_AT equ    0x0083
+   119                              <1> defb DMA1TAR3    equ    0xF085
+   120                              <1> defb DMA1TAR3_AT equ    0x0085
+   121                              <1> defb DMA0TAR3    equ    0xF086
+   122                              <1> defb DMA0TAR3_AT equ    0x0086
+   123                              <1> defb DMA0TAR2    equ    0xF087
+   124                              <1> defb DMA0TAR2_AT equ    0x0087
+   125                              <1> ;
+   126                              <1> defb DMA0BYC2   equ     0xF098
+   127                              <1> defb DMA1BYC2   equ     0xF099
+   128                              <1> 
+   129                              <1> ;
+   130                              <1> ;/* The Master Interrupt Controller
+   131                              <1> ;*/
+   132                              <1> defb ICW1M_AT   equ     0x0020
+   133                              <1> defb ICW2M_AT   equ     0x0021
+   134                              <1> defb ICW3M_AT   equ     0x0021
+   135                              <1> defb ICW4M_AT   equ     0x0021
+   136                              <1> defb OCW1M_AT   equ     0x0021
+   137                              <1> defb OCW2M_AT   equ     0x0020
+   138                              <1> defb OCW3M_AT   equ     0x0020
+   139                              <1> 
+   140                              <1> defb ICW1M      equ     0xF020
+   141                              <1> defb ICW2M      equ     0xF021
+   142                              <1> defb ICW3M      equ     0xF021
+   143                              <1> defb ICW4M      equ     0xF021
+   144                              <1> defb OCW1M      equ     0xF021
+   145                              <1> defb OCW2M      equ     0xF020
+   146                              <1> defb OCW3M      equ     0xF020
+   147                              <1> defb IRR_M	equ	0xF020
+   148                              <1> 
+   149                              <1> ;
+   150                              <1> ;/* The Slave Interrupt Controller
+   151                              <1> ;*/
+   152                              <1> defb ICW1S_AT   equ     0x00A0
+   153                              <1> defb ICW2S_AT   equ     0x00A1
+   154                              <1> defb ICW3S_AT   equ     0x00A1
+   155                              <1> defb ICW4S_AT   equ     0x00A1
+   156                              <1> defb OCW1S_AT   equ     0x00A1
+   157                              <1> defb OCW2S_AT   equ     0x00A0
+   158                              <1> defb OCW3S_AT   equ     0x00A0
+   159                              <1> defb IRR_M_AT	equ	0x00A0
+   160                              <1> 
+   161                              <1> defb ICW1S      equ     0xF0A0
+   162                              <1> defb ICW2S      equ     0xF0A1
+   163                              <1> defb ICW3S      equ     0xF0A1
+   164                              <1> defb ICW4S      equ     0xF0A1
+   165                              <1> defb OCW1S      equ     0xF0A1
+   166                              <1> defb OCW2S      equ     0xF0A0
+   167                              <1> defb OCW3S      equ     0xF0A0
+   168                              <1> 
+   169                              <1> ;
+   170                              <1> ;/* The Timer/Counter Unit
+   171                              <1> ;*/
+   172                              <1> defb    TMR0    equ     0xF040
+   173                              <1> defb    TMR0_AT equ     0x0040
+   174                              <1> defb    TMR1    equ     0xF041
+   175                              <1> defb    TMR1_AT equ     0x0041
+   176                              <1> defb    TMR2    equ     0xF042
+   177                              <1> defb    TMR2_AT equ     0x0042
+   178                              <1> defb    TMRCON  equ     0xF043
+   179                              <1> defb    TMRCON_AT  equ  0x0043
+   180                              <1> 
+   181                              <1> ;
+   182                              <1> ;/* The Chip Select Unit
+   183                              <1> ;*/
+   184                              <1> defw    CS0ADL  equ     0xF400
+   185                              <1> defw    CS0ADH  equ     0xF402
+   186                              <1> defw    CS0MSKL equ     0xF404
+   187                              <1> defw    CS0MSKH equ     0xF406
+   188                              <1> defw    CS1ADL  equ     0xF408
+   189                              <1> defw    CS1ADH  equ     0xF40A
+   190                              <1> defw    CS1MSKL equ     0xF40C
+   191                              <1> defw    CS1MSKH equ     0xF40E
+   192                              <1> defw    CS2ADL  equ     0xF410
+   193                              <1> defw    CS2ADH  equ     0xF412
+   194                              <1> defw    CS2MSKL equ     0xF414
+   195                              <1> defw    CS2MSKH equ     0xF416
+   196                              <1> defw    CS3ADL  equ     0xF418
+   197                              <1> defw    CS3ADH  equ     0xF41A
+   198                              <1> defw    CS3MSKL equ     0xF41C
+   199                              <1> defw    CS3MSKH equ     0xF41E
+   200                              <1> defw    CS4ADL  equ     0xF420
+   201                              <1> defw    CS4ADH  equ     0xF422
+   202                              <1> defw    CS4MSKL equ     0xF424
+   203                              <1> defw    CS4MSKH equ     0xF426
+   204                              <1> defw    CS5ADL  equ     0xF428
+   205                              <1> defw    CS5ADH  equ     0xF42A
+   206                              <1> defw    CS5MSKL equ     0xF42C
+   207                              <1> defw    CS5MSKH equ     0xF42E
+   208                              <1> defw    CS6ADL  equ     0xF430
+   209                              <1> defw    CS6ADH  equ     0xF432
+   210                              <1> defw    CS6MSKL equ     0xF434
+   211                              <1> defw    CS6MSKH equ     0xF436
+   212                              <1> defw    UCSADL  equ     0xF438
+   213                              <1> defw    UCSADH  equ     0xF43A
+   214                              <1> defw    UCSMSKL equ     0xF43C
+   215                              <1> defw    UCSMSKH equ     0xF43E
+   216                              <1> 
+   217                              <1> ;
+   218                              <1> ;/* The Synchronous Serial I/O Unit
+   219                              <1> ;*/
+   220                              <1> defw    SSIOTBUF equ    0xF480
+   221                              <1> defw    SSIORBUF equ    0xF482
+   222                              <1> defw    SSIOBAUD equ    0xF484
+   223                              <1> defw    SSIOCON1 equ    0xF486
+   224                              <1> defw    SSIOCON2 equ    0xF488
+   225                              <1> defw    SSIOCTR  equ    0xF48A
+   226                              <1> 
+   227                              <1> ;
+   228                              <1> ;/* The Refresh Control Unit
+   229                              <1> ;*/
+   230                              <1> defw    RFSBAD  equ     0xF4A0
+   231                              <1> defw    RFSCIR  equ     0xF4A2
+   232                              <1> defw    RFSCON  equ     0xF4A4
+   233                              <1> defw    RFSADD  equ     0xF4A6
+   234                              <1> 
+   235                              <1> ;
+   236                              <1> ;/* The Watchdog Timer Unit
+   237                              <1> ;*/
+   238                              <1> defw    WDTRLDH equ     0xF4C0
+   239                              <1> defw    WDTRLDL equ     0xF4C2
+   240                              <1> defw    WDTCNTH equ     0xF4C4
+   241                              <1> defw    WDTCNTL equ     0xF4C6
+   242                              <1> defw    WDTCLR  equ     0xF4C8
+   243                              <1> defb    WDTSTATUS  equ  0xF4CA
+   244                              <1> 
+   245                              <1> ;
+   246                              <1> ;/* Clock Generation and Power Management
+   247                              <1> ;*/
+   248                              <1> defb    PWRCON  equ     0xF800
+   249                              <1> defw    CLKPRS  equ     0xF804
+   250                              <1> 
+   251                              <1> ;
+   252                              <1> ;/* Device Configuration Registers
+   253                              <1> ;*/
+   254                              <1> defb    P1CFG   equ     0xF820
+   255                              <1> defb    P2CFG   equ     0xF822
+   256                              <1> defb    P3CFG   equ     0xF824
+   257                              <1> defb    PINCFG  equ     0xF826
+   258                              <1> defb    DMACFG  equ     0xF830
+   259                              <1> defb    INTCFG  equ     0xF832
+   260                              <1> defb    TMRCFG  equ     0xF834
+   261                              <1> defb    SIOCFG  equ     0xF836
+   262                              <1> 
+   263                              <1> ;
+   264                              <1> ;/* Parallel I/O Ports
+   265                              <1> ;*/
+   266                              <1> defb    P1PIN   equ     0xF860
+   267                              <1> defb    P1LTC   equ     0xF862
+   268                              <1> defb    P1DIR   equ     0xF864
+   269                              <1> defb    P2PIN   equ     0xF868
+   270                              <1> defb    P2LTC   equ     0xF86A
+   271                              <1> defb    P2DIR   equ     0xF86C
+   272                              <1> defb    P3PIN   equ     0xF870
+   273                              <1> defb    P3LTC   equ     0xF872
+   274                              <1> defb    P3DIR   equ     0xF874
+   275                              <1> 
+   276                              <1> 
+   277                              <1> ; bits.inc
+   278                              <1> ;
+   279                              <1> ; assembly language bit definitions
+   280                              <1> ;
+   281                              <1> defb    BIT0    equ     0x01
+   282                              <1> defb    BIT1    equ     0x02
+   283                              <1> defb    BIT2    equ     0x04
+   284                              <1> defb    BIT3    equ     0x08
+   285                              <1> defb    BIT4    equ     0x10
+   286                              <1> defb    BIT5    equ     0x20
+   287                              <1> defb    BIT6    equ     0x40
+   288                              <1> defb    BIT7    equ     0x80
+   289                              <1> 
+   290                              <1> defw    BIT8    equ     0x0100
+   291                              <1> defw    BIT9    equ     0x0200
+   292                              <1> defw    BIT10   equ     0x0400
+   293                              <1> defw    BIT11   equ     0x0800
+   294                              <1> defw    BIT12   equ     0x1000
+   295                              <1> defw    BIT13   equ     0x2000
+   296                              <1> defw    BIT14   equ     0x4000
+   297                              <1> defw    BIT15   equ     0x8000
+   298                              <1> 
+   299                              <1> defd    BIT16   equ     0x00010000
+   300                              <1> defd    BIT31   equ     0x80000000
+   301                              <1> 
+   302                              <1> defb    ZBIT0    equ     0
+   303                              <1> defb    ZBIT1    equ     0
+   304                              <1> defb    ZBIT2    equ     0
+   305                              <1> defb    ZBIT3    equ     0
+   306                              <1> defb    ZBIT4    equ     0
+   307                              <1> defb    ZBIT5    equ     0
+   308                              <1> defb    ZBIT6    equ     0
+   309                              <1> defb    ZBIT7    equ     0
+   310                              <1> 
+   311                              <1> defw    ZBIT8    equ     0
+   312                              <1> defw    ZBIT9    equ     0
+   313                              <1> defw    ZBIT10   equ     0
+   314                              <1> defw    ZBIT11   equ     0
+   315                              <1> defw    ZBIT12   equ     0
+   316                              <1> defw    ZBIT13   equ     0
+   317                              <1> defw    ZBIT14   equ     0
+   318                              <1> defw    ZBIT15   equ     0
+   319                              <1> 
+   320                              <1> 
+   321                              <1> ;
+   322                              <1> ;/* Asynchronout Serial I/O channel 0  (COM1)
+   323                              <1> ;*/
+   324                              <1> defb    RBR0_F4 equ     0xF4F8
+   325                              <1> defb    TBR0_F4 equ     0xF4F8
+   326                              <1> defb    DLL0_F4 equ     0xF4F8
+   327                              <1> defb    DLH0_F4 equ     0xF4F9
+   328                              <1> defb    IER0_F4 equ     0xF4F9
+   329                              <1> defb    IIR0_F4 equ     0xF4FA
+   330                              <1> defb    LCR0_F4 equ     0xF4FB
+   331                              <1> defb    MCR0_F4 equ     0xF4FC
+   332                              <1> defb    LSR0_F4 equ     0xF4FD
+   333                              <1> defb    MSR0_F4 equ     0xF4FE
+   334                              <1> defb    SCR0_F4 equ     0xF4FF
+   335                              <1> 
+   336                              <1> %define MFPIC 0
+   337                              <1> %if MFPIC
+   338                              <1> defb    RBR0    equ     0x0448
+   339                              <1> defb    TBR0    equ     0x0448
+   340                              <1> defb    DLL0    equ     0x0448
+   341                              <1> defb    DLH0    equ     0x0449
+   342                              <1> defb    IER0    equ     0x0449
+   343                              <1> defb    IIR0    equ     0x044A
+   344                              <1> defb    LCR0    equ     0x044B
+   345                              <1> defb    MCR0    equ     0x044C
+   346                              <1> defb    LSR0    equ     0x044D
+   347                              <1> defb    MSR0    equ     0x044E
+   348                              <1> defb    SCR0    equ     0x044F
+   349                              <1> %else
+   350                              <1> defb    RBR0    equ     0x03F8
+   351                              <1> defb    TBR0    equ     0x03F8
+   352                              <1> defb    DLL0    equ     0x03F8
+   353                              <1> defb    DLH0    equ     0x03F9
+   354                              <1> defb    IER0    equ     0x03F9
+   355                              <1> defb    IIR0    equ     0x03FA
+   356                              <1> defb    LCR0    equ     0x03FB
+   357                              <1> defb    MCR0    equ     0x03FC
+   358                              <1> defb    LSR0    equ     0x03FD
+   359                              <1> defb    MSR0    equ     0x03FE
+   360                              <1> defb    SCR0    equ     0x03FF
+   361                              <1> %endif
+   362                              <1> 
+   363                              <1> ;
+   364                              <1> ;/* Asynchronout Serial I/O channel 1  (COM2)
+   365                              <1> ;*/
+   366                              <1> defb    RBR1_F8 equ     0xF8F8
+   367                              <1> defb    TBR1_F8 equ     0xF8F8
+   368                              <1> defb    DLL1_F8 equ     0xF8F8
+   369                              <1> defb    DLH1_F8 equ     0xF8F9
+   370                              <1> defb    IER1_F8 equ     0xF8F9
+   371                              <1> defb    IIR1_F8 equ     0xF8FA
+   372                              <1> defb    LCR1_F8 equ     0xF8FB
+   373                              <1> defb    MCR1_F8 equ     0xF8FC
+   374                              <1> defb    LSR1_F8 equ     0xF8FD
+   375                              <1> defb    MSR1_F8 equ     0xF8FE
+   376                              <1> defb    SCR1_F8 equ     0xF8FF
+   377                              <1> 
+   378                              <1> defb    RBR1    equ     0x02F8
+   379                              <1> defb    TBR1    equ     0x02F8
+   380                              <1> defb    DLL1    equ     0x02F8
+   381                              <1> defb    DLH1    equ     0x02F9
+   382                              <1> defb    IER1    equ     0x02F9
+   383                              <1> defb    IIR1    equ     0x02FA
+   384                              <1> defb    LCR1    equ     0x02FB
+   385                              <1> defb    MCR1    equ     0x02FC
+   386                              <1> defb    LSR1    equ     0x02FD
+   387                              <1> defb    MSR1    equ     0x02FE
+   388                              <1> defb    SCR1    equ     0x02FF
+   389                              <1> 
+   390                              <1> ;/* LSRx bits
+   391                              <1> ;*/
+   392                              <1> defb    LSR_TE  equ     BIT6
+   393                              <1> defb    LSR_TBE equ     BIT5
+   394                              <1> defb    LSR_BI  equ     BIT4
+   395                              <1> defb    LSR_FE  equ     BIT3
+   396                              <1> defb    LSR_PE  equ     BIT2
+   397                              <1> defb    LSR_OE  equ     BIT1
+   398                              <1> defb    LSR_RBF equ     BIT0
+   399                              <1> 
+   400                              <1> ;/* MSRx bits
+   401                              <1> ;*/
+   402                              <1> defb	MSR_DCD	equ	BIT7
+   403                              <1> defb	MSR_RI 	equ	BIT6
+   404                              <1> defb	MSR_DSR	equ	BIT5
+   405                              <1> defb	MSR_CTS	equ	BIT4
+   406                              <1> defb	MSR_deltaDCD	equ	BIT3
+   407                              <1> defb	MSR_deltaRI	equ	BIT2
+   408                              <1> defb	MSR_deltaDSR	equ	BIT1
+   409                              <1> defb	MSR_deltaCTS	equ	BIT0
+   410                              <1> 
+   411                              <1> ;/* Bits in CR0
+   412                              <1> ;*/
+   413                              <1> defb    CR0_PE  equ     BIT0
+   414                              <1> defb    CR0_MP  equ     BIT1
+   415                              <1> defb    CR0_EM  equ     BIT2
+   416                              <1> defb    CR0_TS  equ     BIT3
+   417                              <1> defd    CR0_WP  equ     BIT16
+   418                              <1> defd    CR0_PG  equ     BIT31
+   419                              <1> 
+   420                              <1> ;/* Some ASCII character codes
+   421                              <1> ;*/
+   422                              <1> defb    ASCII_NUL       equ     0x00
+   423                              <1> defb    ASCII_BS        equ     0x08
+   424                              <1> defb    ASCII_HT        equ     0x09
+   425                              <1> defb    ASCII_LF        equ     0x0A
+   426                              <1> defb    ASCII_NL        equ     0x0A
+   427                              <1> defb    ASCII_FF        equ     0x0C
+   428                              <1> defb    ASCII_CR        equ     0x0D
+   429                              <1> defb	ASCII_ESC	equ	0x1B
+   430                              <1> defb    ASCII_SP        equ     0x20
+   431                              <1> defb    ASCII_DEL       equ     0x7F
+   432                              <1> defb	ASCII_RUB	equ	0xFF
+   433                              <1> 
+   434                              <1> 
+   435                              <1> ;/* End of i386EX.inc */
+    26                                  %include "macro.inc"
+    27                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    28                              <1> ;
+    29                              <1> ; some useful macros:
+    30                              <1> ;
+    31                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    32                              <1> %define NREPEAT 0
+    33                              <1> 
+    34                              <1> %if NREPEAT
+    35                              <1> 
+    36                              <1> %macro	rep	1
+    37                              <1> %%loop:	%1
+    38                              <1> 	dec	cx
+    39                              <1> 	jnz	%%loop
+    40                              <1> %endm
+    41                              <1> 
+    42                              <1> %macro	repne	1
+    43                              <1> %%loop:	%1
+    44                              <1> 	je	%%e
+    45                              <1> 	dec	cx
+    46                              <1> 	jnz	%%loop
+    47                              <1> 	cmp	cx,1
+    48                              <1> 	jmp	%%done
+    49                              <1> %%e:	dec	cx
+    50                              <1> 	cmp	cx,cx
+    51                              <1> %%done:
+    52                              <1> %endm
+    53                              <1> 
+    54                              <1> %macro	repe	1
+    55                              <1> %%loop:	%1
+    56                              <1> 	jne	%%ne
+    57                              <1> 	dec	cx
+    58                              <1> 	jnz	%%loop
+    59                              <1> 	jmp	%%done
+    60                              <1> %%ne:	dec	cx
+    61                              <1> 	jcxz	%%cxz
+    62                              <1> 	jmp	%%done
+    63                              <1> %%cxz:	cmp	cx,1
+    64                              <1> %%done:
+    65                              <1> %endm
+    66                              <1> 
+    67                              <1> %macro	REP	1
+    68                              <1> %%loop:	%1
+    69                              <1> 	dec	ecx
+    70                              <1> 	jnz	%%loop
+    71                              <1> %endm
+    72                              <1> 
+    73                              <1> %macro	REPNE	1
+    74                              <1> %%loop:	%1
+    75                              <1> 	je	%%e
+    76                              <1> 	dec	ecx
+    77                              <1> 	jnz	%%loop
+    78                              <1> 	cmp	cl,1
+    79                              <1> 	jmp	%%done
+    80                              <1> %%e:	dec	ecx
+    81                              <1> 	cmp	cl,cl
+    82                              <1> %%done:
+    83                              <1> %endm
+    84                              <1> 
+    85                              <1> %macro	REPE	1
+    86                              <1> %%loop:	%1
+    87                              <1> 	jne	%%ne
+    88                              <1> 	dec	ecx
+    89                              <1> 	jnz	%%loop
+    90                              <1> 	jmp	%%done
+    91                              <1> %%ne:	dec	ecx
+    92                              <1> 	jecxz	%%cxz
+    93                              <1> 	jmp	%%done
+    94                              <1> %%cxz:	cmp	cl,1
+    95                              <1> %%done:
+    96                              <1> %endm
+    97                              <1> 
+    98                              <1> %endif
+    99                              <1> 
+   100                              <1> 
+   101                              <1> ;
+   102                              <1> ; format of the BYTE initialization table:  address, byte
+   103                              <1> ;
+   104                              <1> %imacro  binit 2
+   105                              <1>         dw      %1
+   106                              <1>         db      %2
+   107                              <1> %endmacro
+   108                              <1> ; end with DW -1
+   109                              <1> 
+   110                              <1> ;
+   111                              <1> ; format of the WORD initialization table:  address, word
+   112                              <1> ;
+   113                              <1> %imacro  winit 2
+   114                              <1>         dw      %1
+   115                              <1>         dw      %2
+   116                              <1> %endmacro
+   117                              <1> ; end with DW -1
+   118                              <1> 
+   119                              <1> 
+   120                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   121                              <1> %imacro get_bda	1.nolist
+   122                              <1> 	push	0x0040
+   123                              <1> 	pop	%1
+   124                              <1> 	cnop
+   125                              <1> %endm
+   126                              <1> 
+   127                              <1> 
+   128                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   129                              <1> %imacro	get_loc0 1.nolist
+   130                              <1> 	push	0x0000
+   131                              <1> 	pop	%1
+   132                              <1> 	cnop
+   133                              <1> %endm
+   134                              <1> 
+   135                              <1> 
+   136                              <1> 
+   137                              <1> %imacro setloc  1.nolist
+   138                              <1>  times   (%1-($-$$)) db 0FFh
+   139                              <1> %endm
+   140                              <1> 
+   141                              <1> %imacro db_lo   1
+   142                              <1>  db (%1)&255
+   143                              <1> %endm
+   144                              <1> 
+   145                              <1> %imacro cnop    0.nolist
+   146                              <1> %ifdef SOFT_DEBUG
+   147                              <1> %if SOFT_DEBUG
+   148                              <1>         nop
+   149                              <1> %endif
+   150                              <1> %endif
+   151                              <1> %endm
+   152                              <1> 
+   153                              <1> %imacro popm 1-*.nolist
+   154                              <1> %rep %0
+   155                              <1> %ifidni %1,ALL
+   156                              <1>  popa
+   157                              <1> %elifidni %1,F
+   158                              <1>  popf
+   159                              <1> %else
+   160                              <1>  pop %1
+   161                              <1> %ifidni %1,DS
+   162                              <1>  cnop
+   163                              <1> %elifidni %1,ES
+   164                              <1>  cnop
+   165                              <1> %elifidni %1,FS
+   166                              <1>  cnop
+   167                              <1> %elifidni %1,GS
+   168                              <1>  cnop
+   169                              <1> %endif
+   170                              <1> %endif
+   171                              <1> %rotate 1
+   172                              <1> %endrep
+   173                              <1> %endm
+   174                              <1> 
+   175                              <1> %imacro pushm 1-*.nolist
+   176                              <1> %rep %0
+   177                              <1> %rotate -1
+   178                              <1> %ifidni %1,ALL
+   179                              <1>  pusha
+   180                              <1> %elifidni %1,F
+   181                              <1>  pushf
+   182                              <1> %else
+   183                              <1>  push %1
+   184                              <1> %endif
+   185                              <1> %endrep
+   186                              <1> %endm
+   187                              <1> 
+   188                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   189                              <1> %assign __size__ (%2-1)	| 0xFF
+   190                              <1> %if (__size__ <= 0xFFFF)
+   191                              <1> %assign __gran__ 0
+   192                              <1> %else
+   193                              <1> %assign __gran__ 0xC0			; G B 0 0
+   194                              <1> %endif
+   195                              <1> %assign __expand__ 0
+   196                              <1> %if %0==3
+   197                              <1> %if %3
+   198                              <1> %assign __expand__ 4
+   199                              <1> %endif
+   200                              <1> %endif
+   201                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   202                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   203                              <1> %endm
+   204                              <1> 
+   205                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   206                              <1> %assign __size__ (%2-1)	| 0xFF
+   207                              <1> %if (__size__ <= 0xFFFF)
+   208                              <1> %assign __gran__ 0
+   209                              <1> %else
+   210                              <1> %assign __gran__ 0xC0			; G D 0 0
+   211                              <1> %endif
+   212                              <1> %assign __conform__ 0
+   213                              <1> %if %0==3
+   214                              <1> %if %3
+   215                              <1> %assign __conform__ 4
+   216                              <1> %endif
+   217                              <1> %endif
+   218                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   219                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   220                              <1> %endm
+   221                              <1> 
+   222                              <1> ;/* End of macro.inc */
+    27                                  
+    28                                  segment	_TEXT
+    29                                  
+    30                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    31                                  ; go_call -- FAR CALL an arbitrary Real Mode address, for the GO command
+    32                                  ;
+    33                                  ;	void __cdecl go_call(word seg, word off, T_REGS *regs);
+    34                                  ;
+    35                                  ; The register values in *regs are loaded before the call and written
+    36                                  ; back from whatever the callee left behind, so GO can both set up a
+    37                                  ; call and report what came out of it.
+    38                                  ;
+    39                                  ; A far CALL is used rather than a far JMP, so the target comes back to
+    40                                  ; the monitor with a RETF.  A target that returns with IRET, or that
+    41                                  ; leaves the stack unbalanced, will not find its way home.
+    42                                  ;
+    43                                  ; The callee is trusted for SS:SP and nothing else.  BP is re-formed
+    44                                  ; from SP after the call because the callee is free to trash it.
+    45                                  ;
+    46                                  ;    Enter with (__cdecl -- arguments on the stack, caller cleans up):
+    47                                  ;	[bp+4]	target segment
+    48                                  ;	[bp+6]	target offset
+    49                                  ;	[bp+8]	regs offset
+    50                                  ;	[bp+10]	regs segment
+    51                                  ;
+    52                                  ;    T_REGS layout, in words:
+    53                                  ;	+0 AX	+2 BX	+4 CX	+6 DX
+    54                                  ;	+8 SI	+10 DI	+12 DS	+14 ES	+16 FLAGS
+    55                                  ;
+    56                                  ;    Exit with:
+    57                                  ;	*regs updated, all of the monitor's own registers preserved
+    58                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    59                                  	global	_go_call
+    60                                  _go_call:
+    61 00000000 55                      	push	bp
+    62 00000001 89E5                    	mov	bp,sp
+    63 00000003 061E575652515350        	pushm	ax,bx,cx,dx,si,di,ds,es		; SP is now BP-16
+    64                                  
+    65 0000000B 83EC04                  	sub	sp,4				; SP is now BP-20
+    66 0000000E 8B4606                  	mov	ax,[bp+6]			; stage the far target where
+    67 00000011 8946EC                  	mov	[bp-20],ax			;  CALL FAR can reach it with
+    68 00000014 8B4604                  	mov	ax,[bp+4]			;  a BP-relative address
+    69 00000017 8946EE                  	mov	[bp-18],ax
+    70                                  
+    71                                  ; Load the entry values.  DS and ES travel through the stack because
+    72                                  ; T_REGS is addressed through ES:DI right up to the last moment.
+    73 0000001A C47E08                  	les	di,[bp+8]			; ES:DI -> T_REGS
+    74 0000001D 26FF750E                	push	word [es:di+14]			; ES for the callee
+    75 00000021 26FF750C                	push	word [es:di+12]			; DS for the callee
+    76 00000025 268B05                  	mov	ax,[es:di+0]
+    77 00000028 268B5D02                	mov	bx,[es:di+2]
+    78 0000002C 268B4D04                	mov	cx,[es:di+4]
+    79 00000030 268B5506                	mov	dx,[es:di+6]
+    80 00000034 268B7508                	mov	si,[es:di+8]
+    81 00000038 268B7D0A                	mov	di,[es:di+10]			; DI last: it held the pointer
+    82 0000003C 1F                      	pop	ds
+    83 0000003D 07                      	pop	es				; SP is back to BP-20
+    84                                  
+    85 0000003E FF5EEC                  	call	far [bp-20]			; *** into the unknown ***
+    86                                  
+    87                                  ; Capture what came back.  PUSHF is first because nothing between the
+    88                                  ; call and it may disturb the flags.
+    89 00000041 9C                      	pushf
+    90 00000042 50                      	push	ax
+    91 00000043 53                      	push	bx
+    92 00000044 51                      	push	cx
+    93 00000045 52                      	push	dx
+    94 00000046 56                      	push	si
+    95 00000047 57                      	push	di
+    96 00000048 1E                      	push	ds
+    97 00000049 06                      	push	es
+    98                                  
+    99                                  ; Re-form BP.  A RETF with a balanced stack leaves SP at BP-20, and the
+   100                                  ; nine words just pushed put it at BP-38.
+   101 0000004A 89E5                    	mov	bp,sp
+   102 0000004C 83C526                  	add	bp,38
+   103                                  
+   104 0000004F C47E08                  	les	di,[bp+8]			; ES:DI -> T_REGS again
+   105 00000052 268F450E                	pop	word [es:di+14]			; ES	(pushed last)
+   106 00000056 268F450C                	pop	word [es:di+12]			; DS
+   107 0000005A 268F450A                	pop	word [es:di+10]			; DI
+   108 0000005E 268F4508                	pop	word [es:di+8]			; SI
+   109 00000062 268F4506                	pop	word [es:di+6]			; DX
+   110 00000066 268F4504                	pop	word [es:di+4]			; CX
+   111 0000006A 268F4502                	pop	word [es:di+2]			; BX
+   112 0000006E 268F05                  	pop	word [es:di+0]			; AX
+   113 00000071 268F4510                	pop	word [es:di+16]			; FLAGS
+   114                                  
+   115 00000075 83C404                  	add	sp,4				; drop the staged far target
+   116 00000078 585B595A5E5F1F07        	popm	ax,bx,cx,dx,si,di,ds,es
+   117 00000080 5D                      	pop	bp
+   118 00000081 C3                      	ret			; __cdecl -- caller pops the arguments

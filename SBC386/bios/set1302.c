@@ -26,18 +26,17 @@
 ;
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-%include "seg_def.inc"
-%include "i386ex.inc"
-%include "bda.inc"
-%include "macro.inc"
 */
+
 #include "mytypes.h"
 #include "cprintf.h"
 #include "strtobcd.h"
 #include "nvram.h"
 #include "getline.h"
 #include "disk.h"
+#include "debugmon.h"
 
+void testmain(void);	/* the POST self test, in testmain.c */
 
 
 #define Rnone	0
@@ -154,7 +153,9 @@ T_STR top_name[] = {
 	"Fixed Disks"		,
 	"Floppy Disks"		,
 	"RS-232 Serial"		,
-	"Date/Time/Battery"
+	"Date/Time/Battery"	,
+	"Debug Monitor"		,
+	"Self test"
 };
 
 VOID set_top(int modified)
@@ -163,8 +164,6 @@ VOID set_top(int modified)
 	word temp;
 
 	temp = get_nvram_crc(29);
-//	printf("\nNVRAM calculated CRC = %04x   read CRC = %04x\n",
-//					temp, bda.nvram_checksum);
 
 	do {
 		opt = option_get(
@@ -184,24 +183,22 @@ VOID set_top(int modified)
 			case 4:
 				set_clock();
 				break;
+			case 5:
+				debugmon();
+				break;
+			case 6:
+				testmain();
+				break;
 		}
 	} while(opt);
 
 	if (modified) {
-#if 0
-		for (i=0; i<31; i++) bda.nvram_info[i] = 0;
-#endif
 		temp = get_nvram_crc(29);
-//		printf("\n2NVRAM calculated CRC = %04x   read CRC = %04x\n",
-//					temp, bda.nvram_checksum);
 
 		bda.nvram_checksum = temp;
 		put_nvram_info();
 		printf("\nReboot required!\n");
 		temp = get_nvram_crc(31);
-//		printf("\n3NVRAM calculated CRC = %04x   new read CRC = %04x\n",
-//					temp, bda.nvram_checksum);
-
 		exit(15);
 	}
 }

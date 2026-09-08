@@ -28,7 +28,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
 %include "i386ex.inc"
-;%include "bda.inc"
 %include "macro.inc"
 
 
@@ -137,23 +136,10 @@ pm_continue:
 	mov	dx,0x4FF
 	mov	al,0xF0
 	out	dx,al
-;;;	hlt
 
 	mov	ax,descr_DS		; set DS descriptor
 	mov	ds,ax			; **
 
-;	xor	ebx,ebx
-;	xor	ebp,ebp
-; stack value saves
-;	mov	bx,ss
-;	mov	esi,ebx			; save SS
-;	mov	bp,sp			; save SP
-;
-;	shl	ebx,4			; account for
-;	add	ebx,ebp			; new linear stack pointer
-;
-;	mov	ss,ax			; linear Stack
-;	mov	esp,ebx			; set stack
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;  __pm_sizeMem -- size Memory in Megabytes
@@ -179,7 +165,6 @@ __pm_size1:
 return_to_real:
 	mov	ax,descr_RMdata		; 64K segment at 0x00000000
 	mov	ds,ax
-;;;	jmp	$+2	; clear prefetch queue
 	jmp	descr_RMcode:real_return
 real_return:
 	bits	16
@@ -188,15 +173,94 @@ real_return:
 	and	al,0xFE		; turn off PE bit
 	mov	cr0,eax
 	jmp	0xF000:really_return
-;	jmp	far really_return
 really_return:
 	mov	ax,DGROUP
 	mov	ds,ax
-; the segment registers below were never touched in Protected Mode
-;	mov	es,ax
-;	mov	fs,ax
-;	mov	gs,ax
 
 ; EDX is size in MB
 	mov	ax,dx
 	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; pm_read -- copy a block of physical memory into a Real Mode buffer
+;
+;	void __cdecl pm_read(dword linear, byte *dest, word count);
+;
+; Copies 'count' bytes from the 32-bit physical address 'linear' to 'dest'.
+; Protected Mode is entered just long enough to do the move, so the caller
+; stays in Real Mode and printf / INT 14h keep working.  That is what lets
+; the debug monitor display all of memory and not just the first megabyte.
+;
+; Interrupts are off across the switch: there is no Protected Mode IDT, so
+; an interrupt taken in PM would fault with nothing to catch it.  The move
+; is short enough that the 18.2hz tick is not disturbed.
+;
+;    Enter with (__cdecl -- arguments on the stack, caller cleans up):
+;	[bp+4]	source linear address (dword)
+;	[bp+8]	destination offset
+;	[bp+10]	destination segment
+;	[bp+12]	byte count (word)
+;
+;    Exit with:
+;	all registers and flags preserved
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	global	_pm_read
+_pm_read:
+	push	bp
+	mov	bp,sp
+	pushm	ax,bx,cx,dx,si,di,ds,es
+	pushf
+	cli
+
+	mov	cx,[bp+12]	; byte count
+	or	cx,cx
+	jz	pmr_done	; nothing to move
+
+; form the destination linear address:  segment*16 + offset
+	movzx	eax,word [bp+10]	; destination segment
+	shl	eax,4
+	movzx	ebx,word [bp+8]		; destination offset
+	add	eax,ebx
+	mov	edi,eax			; EDI = destination linear
+
+	mov	esi,[bp+4]		; ESI = source, already linear
+	movzx	ecx,cx			; ECX = count
+
+	lgdt	[rom_gdt]	; the ROM GDT declared above
+
+	mov	ebx,cr0		; CR0 is held in EBX because the
+	or	bl,1		;  prefetch flush below eats EAX
+	mul	eax		; time waster for the prefetch queue
+	mov	cr0,ebx		; enter protected mode
+	jmp	descr_BIOS32:pmr_pm
+
+	bits	32
+pmr_pm:
+	mov	ax,descr_DS	; flat source
+	mov	ds,ax
+	mov	ax,descr_ES	; flat destination
+	mov	es,ax
+	cld
+	rep	movsb		; DS:ESI -> ES:EDI
+
+; Give DS and ES 64K limits before leaving, or their cached descriptors
+; would still read 4Gb once PE is cleared.
+	mov	ax,descr_RMdata
+	mov	ds,ax
+	mov	es,ax
+	jmp	descr_RMcode:pmr_rm
+
+pmr_rm:
+	bits	16
+	mov	eax,cr0
+	and	al,0xFE		; clear PE
+	mov	cr0,eax
+	jmp	0xF000:pmr_back
+pmr_back:
+
+pmr_done:
+	popf
+	popm	ax,bx,cx,dx,si,di,ds,es
+	pop	bp
+	ret			; __cdecl -- caller pops the arguments

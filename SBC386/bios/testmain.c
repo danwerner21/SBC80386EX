@@ -30,6 +30,7 @@
 #include "mytypes.h"
 #include "cprintf.h"
 #include "nvram.h"
+#include "hdinit.h"
 
 #define ALL 0
 #define CPRINTF	ALL|0
@@ -45,6 +46,7 @@
 #define TVGA3	ALL|1
 #define TCVDU	ALL|1
 #define T4UART	ALL|1
+#define THDINIT	ALL|0	/* now done by _main_() before INT 19h */
 
 
 void lites(int);
@@ -262,6 +264,12 @@ void testmain(void)
 	static const char parity[] = "no?e?m?s";
  	int tries;
 
+#if THDINIT
+	/* Enumeration moved to _main_(): it has to happen on every
+	   boot, not only when the self test is run. */
+	hd_enumerate();
+#endif
+
 
 #if CPRINTF
 
@@ -432,4 +440,6 @@ void testmain(void)
 	if (test_cvdu(0xF0)) printf("CVDU found at 0x4F0\n");
 }
 #endif
+
+
 } /* end testmain.c */

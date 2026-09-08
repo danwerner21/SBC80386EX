@@ -33,6 +33,7 @@
 #include "cprintf.h"
 #include "nvram.h"
 #include "getline.h"
+#include "hdinit.h"	/* hd_enumerate() */
 
 void lites(int);
 int install_SIO0(int);
@@ -112,11 +113,11 @@ int _main_(int code)
 	int i;
 jleds(code);
 
-#if 1
-	if (code) {
-		bda.disk_tab[0] = FX_IDEm;
-	}
-#endif
+/* The drive registration that used to sit here was inverted: it ran
+   only when 'code' was non-zero, which is to say only when the NVRAM
+   checksum was bad, the clock had stopped, or battery charging was
+   disabled.  On a healthy board no disk was ever registered.
+   hd_enumerate() in hdinit.c now does it unconditionally. */
 
 	i = RBR0;
 #if 0
@@ -173,6 +174,16 @@ jleds(code);
 		printf("en");
 	printf("abled.\n");
 
+	/* Enumerate the fixed disks.
+	 *
+	 * This has to happen BEFORE set_top().  SETUP and the debug monitor
+	 * both sit under it, and both want to talk to the disks -- with the
+	 * enumeration after it, bda.hd_number was still 0 and INT 41h/46h
+	 * still pointed at int_nop while the monitor was running, so every
+	 * INT 13h call from there came straight back with INVALID_COMMAND.
+	 */
+	hd_enumerate();
+
 /* NOW -- we may check for waiting input */
 
 #define KEY_STRUCK 0x10
@@ -186,8 +197,12 @@ jleds(code);
 	if (code) set_top(code & ~KEY_STRUCK);
 	else delay(20); /* delay 2.0 seconds */
 
-	testmain();
+	/* Boot.  INT 19h takes over the stack and does not return; anything
+	   below here runs only if the vector was never set up. */
+	ASM {
+		int	0x19
+	}
 
-	printf("\nShutdown.\n");
+	printf("\nINT 19h returned -- nothing to boot.\n");
 	return 8;
 }

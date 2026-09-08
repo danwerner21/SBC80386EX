@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 0)
+  (lib (name "SBC-386EX-2-rescue")(type "Legacy")(uri "${KIPRJMOD}/SBC-386EX-2-rescue.lib")(options "")(descr ""))
+)

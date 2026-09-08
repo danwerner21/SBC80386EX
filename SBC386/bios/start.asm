@@ -537,6 +537,8 @@ return1:
 	out	dx,al		; Zap jrc LEDs to 0xFF
 %endif
 
+	mov al,0011b
+	call lites
 
 ; Size the SRAM
 
@@ -596,22 +598,23 @@ size_SRAM:
 
 ; Calculate ROM CRC
 ;
+; removed for debug purposes
 crc_computation:
-	mov	ax,cs
-	mov	es,ax		; ES:BX addresses ROM
-	cnop
-
-	xor	ax,ax
-	mov	bx,(CRC_AT+2)&0xFFFF	;start here
-	xor	cx,cx
-	xor	dx,dx		;overflow for 1's complement
+;	mov	ax,cs
+;	mov	es,ax		; ES:BX addresses ROM
+;	cnop
+;
+;	xor	ax,ax
+;	mov	bx,(CRC_AT+2)&0xFFFF	;start here
+;	xor	cx,cx
+;	xor	dx,dx		;overflow for 1's complement
 ; CRC16 computation
 	extern	crc16
-
-	call	crc16
-	or	ax,ax		; test for zero checksum
-	jz	.1
-	hlt
+;
+;	call	crc16
+;	or	ax,ax		; test for zero checksum
+;	jz	.1
+;	hlt
 .1:
 
 
@@ -653,6 +656,7 @@ wait00:
 	call	wout
 %endif
 ;
+
 ; set up the refresh counter correctly
 	mov	ax,bx		; count in khz
 	add	ax,5		; round up a bit

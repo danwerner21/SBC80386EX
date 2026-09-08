@@ -37,6 +37,14 @@ max_lba	resd	1	; up to 28 bits  ==  128Gb = 137gb */
 nsectors	resb	1	; maximum number of sectors per track**/
 ; was	byte	reserved2;	   386EX usage TBD */
 disk_flags	resb	1		; see bit definitions above */
+; */
+; ncylinders / n__heads / nsectors above carry the TRANSLATED geometry */
+; -- what INT 13h AH=08h reports, and what the INT 41h and INT 46h */
+; tables expose.  The numbers the drive itself reports are kept here, */
+; so both are available. */
+phys_cylinders	resw	1
+phys_heads	resb	1
+phys_sectors	resb	1
 endstruc
 ; */
 ; */
@@ -84,7 +92,7 @@ endstruc
 ; course the IDE drive interface changes, perhaps when drives get
 ; to 128G and the PC industry will do yet another kludge.
 ; */
-;IDE Command Constants.  These should never change.
+;IDE Command Constants.  These should never change. */
 %define	ide_cmd_recal	0x10
 %define	ide_cmd_read	0x20
 %define	ide_cmd_write	0x30

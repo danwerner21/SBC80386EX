@@ -502,7 +502,7 @@
     70                                  global	int_17h		; (parallel port)
     71                                  
     72                                  global	int_18h		; (ROM Basic)
-    73                                  global	int_19h		; (Reboot)
+    73                                  ; int_19h now lives in 19h_boot.asm
     74                                  ;;global	int_1Ah		; (CMOS clock)
     75                                  global	int_1Bh		; (ctrl-Break)
     76                                  global	int_1Ch		; (timer tick)
@@ -603,120 +603,119 @@
    171                                  int_17h:
    172                                  
    173                                  int_18h:
-   174                                  int_19h:
-   175                                  int_1Ah:
-   176                                  int_1Bh:
-   177                                  int_1Ch		equ	int_nop	; streamlined return
-   178                                  int_1Dh:
-   179                                  int_1Eh:
-   180                                  int_1Fh:
+   174                                  int_1Ah:
+   175                                  int_1Bh:
+   176                                  int_1Ch		equ	int_nop	; streamlined return
+   177                                  int_1Dh:
+   178                                  int_1Eh:
+   179                                  int_1Fh:
+   180                                  
    181                                  
-   182                                  
-   183                                  %define INVALID_COMMAND		1
-   184                                  int_EMM:
-   185                                  int_msdos:
-   186                                  int_40h:	; floppy disk handler
-   187 00000008 FB                      	sti
-   188 00000009 B401                    	mov	ah,INVALID_COMMAND
-   189 0000000B F9                      	stc
-   190 0000000C CA0200                  	retf	2
+   182                                  %define INVALID_COMMAND		1
+   183                                  int_EMM:
+   184                                  int_msdos:
+   185                                  int_40h:	; floppy disk handler
+   186 00000008 FB                      	sti
+   187 00000009 B401                    	mov	ah,INVALID_COMMAND
+   188 0000000B F9                      	stc
+   189 0000000C CA0200                  	retf	2
+   190                                  
    191                                  
-   192                                  
-   193                                  param_hd0:
-   194                                  int_42h:
-   195                                  param_VGA:
-   196                                  param_font:
-   197                                  param_hd1:
-   198                                  int_4Ah:
-   199 0000000F CF                      	iret
-   200                                  
-   201                                  int_irq8:
-   202                                  int_irq9:
-   203                                  int_irq10:
-   204                                  int_irq11:
-   205                                  int_irq12:
-   206                                  int_irq13:
-   207                                  int_irq14:
-   208                                  int_irq15:
-   209                                  
-   210                                  clear_irq8:
-   211                                  clear_irq9:
-   212                                  clear_irq10:
-   213                                  clear_irq11:
-   214                                  clear_irq12:
-   215                                  clear_irq13:
-   216                                  clear_irq14:
-   217                                  clear_irq15:
-   218 00000010 50                      	push	ax
-   219 00000011 B020                    	mov	al,NS_EOI
-   220 00000013 E6A0                    	out	OCW2S_AT,al
-   221 00000015 EB01                    	jmp	$+3
-   222                                  clear_irq2:
-   223 00000017 50                      	push	ax
-   224                                  ; jmp $+3 comes here
-   225 00000018 B062                    	mov	al,0x62		; specific EOI to irq2 on Master
-   226 0000001A E620                    	out	OCW2M_AT,al
-   227 0000001C 58                      	pop	ax
-   228 0000001D CF                      	iret
-   229                                  
-   230                                  ;
-   231                                  ;  Reserved locations INT 80h..0F0h for Basic
-   232                                  ;  Locations 0F1h..0FFh not assigned
+   192                                  param_hd0:
+   193                                  int_42h:
+   194                                  param_VGA:
+   195                                  param_font:
+   196                                  param_hd1:
+   197                                  int_4Ah:
+   198 0000000F CF                      	iret
+   199                                  
+   200                                  int_irq8:
+   201                                  int_irq9:
+   202                                  int_irq10:
+   203                                  int_irq11:
+   204                                  int_irq12:
+   205                                  int_irq13:
+   206                                  int_irq14:
+   207                                  int_irq15:
+   208                                  
+   209                                  clear_irq8:
+   210                                  clear_irq9:
+   211                                  clear_irq10:
+   212                                  clear_irq11:
+   213                                  clear_irq12:
+   214                                  clear_irq13:
+   215                                  clear_irq14:
+   216                                  clear_irq15:
+   217 00000010 50                      	push	ax
+   218 00000011 B020                    	mov	al,NS_EOI
+   219 00000013 E6A0                    	out	OCW2S_AT,al
+   220 00000015 EB01                    	jmp	$+3
+   221                                  clear_irq2:
+   222 00000017 50                      	push	ax
+   223                                  ; jmp $+3 comes here
+   224 00000018 B062                    	mov	al,0x62		; specific EOI to irq2 on Master
+   225 0000001A E620                    	out	OCW2M_AT,al
+   226 0000001C 58                      	pop	ax
+   227 0000001D CF                      	iret
+   228                                  
+   229                                  ;
+   230                                  ;  Reserved locations INT 80h..0F0h for Basic
+   231                                  ;  Locations 0F1h..0FFh not assigned
+   232                                  
    233                                  
-   234                                  
-   235                                  ; do this to shut up WATCOM 1.9
-   236                                  	global	_small_code_
-   237                                  	global	VIDEO_putchar_
-   238                                  	global	@VIDEO_putchar
-   239                                  	global	@CVDU_putchar
-   240                                  _small_code_:
-   241 0000001E 90                      	nop
-   242 0000001F C3                      	ret
-   243                                  ;/* this is just a stub for the moment */
-   244                                  VIDEO_putchar_:
-   245                                  @VIDEO_putchar:
-   246                                  @CVDU_putchar:
-   247                                  %define VSHOW 0
-   248                                  %if VSHOW
-   249                                  	mov	dx,0x4ff
-   250                                  	out	dx,al
-   251                                  %endif
-   252 00000020 B401                    	mov	ah,1		; write to serial line
-   253 00000022 BA0000                  	mov	dx,0		; COM1
-   254 00000025 CD14                    	int	0x14		; SIO0 write
-   255                                  %if VSHOW
-   256                                  	mov	al,ah
-   257                                  	mov	dx,0x4ff
-   258                                  	out	dx,al
-   259                                  %endif
-   260 00000027 C3                      	ret
+   234                                  ; do this to shut up WATCOM 1.9
+   235                                  	global	_small_code_
+   236                                  	global	VIDEO_putchar_
+   237                                  	global	@VIDEO_putchar
+   238                                  	global	@CVDU_putchar
+   239                                  _small_code_:
+   240 0000001E 90                      	nop
+   241 0000001F C3                      	ret
+   242                                  ;/* this is just a stub for the moment */
+   243                                  VIDEO_putchar_:
+   244                                  @VIDEO_putchar:
+   245                                  @CVDU_putchar:
+   246                                  %define VSHOW 0
+   247                                  %if VSHOW
+   248                                  	mov	dx,0x4ff
+   249                                  	out	dx,al
+   250                                  %endif
+   251 00000020 B401                    	mov	ah,1		; write to serial line
+   252 00000022 BA0000                  	mov	dx,0		; COM1
+   253 00000025 CD14                    	int	0x14		; SIO0 write
+   254                                  %if VSHOW
+   255                                  	mov	al,ah
+   256                                  	mov	dx,0x4ff
+   257                                  	out	dx,al
+   258                                  %endif
+   259 00000027 C3                      	ret
+   260                                  
    261                                  
    262                                  
-   263                                  
-   264                                  	global	KBD_getchar_
-   265                                  	global	@KBD_getchar
-   266                                  
-   267                                  KBD_getchar_:
-   268                                  @KBD_getchar:
-   269                                  .1:
-   270 00000028 B402                    	mov	ah,2		; read from serial line
-   271 0000002A BA0000                  	mov	dx,0		; COM1
-   272 0000002D CD14                    	int	0x14		; SIO0 write
-   273                                  %if VSHOW
-   274                                  ;;	xchg	al,ah
-   275                                  	mov	dx,0x4ff
-   276                                  	out	dx,al
-   277                                  ;;	xchg	al,ah
-   278                                  %endif
-   279 0000002F F6C4FF                  	test	ah,0xFF		; any error bit set?
-   280 00000032 75F4                    	jnz	.1
-   281 00000034 247F                    	and	al,0x7F		; mask to 7 bits
-   282 00000036 C3                      	ret
+   263                                  	global	KBD_getchar_
+   264                                  	global	@KBD_getchar
+   265                                  
+   266                                  KBD_getchar_:
+   267                                  @KBD_getchar:
+   268                                  .1:
+   269 00000028 B402                    	mov	ah,2		; read from serial line
+   270 0000002A BA0000                  	mov	dx,0		; COM1
+   271 0000002D CD14                    	int	0x14		; SIO0 write
+   272                                  %if VSHOW
+   273                                  ;;	xchg	al,ah
+   274                                  	mov	dx,0x4ff
+   275                                  	out	dx,al
+   276                                  ;;	xchg	al,ah
+   277                                  %endif
+   278 0000002F F6C4FF                  	test	ah,0xFF		; any error bit set?
+   279 00000032 75F4                    	jnz	.1
+   280 00000034 247F                    	and	al,0x7F		; mask to 7 bits
+   281 00000036 C3                      	ret
+   282                                  
    283                                  
-   284                                  
-   285                                  	global	FDC_stop_motor
-   286                                  	global	FDC_stop_motor_
-   287                                  FDC_stop_motor_:
-   288                                  FDC_stop_motor:
-   289                                  ; totally a dummy routine
-   290 00000037 C3                      	ret
+   284                                  	global	FDC_stop_motor
+   285                                  	global	FDC_stop_motor_
+   286                                  FDC_stop_motor_:
+   287                                  FDC_stop_motor:
+   288                                  ; totally a dummy routine
+   289 00000037 C3                      	ret

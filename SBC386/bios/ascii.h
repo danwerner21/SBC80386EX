@@ -13,6 +13,7 @@
 #define    ASCII_SP              0x20
 #define    ASCII_DEL             0x7F
 #define	   ASCII_RUB		 	 0xFF
+#define    ASCII_CTRLC		   ('C'&31)
 #define    ASCII_CTRLX		   ('X'&31)
 #define	   ASCII_CTRLU		   ('U'&31)
 

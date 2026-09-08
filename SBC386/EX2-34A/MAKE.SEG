@@ -1,8 +1,0 @@
-LINK = wcl
-LOPT = -lr
-
-
-
-seg.exe:  seg.obj seg_at.obj
-	$(LINK) $(LOPT) -k1024 -fe=$@ -fm=$*.map $<
-

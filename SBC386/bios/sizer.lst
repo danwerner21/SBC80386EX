@@ -460,371 +460,435 @@
    438                              <1> 
    439                              <1> 
    440                              <1> ;/* End of i386EX.inc */
-    31                                  ;%include "bda.inc"
-    32                                  %include "macro.inc"
-    33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    34                              <1> ;
-    35                              <1> ; some useful macros:
-    36                              <1> ;
-    37                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    38                              <1> %define NREPEAT 0
-    39                              <1> 
-    40                              <1> %if NREPEAT
-    41                              <1> 
-    42                              <1> %macro	rep	1
-    43                              <1> %%loop:	%1
-    44                              <1> 	dec	cx
-    45                              <1> 	jnz	%%loop
-    46                              <1> %endm
-    47                              <1> 
-    48                              <1> %macro	repne	1
-    49                              <1> %%loop:	%1
-    50                              <1> 	je	%%e
-    51                              <1> 	dec	cx
-    52                              <1> 	jnz	%%loop
-    53                              <1> 	cmp	cx,1
-    54                              <1> 	jmp	%%done
-    55                              <1> %%e:	dec	cx
-    56                              <1> 	cmp	cx,cx
-    57                              <1> %%done:
-    58                              <1> %endm
-    59                              <1> 
-    60                              <1> %macro	repe	1
-    61                              <1> %%loop:	%1
-    62                              <1> 	jne	%%ne
-    63                              <1> 	dec	cx
-    64                              <1> 	jnz	%%loop
-    65                              <1> 	jmp	%%done
-    66                              <1> %%ne:	dec	cx
-    67                              <1> 	jcxz	%%cxz
-    68                              <1> 	jmp	%%done
-    69                              <1> %%cxz:	cmp	cx,1
-    70                              <1> %%done:
-    71                              <1> %endm
-    72                              <1> 
-    73                              <1> %macro	REP	1
-    74                              <1> %%loop:	%1
-    75                              <1> 	dec	ecx
-    76                              <1> 	jnz	%%loop
-    77                              <1> %endm
-    78                              <1> 
-    79                              <1> %macro	REPNE	1
-    80                              <1> %%loop:	%1
-    81                              <1> 	je	%%e
-    82                              <1> 	dec	ecx
-    83                              <1> 	jnz	%%loop
-    84                              <1> 	cmp	cl,1
-    85                              <1> 	jmp	%%done
-    86                              <1> %%e:	dec	ecx
-    87                              <1> 	cmp	cl,cl
-    88                              <1> %%done:
-    89                              <1> %endm
-    90                              <1> 
-    91                              <1> %macro	REPE	1
-    92                              <1> %%loop:	%1
-    93                              <1> 	jne	%%ne
-    94                              <1> 	dec	ecx
-    95                              <1> 	jnz	%%loop
-    96                              <1> 	jmp	%%done
-    97                              <1> %%ne:	dec	ecx
-    98                              <1> 	jecxz	%%cxz
-    99                              <1> 	jmp	%%done
-   100                              <1> %%cxz:	cmp	cl,1
-   101                              <1> %%done:
-   102                              <1> %endm
-   103                              <1> 
-   104                              <1> %endif
+    31                                  %include "macro.inc"
+    32                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    33                              <1> ;
+    34                              <1> ; some useful macros:
+    35                              <1> ;
+    36                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    37                              <1> %define NREPEAT 0
+    38                              <1> 
+    39                              <1> %if NREPEAT
+    40                              <1> 
+    41                              <1> %macro	rep	1
+    42                              <1> %%loop:	%1
+    43                              <1> 	dec	cx
+    44                              <1> 	jnz	%%loop
+    45                              <1> %endm
+    46                              <1> 
+    47                              <1> %macro	repne	1
+    48                              <1> %%loop:	%1
+    49                              <1> 	je	%%e
+    50                              <1> 	dec	cx
+    51                              <1> 	jnz	%%loop
+    52                              <1> 	cmp	cx,1
+    53                              <1> 	jmp	%%done
+    54                              <1> %%e:	dec	cx
+    55                              <1> 	cmp	cx,cx
+    56                              <1> %%done:
+    57                              <1> %endm
+    58                              <1> 
+    59                              <1> %macro	repe	1
+    60                              <1> %%loop:	%1
+    61                              <1> 	jne	%%ne
+    62                              <1> 	dec	cx
+    63                              <1> 	jnz	%%loop
+    64                              <1> 	jmp	%%done
+    65                              <1> %%ne:	dec	cx
+    66                              <1> 	jcxz	%%cxz
+    67                              <1> 	jmp	%%done
+    68                              <1> %%cxz:	cmp	cx,1
+    69                              <1> %%done:
+    70                              <1> %endm
+    71                              <1> 
+    72                              <1> %macro	REP	1
+    73                              <1> %%loop:	%1
+    74                              <1> 	dec	ecx
+    75                              <1> 	jnz	%%loop
+    76                              <1> %endm
+    77                              <1> 
+    78                              <1> %macro	REPNE	1
+    79                              <1> %%loop:	%1
+    80                              <1> 	je	%%e
+    81                              <1> 	dec	ecx
+    82                              <1> 	jnz	%%loop
+    83                              <1> 	cmp	cl,1
+    84                              <1> 	jmp	%%done
+    85                              <1> %%e:	dec	ecx
+    86                              <1> 	cmp	cl,cl
+    87                              <1> %%done:
+    88                              <1> %endm
+    89                              <1> 
+    90                              <1> %macro	REPE	1
+    91                              <1> %%loop:	%1
+    92                              <1> 	jne	%%ne
+    93                              <1> 	dec	ecx
+    94                              <1> 	jnz	%%loop
+    95                              <1> 	jmp	%%done
+    96                              <1> %%ne:	dec	ecx
+    97                              <1> 	jecxz	%%cxz
+    98                              <1> 	jmp	%%done
+    99                              <1> %%cxz:	cmp	cl,1
+   100                              <1> %%done:
+   101                              <1> %endm
+   102                              <1> 
+   103                              <1> %endif
+   104                              <1> 
    105                              <1> 
-   106                              <1> 
-   107                              <1> ;
-   108                              <1> ; format of the BYTE initialization table:  address, byte
-   109                              <1> ;
-   110                              <1> %imacro  binit 2
-   111                              <1>         dw      %1
-   112                              <1>         db      %2
-   113                              <1> %endmacro
-   114                              <1> ; end with DW -1
-   115                              <1> 
-   116                              <1> ;
-   117                              <1> ; format of the WORD initialization table:  address, word
-   118                              <1> ;
-   119                              <1> %imacro  winit 2
-   120                              <1>         dw      %1
-   121                              <1>         dw      %2
-   122                              <1> %endmacro
-   123                              <1> ; end with DW -1
+   106                              <1> ;
+   107                              <1> ; format of the BYTE initialization table:  address, byte
+   108                              <1> ;
+   109                              <1> %imacro  binit 2
+   110                              <1>         dw      %1
+   111                              <1>         db      %2
+   112                              <1> %endmacro
+   113                              <1> ; end with DW -1
+   114                              <1> 
+   115                              <1> ;
+   116                              <1> ; format of the WORD initialization table:  address, word
+   117                              <1> ;
+   118                              <1> %imacro  winit 2
+   119                              <1>         dw      %1
+   120                              <1>         dw      %2
+   121                              <1> %endmacro
+   122                              <1> ; end with DW -1
+   123                              <1> 
    124                              <1> 
-   125                              <1> 
-   126                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
-   127                              <1> %imacro get_bda	1.nolist
-   128                              <1> 	push	0x0040
-   129                              <1> 	pop	%1
-   130                              <1> 	cnop
-   131                              <1> %endm
+   125                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   126                              <1> %imacro get_bda	1.nolist
+   127                              <1> 	push	0x0040
+   128                              <1> 	pop	%1
+   129                              <1> 	cnop
+   130                              <1> %endm
+   131                              <1> 
    132                              <1> 
-   133                              <1> 
-   134                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
-   135                              <1> %imacro	get_loc0 1.nolist
-   136                              <1> 	push	0x0000
-   137                              <1> 	pop	%1
-   138                              <1> 	cnop
-   139                              <1> %endm
+   133                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   134                              <1> %imacro	get_loc0 1.nolist
+   135                              <1> 	push	0x0000
+   136                              <1> 	pop	%1
+   137                              <1> 	cnop
+   138                              <1> %endm
+   139                              <1> 
    140                              <1> 
    141                              <1> 
-   142                              <1> 
-   143                              <1> %imacro setloc  1.nolist
-   144                              <1>  times   (%1-($-$$)) db 0FFh
-   145                              <1> %endm
-   146                              <1> 
-   147                              <1> %imacro db_lo   1
-   148                              <1>  db (%1)&255
-   149                              <1> %endm
-   150                              <1> 
-   151                              <1> %imacro cnop    0.nolist
-   152                              <1> %ifdef SOFT_DEBUG
-   153                              <1> %if SOFT_DEBUG
-   154                              <1>         nop
+   142                              <1> %imacro setloc  1.nolist
+   143                              <1>  times   (%1-($-$$)) db 0FFh
+   144                              <1> %endm
+   145                              <1> 
+   146                              <1> %imacro db_lo   1
+   147                              <1>  db (%1)&255
+   148                              <1> %endm
+   149                              <1> 
+   150                              <1> %imacro cnop    0.nolist
+   151                              <1> %ifdef SOFT_DEBUG
+   152                              <1> %if SOFT_DEBUG
+   153                              <1>         nop
+   154                              <1> %endif
    155                              <1> %endif
-   156                              <1> %endif
-   157                              <1> %endm
-   158                              <1> 
-   159                              <1> %imacro popm 1-*.nolist
-   160                              <1> %rep %0
-   161                              <1> %ifidni %1,ALL
-   162                              <1>  popa
-   163                              <1> %elifidni %1,F
-   164                              <1>  popf
-   165                              <1> %else
-   166                              <1>  pop %1
-   167                              <1> %ifidni %1,DS
-   168                              <1>  cnop
-   169                              <1> %elifidni %1,ES
-   170                              <1>  cnop
-   171                              <1> %elifidni %1,FS
-   172                              <1>  cnop
-   173                              <1> %elifidni %1,GS
-   174                              <1>  cnop
+   156                              <1> %endm
+   157                              <1> 
+   158                              <1> %imacro popm 1-*.nolist
+   159                              <1> %rep %0
+   160                              <1> %ifidni %1,ALL
+   161                              <1>  popa
+   162                              <1> %elifidni %1,F
+   163                              <1>  popf
+   164                              <1> %else
+   165                              <1>  pop %1
+   166                              <1> %ifidni %1,DS
+   167                              <1>  cnop
+   168                              <1> %elifidni %1,ES
+   169                              <1>  cnop
+   170                              <1> %elifidni %1,FS
+   171                              <1>  cnop
+   172                              <1> %elifidni %1,GS
+   173                              <1>  cnop
+   174                              <1> %endif
    175                              <1> %endif
-   176                              <1> %endif
-   177                              <1> %rotate 1
-   178                              <1> %endrep
-   179                              <1> %endm
-   180                              <1> 
-   181                              <1> %imacro pushm 1-*.nolist
-   182                              <1> %rep %0
-   183                              <1> %rotate -1
-   184                              <1> %ifidni %1,ALL
-   185                              <1>  pusha
-   186                              <1> %elifidni %1,F
-   187                              <1>  pushf
-   188                              <1> %else
-   189                              <1>  push %1
-   190                              <1> %endif
-   191                              <1> %endrep
-   192                              <1> %endm
-   193                              <1> 
-   194                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
-   195                              <1> %assign __size__ (%2-1)	| 0xFF
-   196                              <1> %if (__size__ <= 0xFFFF)
-   197                              <1> %assign __gran__ 0
-   198                              <1> %else
-   199                              <1> %assign __gran__ 0xC0			; G B 0 0
-   200                              <1> %endif
-   201                              <1> %assign __expand__ 0
-   202                              <1> %if %0==3
-   203                              <1> %if %3
-   204                              <1> %assign __expand__ 4
+   176                              <1> %rotate 1
+   177                              <1> %endrep
+   178                              <1> %endm
+   179                              <1> 
+   180                              <1> %imacro pushm 1-*.nolist
+   181                              <1> %rep %0
+   182                              <1> %rotate -1
+   183                              <1> %ifidni %1,ALL
+   184                              <1>  pusha
+   185                              <1> %elifidni %1,F
+   186                              <1>  pushf
+   187                              <1> %else
+   188                              <1>  push %1
+   189                              <1> %endif
+   190                              <1> %endrep
+   191                              <1> %endm
+   192                              <1> 
+   193                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   194                              <1> %assign __size__ (%2-1)	| 0xFF
+   195                              <1> %if (__size__ <= 0xFFFF)
+   196                              <1> %assign __gran__ 0
+   197                              <1> %else
+   198                              <1> %assign __gran__ 0xC0			; G B 0 0
+   199                              <1> %endif
+   200                              <1> %assign __expand__ 0
+   201                              <1> %if %0==3
+   202                              <1> %if %3
+   203                              <1> %assign __expand__ 4
+   204                              <1> %endif
    205                              <1> %endif
-   206                              <1> %endif
-   207                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
-   208                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
-   209                              <1> %endm
-   210                              <1> 
-   211                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
-   212                              <1> %assign __size__ (%2-1)	| 0xFF
-   213                              <1> %if (__size__ <= 0xFFFF)
-   214                              <1> %assign __gran__ 0
-   215                              <1> %else
-   216                              <1> %assign __gran__ 0xC0			; G D 0 0
-   217                              <1> %endif
-   218                              <1> %assign __conform__ 0
-   219                              <1> %if %0==3
-   220                              <1> %if %3
-   221                              <1> %assign __conform__ 4
+   206                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   207                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   208                              <1> %endm
+   209                              <1> 
+   210                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   211                              <1> %assign __size__ (%2-1)	| 0xFF
+   212                              <1> %if (__size__ <= 0xFFFF)
+   213                              <1> %assign __gran__ 0
+   214                              <1> %else
+   215                              <1> %assign __gran__ 0xC0			; G D 0 0
+   216                              <1> %endif
+   217                              <1> %assign __conform__ 0
+   218                              <1> %if %0==3
+   219                              <1> %if %3
+   220                              <1> %assign __conform__ 4
+   221                              <1> %endif
    222                              <1> %endif
-   223                              <1> %endif
-   224                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
-   225                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
-   226                              <1> %endm
-   227                              <1> 
-   228                              <1> ;/* End of macro.inc */
+   223                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   224                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   225                              <1> %endm
+   226                              <1> 
+   227                              <1> ;/* End of macro.inc */
+    32                                  
     33                                  
-    34                                  
-    35                                  segment CONST
-    36                                  
-    37                                  PM_GDT	equ	0x000F_0000 + gdt0
-    38                                  	global	gdt0
-    39                                  ;
-    40                                  ; now the Global Descriptor Table prototype
-    41                                  ;
-    42                                  	align	16
-    43 00000000 0000000000000000        gdt0:	dq	0		; null descriptor
-    44                                  rom_gdt:
-    45                                  descr08	equ	$-gdt0
-    46 00000008 6F00                    	dw	len_gdt-1
-    47 0000000A [00000F00]              	dd	PM_GDT
-    48 0000000E 0000                    	dw	0		; filler
-    49                                  descrP	equ	descr08
+    34                                  segment CONST
+    35                                  
+    36                                  PM_GDT	equ	0x000F_0000 + gdt0
+    37                                  	global	gdt0
+    38                                  ;
+    39                                  ; now the Global Descriptor Table prototype
+    40                                  ;
+    41                                  	align	16
+    42 00000000 0000000000000000        gdt0:	dq	0		; null descriptor
+    43                                  rom_gdt:
+    44                                  descr08	equ	$-gdt0
+    45 00000008 6F00                    	dw	len_gdt-1
+    46 0000000A [00000F00]              	dd	PM_GDT
+    47 0000000E 0000                    	dw	0		; filler
+    48                                  descrP	equ	descr08
+    49                                  
     50                                  
-    51                                  
-    52                                  descr10	equ	$-gdt0
-    53 00000010 0000000000000000        	dq	0		; LDT filler
+    51                                  descr10	equ	$-gdt0
+    52 00000010 0000000000000000        	dq	0		; LDT filler
+    53                                  
     54                                  
-    55                                  
-    56                                  descr18	equ	$-gdt0
-    57 00000018 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
-    58                                  descr_DS	equ	descr18
+    55                                  descr18	equ	$-gdt0
+    56 00000018 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
+    57                                  descr_DS	equ	descr18
+    58                                  
     59                                  
-    60                                  
-    61                                  descr20	equ	$-gdt0
-    62 00000020 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
-    63                                  descr_ES	equ	descr20
+    60                                  descr20	equ	$-gdt0
+    61 00000020 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
+    62                                  descr_ES	equ	descr20
+    63                                  
     64                                  
-    65                                  
-    66                                  descr28	equ	$-gdt0
-    67 00000028 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
-    68                                  descr_SS	equ	descr28
+    65                                  descr28	equ	$-gdt0
+    66 00000028 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
+    67                                  descr_SS	equ	descr28
+    68                                  
     69                                  
-    70                                  
-    71                                  descr30	equ	$-gdt0
-    72 00000030 FFFF0000009BCF00        	descr_linear_code	0, 0x03FF_FFFF	; 64meg DRAM
-    73                                  descr_CS	equ	descr30
+    70                                  descr30	equ	$-gdt0
+    71 00000030 FFFF0000009BCF00        	descr_linear_code	0, 0x03FF_FFFF	; 64meg DRAM
+    72                                  descr_CS	equ	descr30
+    73                                  
     74                                  
-    75                                  
-    76                                  descr38	equ	$-gdt0
-    77 00000038 FFFF00000F9B0000        	descr_linear_code	0xF0000, 0xFFFF ; 64K code (286)
-    78                                  descr_BIOS	equ	descr38
+    75                                  descr38	equ	$-gdt0
+    76 00000038 FFFF00000F9B0000        	descr_linear_code	0xF0000, 0xFFFF ; 64K code (286)
+    77                                  descr_BIOS	equ	descr38
+    78                                  
     79                                  
-    80                                  
-    81                                  descr40	equ	$-gdt0
-    82 00000040 FF02000400930000        	descr_linear_data	0x400, 0x300	; BIOS data area
-    83                                  descr_BDA equ	descr40
+    80                                  descr40	equ	$-gdt0
+    81 00000040 FF02000400930000        	descr_linear_data	0x400, 0x300	; BIOS data area
+    82                                  descr_BDA equ	descr40
+    83                                  
     84                                  
-    85                                  
-    86                                  descr48	equ	$-gdt0
-    87 00000048 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
-    88                                  descr_FS	equ	descr48
+    85                                  descr48	equ	$-gdt0
+    86 00000048 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
+    87                                  descr_FS	equ	descr48
+    88                                  
     89                                  
-    90                                  
-    91                                  descr50	equ	$-gdt0
-    92 00000050 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
-    93                                  descr_GS	equ	descr50
+    90                                  descr50	equ	$-gdt0
+    91 00000050 FFFF00000093CF00        	descr_linear_data	0, 0x03FF_FFFF	; 64meg DRAM
+    92                                  descr_GS	equ	descr50
+    93                                  
     94                                  
-    95                                  
-    96                                  descr58	equ	$-gdt0
-    97 00000058 FFFF000000930000        	descr_linear_data	0, 0xFFFF	; 64K return Data segment
-    98                                  descr_RMdata	equ	descr58
+    95                                  descr58	equ	$-gdt0
+    96 00000058 FFFF000000930000        	descr_linear_data	0, 0xFFFF	; 64K return Data segment
+    97                                  descr_RMdata	equ	descr58
+    98                                  
     99                                  
-   100                                  
-   101                                  descr60	equ	$-gdt0
-   102 00000060 FFFF00000F9B0000        	descr_linear_code	0x000F0000, 0xFFFF	; 64K return Code segment
-   103                                  descr_RMcode	equ	descr60
+   100                                  descr60	equ	$-gdt0
+   101 00000060 FFFF00000F9B0000        	descr_linear_code	0x000F0000, 0xFFFF	; 64K return Code segment
+   102                                  descr_RMcode	equ	descr60
+   103                                  
    104                                  
-   105                                  
-   106                                  descr68	equ	$-gdt0
-   107 00000068 FFFF00000F9BC100        	descr_linear_code	0xF0000, 0x1FFFF ; 128K code
-   108                                  descr_BIOS32	equ	descr68
+   105                                  descr68	equ	$-gdt0
+   106 00000068 FFFF00000F9BC100        	descr_linear_code	0xF0000, 0x1FFFF ; 128K code
+   107                                  descr_BIOS32	equ	descr68
+   108                                  
    109                                  
-   110                                  
-   111                                  len_gdt		equ	$-gdt0
+   110                                  len_gdt		equ	$-gdt0
+   111                                  
    112                                  
    113                                  
-   114                                  
-   115                                  segment	_TEXT
-   116                                  
-   117                                  	bits	16
-   118                                  
-   119                                  	global	ext_mem_size
-   120                                  ;
-   121                                  ; enter protected mode to size Extended memory
-   122                                  ;
-   123                                  ext_mem_size:
-   124 00000000 0F0116[0800]            	lgdt	[rom_gdt]	; use ROM version of GDT
-   125                                  ;
-   126                                  ; set the PE bit to switch into Protected Mode
-   127                                  ;
-   128 00000005 0F20C3                  	mov	ebx,cr0			; get CR0 to set Prot Mode
-   129 00000008 80CB01                  	or	bl,1			; set PE bit
-   130 0000000B 66F7E0                  	mul	eax	;time waster for prefetch queue
-   131 0000000E 0F22C3                  	mov	cr0,ebx			; enter protected mode
-   132                                  ; now in protected mode, but no segment registers are set
-   133 00000011 EA[1600]6800            	jmp	descr_BIOS32:pm_continue
-   134                                  
-   135                                  	bits	32
-   136                                  pm_continue:
-   137 00000016 66BAFF04                	mov	dx,0x4FF
-   138 0000001A B0F0                    	mov	al,0xF0
-   139 0000001C EE                      	out	dx,al
-   140                                  ;;;	hlt
-   141                                  
-   142 0000001D 66B81800                	mov	ax,descr_DS		; set DS descriptor
-   143 00000021 8ED8                    	mov	ds,ax			; **
-   144                                  
-   145                                  ;	xor	ebx,ebx
-   146                                  ;	xor	ebp,ebp
-   147                                  ; stack value saves
-   148                                  ;	mov	bx,ss
-   149                                  ;	mov	esi,ebx			; save SS
-   150                                  ;	mov	bp,sp			; save SP
-   151                                  ;
-   152                                  ;	shl	ebx,4			; account for
-   153                                  ;	add	ebx,ebp			; new linear stack pointer
-   154                                  ;
-   155                                  ;	mov	ss,ax			; linear Stack
-   156                                  ;	mov	esp,ebx			; set stack
+   114                                  segment	_TEXT
+   115                                  
+   116                                  	bits	16
+   117                                  
+   118                                  	global	ext_mem_size
+   119                                  ;
+   120                                  ; enter protected mode to size Extended memory
+   121                                  ;
+   122                                  ext_mem_size:
+   123 00000000 0F0116[0800]            	lgdt	[rom_gdt]	; use ROM version of GDT
+   124                                  ;
+   125                                  ; set the PE bit to switch into Protected Mode
+   126                                  ;
+   127 00000005 0F20C3                  	mov	ebx,cr0			; get CR0 to set Prot Mode
+   128 00000008 80CB01                  	or	bl,1			; set PE bit
+   129 0000000B 66F7E0                  	mul	eax	;time waster for prefetch queue
+   130 0000000E 0F22C3                  	mov	cr0,ebx			; enter protected mode
+   131                                  ; now in protected mode, but no segment registers are set
+   132 00000011 EA[1600]6800            	jmp	descr_BIOS32:pm_continue
+   133                                  
+   134                                  	bits	32
+   135                                  pm_continue:
+   136 00000016 66BAFF04                	mov	dx,0x4FF
+   137 0000001A B0F0                    	mov	al,0xF0
+   138 0000001C EE                      	out	dx,al
+   139                                  
+   140 0000001D 66B81800                	mov	ax,descr_DS		; set DS descriptor
+   141 00000021 8ED8                    	mov	ds,ax			; **
+   142                                  
+   143                                  
+   144                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   145                                  ;  __pm_sizeMem -- size Memory in Megabytes
+   146                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   147                                  
+   148 00000023 31C0                    	xor	eax,eax		; DO  I=0 TO 63
+   149 00000025 8B10                    	mov	edx,[eax]	;save location [00000]
+   150                                  __pm_size1:
+   151 00000027 89C7                    	mov	edi,eax
+   152 00000029 C1E714                  	shl	edi,20		; address Megabytes (2**20)
+   153 0000002C 8907                    	mov	[edi],eax	; store the number 0..63
+   154 0000002E FEC0                    	inc	al
+   155 00000030 3C40                    	cmp	al,64		; 64mb limit
+   156 00000032 72F3                    	jb	__pm_size1
    157                                  
-   158                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   159                                  ;  __pm_sizeMem -- size Memory in Megabytes
-   160                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   158 00000034 2B0500000000            	sub	eax,[0]		; get memory size in megabytes
+   159 0000003A 891500000000            	mov	[0],edx		;restore location [00000]
+   160 00000040 89C2                    	mov	edx,eax		; answer in EDX
    161                                  
-   162 00000023 31C0                    	xor	eax,eax		; DO  I=0 TO 63
-   163 00000025 8B10                    	mov	edx,[eax]	;save location [00000]
-   164                                  __pm_size1:
-   165 00000027 89C7                    	mov	edi,eax
-   166 00000029 C1E714                  	shl	edi,20		; address Megabytes (2**20)
-   167 0000002C 8907                    	mov	[edi],eax	; store the number 0..63
-   168 0000002E FEC0                    	inc	al
-   169 00000030 3C40                    	cmp	al,64		; 64mb limit
-   170 00000032 72F3                    	jb	__pm_size1
+   162                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   163                                  ; now return to Real Mode
+   164                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   165                                  return_to_real:
+   166 00000042 66B85800                	mov	ax,descr_RMdata		; 64K segment at 0x00000000
+   167 00000046 8ED8                    	mov	ds,ax
+   168 00000048 EA[4F000000]6000        	jmp	descr_RMcode:real_return
+   169                                  real_return:
+   170                                  	bits	16
    171                                  
-   172 00000034 2B0500000000            	sub	eax,[0]		; get memory size in megabytes
-   173 0000003A 891500000000            	mov	[0],edx		;restore location [00000]
-   174 00000040 89C2                    	mov	edx,eax		; answer in EDX
-   175                                  
-   176                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   177                                  ; now return to Real Mode
-   178                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   179                                  return_to_real:
-   180 00000042 66B85800                	mov	ax,descr_RMdata		; 64K segment at 0x00000000
-   181 00000046 8ED8                    	mov	ds,ax
-   182                                  ;;;	jmp	$+2	; clear prefetch queue
-   183 00000048 EA[4F000000]6000        	jmp	descr_RMcode:real_return
-   184                                  real_return:
-   185                                  	bits	16
-   186                                  
-   187 0000004F 0F20C0                  	mov	eax,cr0		;
-   188 00000052 24FE                    	and	al,0xFE		; turn off PE bit
-   189 00000054 0F22C0                  	mov	cr0,eax
-   190 00000057 EA[5C00]00F0            	jmp	0xF000:really_return
-   191                                  ;	jmp	far really_return
-   192                                  really_return:
-   193 0000005C B8[ssss]                	mov	ax,DGROUP
-   194 0000005F 8ED8                    	mov	ds,ax
-   195                                  ; the segment registers below were never touched in Protected Mode
-   196                                  ;	mov	es,ax
-   197                                  ;	mov	fs,ax
-   198                                  ;	mov	gs,ax
-   199                                  
-   200                                  ; EDX is size in MB
-   201 00000061 89D0                    	mov	ax,dx
-   202 00000063 C3                      	ret
+   172 0000004F 0F20C0                  	mov	eax,cr0		;
+   173 00000052 24FE                    	and	al,0xFE		; turn off PE bit
+   174 00000054 0F22C0                  	mov	cr0,eax
+   175 00000057 EA[5C00]00F0            	jmp	0xF000:really_return
+   176                                  really_return:
+   177 0000005C B8[ssss]                	mov	ax,DGROUP
+   178 0000005F 8ED8                    	mov	ds,ax
+   179                                  
+   180                                  ; EDX is size in MB
+   181 00000061 89D0                    	mov	ax,dx
+   182 00000063 C3                      	ret
+   183                                  
+   184                                  
+   185                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   186                                  ; pm_read -- copy a block of physical memory into a Real Mode buffer
+   187                                  ;
+   188                                  ;	void __cdecl pm_read(dword linear, byte *dest, word count);
+   189                                  ;
+   190                                  ; Copies 'count' bytes from the 32-bit physical address 'linear' to 'dest'.
+   191                                  ; Protected Mode is entered just long enough to do the move, so the caller
+   192                                  ; stays in Real Mode and printf / INT 14h keep working.  That is what lets
+   193                                  ; the debug monitor display all of memory and not just the first megabyte.
+   194                                  ;
+   195                                  ; Interrupts are off across the switch: there is no Protected Mode IDT, so
+   196                                  ; an interrupt taken in PM would fault with nothing to catch it.  The move
+   197                                  ; is short enough that the 18.2hz tick is not disturbed.
+   198                                  ;
+   199                                  ;    Enter with (__cdecl -- arguments on the stack, caller cleans up):
+   200                                  ;	[bp+4]	source linear address (dword)
+   201                                  ;	[bp+8]	destination offset
+   202                                  ;	[bp+10]	destination segment
+   203                                  ;	[bp+12]	byte count (word)
+   204                                  ;
+   205                                  ;    Exit with:
+   206                                  ;	all registers and flags preserved
+   207                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   208                                  	global	_pm_read
+   209                                  _pm_read:
+   210 00000064 55                      	push	bp
+   211 00000065 89E5                    	mov	bp,sp
+   212 00000067 061E575652515350        	pushm	ax,bx,cx,dx,si,di,ds,es
+   213 0000006F 9C                      	pushf
+   214 00000070 FA                      	cli
+   215                                  
+   216 00000071 8B4E0C                  	mov	cx,[bp+12]	; byte count
+   217 00000074 09C9                    	or	cx,cx
+   218 00000076 745D                    	jz	pmr_done	; nothing to move
+   219                                  
+   220                                  ; form the destination linear address:  segment*16 + offset
+   221 00000078 660FB7460A              	movzx	eax,word [bp+10]	; destination segment
+   222 0000007D 66C1E004                	shl	eax,4
+   223 00000081 660FB75E08              	movzx	ebx,word [bp+8]		; destination offset
+   224 00000086 6601D8                  	add	eax,ebx
+   225 00000089 6689C7                  	mov	edi,eax			; EDI = destination linear
+   226                                  
+   227 0000008C 668B7604                	mov	esi,[bp+4]		; ESI = source, already linear
+   228 00000090 660FB7C9                	movzx	ecx,cx			; ECX = count
+   229                                  
+   230 00000094 0F0116[0800]            	lgdt	[rom_gdt]	; the ROM GDT declared above
+   231                                  
+   232 00000099 0F20C3                  	mov	ebx,cr0		; CR0 is held in EBX because the
+   233 0000009C 80CB01                  	or	bl,1		;  prefetch flush below eats EAX
+   234 0000009F 66F7E0                  	mul	eax		; time waster for the prefetch queue
+   235 000000A2 0F22C3                  	mov	cr0,ebx		; enter protected mode
+   236 000000A5 EA[AA00]6800            	jmp	descr_BIOS32:pmr_pm
+   237                                  
+   238                                  	bits	32
+   239                                  pmr_pm:
+   240 000000AA 66B81800                	mov	ax,descr_DS	; flat source
+   241 000000AE 8ED8                    	mov	ds,ax
+   242 000000B0 66B82000                	mov	ax,descr_ES	; flat destination
+   243 000000B4 8EC0                    	mov	es,ax
+   244 000000B6 FC                      	cld
+   245 000000B7 F3A4                    	rep	movsb		; DS:ESI -> ES:EDI
+   246                                  
+   247                                  ; Give DS and ES 64K limits before leaving, or their cached descriptors
+   248                                  ; would still read 4Gb once PE is cleared.
+   249 000000B9 66B85800                	mov	ax,descr_RMdata
+   250 000000BD 8ED8                    	mov	ds,ax
+   251 000000BF 8EC0                    	mov	es,ax
+   252 000000C1 EA[C8000000]6000        	jmp	descr_RMcode:pmr_rm
+   253                                  
+   254                                  pmr_rm:
+   255                                  	bits	16
+   256 000000C8 0F20C0                  	mov	eax,cr0
+   257 000000CB 24FE                    	and	al,0xFE		; clear PE
+   258 000000CD 0F22C0                  	mov	cr0,eax
+   259 000000D0 EA[D500]00F0            	jmp	0xF000:pmr_back
+   260                                  pmr_back:
+   261                                  
+   262                                  pmr_done:
+   263 000000D5 9D                      	popf
+   264 000000D6 585B595A5E5F1F07        	popm	ax,bx,cx,dx,si,di,ds,es
+   265 000000DE 5D                      	pop	bp
+   266 000000DF C3                      	ret			; __cdecl -- caller pops the arguments

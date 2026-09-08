@@ -38,6 +38,14 @@ typedef struct _DISKTAB {
 	byte	nsectors;	/* maximum number of sectors per track */
 /* was	byte	reserved2;	   386EX usage TBD */
 	byte	disk_flags;		/* see bit definitions above */
+/* */
+/* ncylinders / n__heads / nsectors above carry the TRANSLATED geometry */
+/* -- what INT 13h AH=08h reports, and what the INT 41h and INT 46h */
+/* tables expose.  The numbers the drive itself reports are kept here, */
+/* so both are available. */
+	word	phys_cylinders;
+	byte	phys_heads;
+	byte	phys_sectors;
 
 } T_DISKTAB;
 /* */
@@ -94,7 +102,7 @@ typedef struct _PARAM_PACKET {
 /* course the IDE drive interface changes, perhaps when drives get
 /* to 128G and the PC industry will do yet another kludge.
 /* */
-/*IDE Command Constants.  These should never change.
+/*IDE Command Constants.  These should never change. */
 #define	ide_cmd_recal	0x10
 #define	ide_cmd_read	0x20
 #define	ide_cmd_write	0x30

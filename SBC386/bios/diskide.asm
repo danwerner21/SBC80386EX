@@ -83,6 +83,7 @@ IDE_CMD_SET_FEATURE EQU 	0EFh
 %include "macro.inc"
 %define XXX
 %include "bda.inc"
+%include "error.inc"		; BIOS status codes for ide_error
 %undef XXX
 
 %define ARG(n) [bp+2+(n)*2]
@@ -111,11 +112,15 @@ IDE_READ_SECTOR_:
         push 	ES
         push	DI
 
+; Master/slave must be taken out of AL BEFORE the wait below:
+;  ide_wait_not_busy returns the drive status in AL, so reading
+;  the argument afterwards always yielded 0 -- the master.  BX
+;  is preserved across the call.
+        mov     bh,al                   ; Master/slave INTO BH
 		call	ide_wait_not_busy		; make sure drive is ready
 		jnz	.2
 
         mov     bl,ARG(6) 				; COUNT OF SECTORS
-        mov     bh,al	 				; Master/slave INTO BH
         mov     dx,ARG(5)
         mov     ax,ARG(4)
 		call	wr_lba					; tell it which sector we want
@@ -124,22 +129,22 @@ IDE_READ_SECTOR_:
 		mov		dx,IDESTTS
 		out		dx,al
 
-		call	ide_wait_drq			; wait until it's got the data
-		jz	.3							; NO ERROR, CONTINUE
-.2:
-   		mov		ax,-1					; MARK ERROR, ABORT
-		jmp	.9
-.3:
-
         mov     CX,ARG(6) 				; COUNT OF SECTORS
         mov     es,ARG(0) 				; high address INTO es
         mov     bx,ARG(1)				; low address into bx
 .4:
+; ATA raises DRQ once per sector during a multi-sector PIO transfer, so
+; the wait belongs inside this loop.  Polled once before it, the second
+; and later sectors ran ahead of the drive and desynchronised.
+		call	ide_wait_drq
+		jnz	.2
 		call	read_data				; grab the data
 		loop	.4
 
         xor     ax,ax
-
+		jmp	.9
+.2:
+		call	ide_error				; real status, not -1
 .9:
    		POP 	DI
    		POP 	ES
@@ -172,11 +177,15 @@ IDE_WRITE_SECTOR_:
         push 	DS
         push	SI
 
+; Master/slave must be taken out of AL BEFORE the wait below:
+;  ide_wait_not_busy returns the drive status in AL, so reading
+;  the argument afterwards always yielded 0 -- the master.  BX
+;  is preserved across the call.
+        mov     bh,al                   ; Master/slave INTO BH
 		call	ide_wait_not_busy		; make sure drive is ready
 		jnz	.2
 
         mov     bl,ARG(6) 				; COUNT OF SECTORS
-        mov     bh,al	 				; Master/slave INTO BH
         mov     dx,ARG(5)
         mov     ax,ARG(4)
 		call	wr_lba					; tell it which sector we want
@@ -185,22 +194,27 @@ IDE_WRITE_SECTOR_:
 		mov		dx,IDESTTS
 		out		dx,al
 
-		call	ide_wait_drq			; wait until it wants the data
-		jz	.3							; NO ERROR, CONTINUE
-.2:
-   		mov		ax,-1					; MARK ERROR, ABORT
-		jmp	.9
-.3:
 
         mov     CX,ARG(6) 				; COUNT OF SECTORS
         mov     ds,ARG(0) 				; high address INTO ds
         mov     bx,ARG(1)				; low address into bx
 .4:
+; DRQ is raised once per sector on the way out too, so the wait goes
+; inside the loop here for the same reason as the read path.
+		call	ide_wait_drq
+		jnz	.2
 		call	write_data				; send the data
 		loop	.4
 
-        xor     ax,ax
+; The drive is still writing the last sector when the loop ends: wait for
+; it to finish so a failure is reported to this caller and not the next.
+		call	ide_wait_not_busy
+		jnz	.2
 
+        xor     ax,ax
+		jmp	.9
+.2:
+		call	ide_error				; real status, not -1
 .9:
    		POP 	SI
    		POP 	DS
@@ -233,11 +247,15 @@ IDE_READ_ID_:
         push	DI
 
 
+; Master/slave must be taken out of AL BEFORE the wait below:
+;  ide_wait_not_busy returns the drive status in AL, so reading
+;  the argument afterwards always yielded 0 -- the master.  BX
+;  is preserved across the call.
+        mov     bh,al                   ; Master/slave INTO BH
 		call	ide_wait_not_busy		; make sure drive is ready
 		jnz	.2
 
         mov     bl,0	 				; COUNT OF SECTORS TO READ INTO BL
-        mov     bh,al 					; Master/slave INTO BH
         mov     ax,0
         mov     dx,0
 		call	wr_lba					; tell it which sector we want
@@ -250,7 +268,7 @@ IDE_READ_ID_:
 		call	ide_wait_drq			;wait until it's got the data
 		jz	.3
 .2:
-   		mov		ax,-1					; MARK ERROR, ABORT
+   		call	ide_error				; real status, not -1
 		jmp	.9
 .3:
 
@@ -313,7 +331,7 @@ IDE_INITIALIZE_:
 		call	ide_wait_not_busy		;make sure drive is ready
 		jz	.3
 .2:
-		mov		ax,-1					; MARK ERROR, ABORT
+		call	ide_error				; real status, not -1
 		jmp	.9
 .3:
         xor     ax,ax
@@ -330,50 +348,156 @@ IDE_INITIALIZE_:
 ; IDE INTERNAL SUBROUTINES
 ;------------------------------------------------------------------------------
 ;-----------------------------------------------------------------------------
-;  Wait for RDY to be set
+;  ide_wait_not_busy -- wait for BSY to clear
 ;
 ;  Exit with:
-;       AL contains status
+;       AL      the status register as read
+;       ZF      set on success, clear on timeout
 ;       All other registers preserved
 ;
+;  The old form of this spun on "mov cx,0FFFFh / loopnz", which is both
+;  clock-dependent and far too short -- a few milliseconds at 20mhz, where
+;  ATA allows seconds for a reset and a card can take hundreds of
+;  milliseconds to come ready.  The 18.2hz BDA tick is used instead: it is
+;  the only clock still running after POST, since start_timer0_ in
+;  1Ah_time.asm gates counters 1 and 2 off.  A single word read of
+;  timer_count_low cannot tear against IRQ0, and the unsigned subtraction
+;  rides through the wrap.
 ;------------------------------------------------------------------------------
+IDE_TIMEOUT	equ	18*5		; five seconds, in 18.2hz ticks
+
 ide_wait_not_busy:
-        pushm   bx,dx,cx
-		mov	cx,0FFFFh
+        pushm   bx,cx,dx,es
+	get_bda	ES
+    es	mov	bx,[timer_count_low]		; when we started
 .1:
-		mov	dx,IDESTTS
-		in	al,dx
+	mov	dx,IDESTTS
+	in	al,dx
+	test	al,80h				; BSY
+	jz	.9				; clear: ZF is already set
 
-        and     al,10000000b
-		loopnz	.1
+    es	mov	cx,[timer_count_low]
+	sub	cx,bx
+	cmp	cx,IDE_TIMEOUT
+	jb	.1
 
-		or	al,al
-        popm    bx,dx,cx
-		ret
+	mov	cx,1
+	or	cx,cx				; ZF clear -- timed out
+	jmp	short .10
+.9:
+	xor	cx,cx				; ZF set -- ready
+.10:
+        popm    bx,cx,dx,es
+	ret
+
+
 ;------------------------------------------------------------------------------
-; Wait for the drive to be ready to transfer data (DRQ = data request)
-; Returns the drive's status in Acc
+; ide_wait_drq -- wait for BSY clear and DRQ set
 ;
 ;  Exit with:
-;       AL contains status
+;       AL      the status register as read
+;       ZF      set on success, clear on timeout or drive error
 ;       All other registers preserved
+;
+;  ERR is watched for as well as the timeout, so a drive that rejects the
+;  command is noticed immediately instead of after five seconds.
 ;------------------------------------------------------------------------------
 ide_wait_drq:
-        pushm   bx,dx,cx
-		mov	cx,0FFFFh
+        pushm   bx,cx,dx,es
+	get_bda	ES
+    es	mov	bx,[timer_count_low]
 .1:
-   		mov	dx,IDESTTS
-		in	al,dx
+	mov	dx,IDESTTS
+	in	al,dx
 
-        and     al,10001000b		; Mask off Busy(7) and DRQ(3)
-        xor     al,00001000b		; We want Busy(7) to be 0 and DRQ (3) to be 1
+	test	al,01h				; ERR -- do not wait it out
+	jnz	.8
 
-		loopnz	.1
+	mov	cl,al
+	and	cl,10001000b			; BSY and DRQ
+	cmp	cl,00001000b			; want BSY=0, DRQ=1
+	je	.9
 
-		or	al,al
-        popm    bx,dx,cx
+    es	mov	cx,[timer_count_low]
+	sub	cx,bx
+	cmp	cx,IDE_TIMEOUT
+	jb	.1
+.8:
+	mov	cx,1
+	or	cx,cx				; ZF clear -- failed
+	jmp	short .10
+.9:
+	xor	cx,cx				; ZF set -- data is ready
+.10:
+        popm    bx,cx,dx,es
 	ret
+
+
 ;------------------------------------------------------------------------------
+; ide_error -- turn the drive's status and error registers into a BIOS
+;              status code, and record it where INT 13h fn 01h will find it
+;
+;  Exit with:
+;       AX      the BIOS status code, never zero
+;       bda.hd_status set to the same value
+;       All other registers preserved
+;
+;  Every failure used to collapse to AX=-1, which gave INT 13h nothing to
+;  report and DOS nothing to base a retry on.
+;------------------------------------------------------------------------------
+ide_error:
+	pushm	bx,cx,dx,es
+
+	mov	dx,IDESTTS
+	in	al,dx
+	mov	ah,al				; keep the status register
+
+	test	al,80h				; still busy: it never answered
+	jnz	.timeout
+	test	al,01h				; no ERR either: we timed out
+	jz	.timeout
+
+	test	ah,20h				; DF -- device fault
+	jz	.decode
+	mov	bl,WRITE_FAULT
+	jmp	short .done
+
+.decode:
+	mov	dx,IDEERR
+	in	al,dx				; the error register
+
+	mov	bl,BAD_SECTOR_FLAG
+	test	al,80h				; BBK  bad block mark
+	jnz	.done
+	mov	bl,BAD_CRC
+	test	al,40h				; UNC  uncorrectable data
+	jnz	.done
+	mov	bl,SECTOR_NOT_FOUND
+	test	al,10h				; IDNF sector id not found
+	jnz	.done
+	mov	bl,INVALID_COMMAND
+	test	al,04h				; ABRT command aborted
+	jnz	.done
+	mov	bl,BAD_SEEK
+	test	al,02h				; TK0NF track 0 not found
+	jnz	.done
+	mov	bl,ADDRESS_MARK_NOT_FOUND
+	test	al,01h				; AMNF
+	jnz	.done
+	mov	bl,UNDEFINED_ERROR
+	jmp	short .done
+
+.timeout:
+	mov	bl,TIME_OUT
+
+.done:
+	get_bda	ES
+    es	mov	[hd_status],bl			; INT 13h fn 01h reads this
+	movzx	ax,bl
+
+	popm	bx,cx,dx,es
+	ret
+
 ; Read a sector of 512 bytes into memory at ES:[BX]
 ;
 ;  Call with:

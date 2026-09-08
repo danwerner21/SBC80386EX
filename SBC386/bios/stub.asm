@@ -70,7 +70,7 @@ global	int_16h		; (keyboard)
 global	int_17h		; (parallel port)
 
 global	int_18h		; (ROM Basic)
-global	int_19h		; (Reboot)
+; int_19h now lives in 19h_boot.asm
 ;;global	int_1Ah		; (CMOS clock)
 global	int_1Bh		; (ctrl-Break)
 global	int_1Ch		; (timer tick)
@@ -171,7 +171,6 @@ int_16h:
 int_17h:
 
 int_18h:
-int_19h:
 int_1Ah:
 int_1Bh:
 int_1Ch		equ	int_nop	; streamlined return

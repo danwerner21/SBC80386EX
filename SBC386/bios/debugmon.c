@@ -728,6 +728,7 @@ void debugmon(void)
 			dword	lba;
 			word	i, bad, first;
 			byte	*b = SecBuffer;
+			byte	pre[16];
 
 			/* *** THIS DESTROYS THE SECTOR IT IS GIVEN ***
 			 *
@@ -743,6 +744,36 @@ void debugmon(void)
 				       "   *** OVERWRITES that sector ***\n");
 				continue;
 			}
+
+			/* Read the sector twice FIRST.  If two reads of the
+			   same untouched sector disagree, the read path is
+			   unreliable on this card and nothing the write test
+			   reports afterwards can be attributed.  This is the
+			   step that was missing when SECTEST was first run on
+			   a card already known to drop its last byte. */
+			if( IDE_READ_SECTOR(0,b,lba,1) ) {
+				printf("pre-read of LBA %lu failed\n", lba);
+				continue;
+			}
+			for( i = 0; i < SECTOR_SIZE; i++ )
+				pre[i & 0x0F] = b[i];		/* keep a tail */
+			printf("pre-read  0..3: %02X %02X %02X %02X"
+			       "   508..511: %02X %02X %02X %02X\n",
+				(word)b[0], (word)b[1], (word)b[2], (word)b[3],
+				(word)b[508], (word)b[509],
+				(word)b[510], (word)b[511]);
+
+			if( IDE_READ_SECTOR(0,b,lba,1) ) {
+				printf("second pre-read failed\n");
+				continue;
+			}
+			bad = 0;
+			for( i = 0; i < SECTOR_SIZE; i++ )
+				if( b[i] != pre[i & 0x0F] && (i & 0x0F) == 0x0F )
+					++bad;
+			printf("two reads of the same sector %s\n",
+				bad ? "DISAGREE -- read path is unreliable"
+				    : "agree");
 
 			for( i = 0; i < SECTOR_SIZE; i++ )
 				b[i] = (byte)(i ^ 0x5A);

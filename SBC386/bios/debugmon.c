@@ -755,8 +755,8 @@ void debugmon(void)
 				printf("pre-read of LBA %lu failed\n", lba);
 				continue;
 			}
-			for( i = 0; i < SECTOR_SIZE; i++ )
-				pre[i & 0x0F] = b[i];		/* keep a tail */
+			for( i = 0; i < 16; i++ )		/* keep the tail */
+				pre[i] = b[SECTOR_SIZE-16+i];
 			printf("pre-read  0..3: %02X %02X %02X %02X"
 			       "   508..511: %02X %02X %02X %02X\n",
 				(word)b[0], (word)b[1], (word)b[2], (word)b[3],
@@ -768,8 +768,8 @@ void debugmon(void)
 				continue;
 			}
 			bad = 0;
-			for( i = 0; i < SECTOR_SIZE; i++ )
-				if( b[i] != pre[i & 0x0F] && (i & 0x0F) == 0x0F )
+			for( i = 0; i < 16; i++ )
+				if( b[SECTOR_SIZE-16+i] != pre[i] )
 					++bad;
 			printf("two reads of the same sector %s\n",
 				bad ? "DISAGREE -- read path is unreliable"

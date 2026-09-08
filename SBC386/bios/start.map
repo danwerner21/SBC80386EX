@@ -1,6 +1,6 @@
 Open Watcom Linker Version 1.9
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/09/08 00:27:23
+Created on:       26/09/08 00:35:19
 Executable Image: start.exe
 creating a DOS executable
 
@@ -12,7 +12,7 @@ creating a DOS executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          0000:0000            000066d0
+DGROUP                          0000:0000            00006880
 
 
 
@@ -23,12 +23,12 @@ DGROUP                          0000:0000            000066d0
 Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
-_TEXT                  CODE           DGROUP         0000:0000       000048cb
-CONST                  DATA           DGROUP         048d:0000       000019f0
-CONST2                 DATA           DGROUP         062c:0000       0000040c
-_DATA                  DATA           DGROUP         066d:0000       00000000
-_BSS                   DATA           DGROUP         066d:0000       00000000
-BOOT                   BOOT           AUTO           066d:0000       00000030
+_TEXT                  CODE           DGROUP         0000:0000       000049bb
+CONST                  DATA           DGROUP         049c:0000       00001ab0
+CONST2                 DATA           DGROUP         0647:0000       0000040c
+_DATA                  DATA           DGROUP         0688:0000       00000000
+_BSS                   DATA           DGROUP         0688:0000       00000000
+BOOT                   BOOT           AUTO           0688:0000       00000030
 
 
                         +----------------+
@@ -56,13 +56,13 @@ Module: start.o(start.asm)
 0000:02dd*     nout
 0000:0301      get_nvram_crc_
 0000:032a      put_nvram_info_
-0000:4acd      _bda_ptr
-0000:4acd*     bda_ptr
-0000:4af0      _SecBuffer
+0000:4bbd      _bda_ptr
+0000:4bbd*     bda_ptr
+0000:4be0      _SecBuffer
 Module: sizer.o(sizer.asm)
 0000:0360      ext_mem_size
 0000:03c4      _pm_read
-0000:4b00*     gdt0
+0000:4bf0*     gdt0
 Module: crc16.o(crc.asm)
 0000:0440      crc16
 Module: diskide.o(diskide.asm)
@@ -129,16 +129,16 @@ Module: set1302.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/set130
 0000:1bd2+     set_stop_bits_
 0000:1c36+     set_char_format_
 0000:1cff+     set_serial_
-0000:65d2+     _name
-0000:65de+     _value
-0000:65e1+     _top_name
-0000:65f9*     _fixed_disks
-0000:6611+     _clock_name
-0000:661d+     _Day
-0000:6639+     _speeds
-0000:6671+     _stop_bits
-0000:6679+     _char_char
-0000:6685+     _serial
+0000:6782+     _name
+0000:678e+     _value
+0000:6791+     _top_name
+0000:67a9*     _fixed_disks
+0000:67c1+     _clock_name
+0000:67cd+     _Day
+0000:67e9+     _speeds
+0000:6821+     _stop_bits
+0000:6829+     _char_char
+0000:6835+     _serial
 Module: icu.o(icu.asm)
 0000:1d70*     mask_interrupt_
 0000:1d8e      unmask_interrupt_
@@ -161,7 +161,7 @@ Module: testmain.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/testm
 0000:21f5*     _set_tick_count
 0000:220e*     _get_time
 0000:2228      testmain_
-0000:6692+     _bitrev
+0000:6842+     _bitrev
 Module: stub.o(stub.asm)
 0000:2430      int_zero_divide
 0000:2430      int_single_step
@@ -235,39 +235,39 @@ Module: debugmon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/debug
 0000:2cef+     DumpIdentify_
 0000:2ead+     DumpSector_
 0000:2f45      debugmon_
-0000:66b4+     _disk_short
+0000:6864+     _disk_short
 Module: monitor.o(monitor.asm)
-0000:3b80      _go_call
+0000:3c70      _go_call
 Module: hdinit.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/hdinit.c)
-0000:3c98      id_word_
-0000:3cad      id_dword_
-0000:3cd2      hd_reset_
-0000:3cfe      hd_set_8bit_
-0000:3d3d+     hd_present_
-0000:3d9e+     hd_probe_
-0000:3ecd+     hd_identify_
-0000:3fe8      hdinit_
-0000:40e3      hd_report_
-0000:424d      hd_enumerate_
+0000:3d88      id_word_
+0000:3d9d      id_dword_
+0000:3dc2      hd_reset_
+0000:3dee      hd_set_8bit_
+0000:3e2d+     hd_present_
+0000:3e8e+     hd_probe_
+0000:3fbd+     hd_identify_
+0000:40d8      hdinit_
+0000:41d3      hd_report_
+0000:433d      hd_enumerate_
 Module: 19h_boot.o(19h_boot.asm)
-0000:4310      int_19h
+0000:4400      int_19h
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/cprintf.c)
-0000:4407*     @nstring
-0000:442b      _cprintf
+0000:44f7*     @nstring
+0000:451b      _cprintf
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4m)
-0000:471e*     __I4M
-0000:471e      __U4M
+0000:480e*     __I4M
+0000:480e      __U4M
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4d)
-0000:4736*     __I4D
-0000:477f      __U4D
+0000:4826*     __I4D
+0000:486f      __U4D
 Module: /opt/openwatcom/lib286/dos/clibc.lib(outp.c)
-0000:4803      outp_
+0000:48f3      outp_
 Module: /opt/openwatcom/lib286/dos/clibc.lib(inp.c)
-0000:480d      inp_
+0000:48fd      inp_
 Module: lib/sbc386.lib(uart_det.asm)
-0000:4820      uart_det_
+0000:4910      uart_det_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/strlen.c)
-0000:48b8      strlen_
+0000:49a8      strlen_
 Warning! W1014: stack segment not found
 Warning! W1023: no starting address found, using 0000:0000
 
@@ -285,6 +285,6 @@ lib/sbc386.lib
                         +-----------------------+
 
 Stack size:  1000 (4096.)
-Memory size:  6700 (26368.)
+Memory size:  68b0 (26800.)
 Entry point address: 0000:0000
-Link time: 00:00.14
+Link time: 00:00.07

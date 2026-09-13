@@ -168,14 +168,14 @@ device_open:		; function 0x80
 device_close:		; function 0x81
 process_term:		; function 0x82
 event_wait:		; function 0x83
-;delay:			; function 0x86
-mov_ext_mem:		; function 0x87
-get_ext_mem_siz:	; function 0x88
+;delay:			; function 0x86	-- below
+;mov_ext_mem:		; function 0x87	-- below
+;get_ext_mem_siz:	; function 0x88	-- below
 enter_protected:	; function 0x89
 
 device_wait:		; function 0x90
 device_post:		; function 0x91
-get_sys_env:		; function 0xC0
+;get_sys_env:		; function 0xC0	-- below
 get_EBDA:		; function 0xC1
 	jmp	int_15h.86	;for now
 
@@ -206,8 +206,7 @@ get_EBDA:		; function 0xC1
 ;
 delay:
 	cmp	cx,4		;about 250,000 usec
-	jb	int_15h.86	;for now
-; the very short delays are not handled at the moment !!!!!!
+	jb	short_delay	;below that, the 1mhz counter
 
 ; Low resolution delays below:
 ;
@@ -268,5 +267,348 @@ do_delay:
 
 .9:
 	popm	ax,bx,cx,dx,ds
+	clc
+	retf	2
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; The 1mhz counter -- Timer 1
+;
+; CLKPRS is calibrated at POST from the measured CPU clock so that PSCLK
+; comes out at 1.000mhz (start.asm), and counters 1 and 2 are driven from
+; PSCLK.  Counter 1 is programmed MODE0 with a count of 65536, so once its
+; gate is open it is simply a free-running 16-bit DOWN counter ticking once
+; per microsecond and wrapping every 65.536ms.
+;
+; POST opens counter 0's gate only -- start_timer0_ in 1Ah_time.asm writes
+; TIMER_STOP+BIT1 -- so the gate has to be opened here before the counter
+; can be read.  Nothing unmasks a timer interrupt (OCW1M masks everything
+; and only IRQ0 and IRQ4 are ever unmasked), so letting counter 1 run costs
+; nothing and it is left running.
+;
+; The port numbers and the gate bits are spelled out here rather than taken
+; from timer.inc: that file emits a binit record of its own at file scope,
+; so including it would plant three stray bytes in _TEXT.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+T1_LATCH	equ	0x40	; counter 1, counter-latch command
+T1_GATES	equ	0x4B	; timer.inc TIMER_RUN: gates for counters 0 and 1
+
+
+;-----------------------------------------------------------------------------
+; t1_read -- the current value of the 1mhz counter
+;
+;    Exit with:
+;	AX	counter 1, counting down
+;	every other register and the flags preserved
+;
+; The latch command and the two reads that follow it are one indivisible
+; operation: an interrupt that latched again between them would leave the
+; two halves coming from different samples.
+;-----------------------------------------------------------------------------
+t1_read:
+	push	dx
+	pushf
+	cli
+
+	mov	al,T1_LATCH
+	mov	dx,TMRCON
+	out	dx,al
+	mov	dx,TMR1
+	in	al,dx		; count low
+	mov	ah,al
+	in	al,dx		; count high
+	xchg	al,ah		; AX = the latched count
+
+	popf
+	pop	dx
+	ret
+
+
+;-----------------------------------------------------------------------------
+; short_delay -- INT 15h function 86h, for waits below 250ms
+;
+;    Enter with:
+;	CX:DX	the delay in microseconds (CX <= 3, so 262143 at most)
+;
+;    Exit with:
+;	Carry	clear
+;	all registers preserved
+;
+; The counter is sampled, not programmed: each pass subtracts however many
+; microseconds have gone by since the previous sample, and the 16-bit
+; subtraction rides through the counter's wrap the same way the 18.2hz
+; deadlines in diskide.asm ride through theirs.  A pass of this loop is a
+; few microseconds, far short of the 65.536ms wrap, so no wrap is missed.
+;
+; Interrupts stay enabled.  A tick or a received character taken during the
+; wait is real elapsed time, and is counted as such.
+;
+; The 18.2hz tick is watched as well, and not for timekeeping: if counter 1
+; never moves -- a gate that did not open, a PSCLK that is not running --
+; the subtraction above would never reach zero and DOS would hang inside
+; INT 15h.  The tick is driven from counter 0 by a different gate bit and a
+; different clock, so it is independent evidence that time is passing.  Six
+; ticks is 439ms, comfortably past the 262ms this path is ever asked for, even
+; allowing a whole tick of slop in the sample taken on the way in.
+;-----------------------------------------------------------------------------
+T1_BAILOUT	equ	8		; 18.2hz ticks: ~439ms
+
+short_delay:
+	push	eax
+	push	ebx
+	push	ecx
+	push	edx
+	push	esi
+	push	edi
+	push	es
+
+	movzx	esi,cx		; ESI = the requested microseconds
+	shl	esi,16
+	mov	si,dx
+
+	mov	al,T1_GATES	; open counter 1's gate.  Counter 0's gate bit
+	mov	dx,TMRCFG	;  is set in the same write, so the 18.2hz tick
+	out	dx,al		;  is not disturbed
+
+	get_bda	ES
+    es	mov	cx,[timer_count_low]	; CX = the tick we started on
+
+	call	t1_read
+	mov	di,ax		; DI = the previous sample
+.1:
+	call	t1_read
+	mov	bx,di
+	sub	bx,ax		; counting down, so previous - current
+	mov	di,ax
+	movzx	ebx,bx
+	sub	esi,ebx		; microseconds still to wait
+	jbe	.9
+
+    es	mov	dx,[timer_count_low]
+	sub	dx,cx			; ticks gone by, riding the wrap
+	cmp	dx,T1_BAILOUT
+	jb	.1			; counter 1 is dead -- stop waiting
+.9:
+	pop	es
+	pop	edi
+	pop	esi
+	pop	edx
+	pop	ecx
+	pop	ebx
+	pop	eax
+	clc
+	retf	2
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; INT 15h
+; Function 87h	Move a block of Extended memory
+;
+;    Enter with:
+;	AH	87h originally, now 0x00 due to decode
+;	CX	the number of WORDS to move, 8000h (64Kb) at most
+;	ES:SI	a six-entry Global Descriptor Table:
+;		  00h	null
+;		  08h	the GDT itself	-- filled in here
+;		  10h	source		-- the caller's
+;		  18h	destination	-- the caller's
+;		  20h	BIOS code	-- filled in here
+;		  28h	stack		-- filled in here
+;
+;    Exit with:
+;	AH	00 on success, 02 if the request cannot be honoured
+;	Carry	clear on success, set on failure
+;
+;    Notes:
+;	The caller supplies the table because this BIOS has nowhere to build
+;	one: _DATA and _BSS are empty by design and ROM cannot be written.
+;	The three entries the interface reserves for the BIOS are written
+;	into the caller's table, which is in RAM.
+;
+;	The move runs in 16-bit protected mode.  The caller's source and
+;	destination descriptors are 286-style, with a 16-bit limit, so a
+;	plain REP MOVSW from offset zero reaches every byte either one can
+;	describe and the 32-bit machinery in sizer.asm is not needed.  A
+;	caller that asks for more words than its own descriptors cover will
+;	fault, with no IDT to catch it -- the same exposure the PC/AT BIOS
+;	has always had here.
+;
+;	There is no A20 gate to open on this board.  PORT92_AT bit 1 is set
+;	at POST and nothing masks address line 20 in any case.
+;
+;	Interrupts are off across the switch: there is no protected mode
+;	IDT, so an interrupt taken in protected mode would fault with
+;	nothing to catch it.  A full 64Kb move is short enough that the
+;	18.2hz tick is not lost.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+GDT_SRC		equ	0x10
+GDT_DST		equ	0x18
+GDT_CODE	equ	0x20
+GDT_STACK	equ	0x28
+GDT_LEN		equ	6*8		; six descriptors
+
+mov_ext_mem:
+	cmp	cx,0x8000	; 64Kb is the most one call can move
+	ja	.bad
+	or	cx,cx
+	jz	.done		; nothing to move
+
+	push	eax
+	push	ebx
+	push	ecx
+	push	edx
+	push	esi
+	push	edi
+	push	ds
+	push	es
+	pushf
+	cli
+
+; the linear address of the caller's table
+	mov	ax,es
+	movzx	eax,ax
+	shl	eax,4
+	movzx	ebx,si
+	add	eax,ebx		; EAX = the GDT's linear base
+
+; Descriptor 08h is the table itself.  In 16-bit operand size LGDT takes a
+; 16-bit limit and a 24-bit base -- exactly the first six bytes of a
+; 286-style descriptor -- so the entry serves as the LGDT operand where it
+; sits.  Storing the base as a dword also puts zero in the access byte,
+; which leaves a null descriptor behind rather than a bogus one.
+	mov	word [es:si+8],GDT_LEN-1
+	mov	[es:si+10],eax
+
+; Descriptor 20h is this code: base F0000, limit 64K, 16-bit exec/read.
+	mov	word [es:si+GDT_CODE],0xFFFF	; limit 15:0
+	mov	word [es:si+GDT_CODE+2],0	; base 15:0
+	mov	byte [es:si+GDT_CODE+4],0x0F	; base 23:16
+	mov	byte [es:si+GDT_CODE+5],0x9B	; present, ring 0, exec/read
+	mov	word [es:si+GDT_CODE+6],0	; limit 19:16, byte granular,
+						;  16-bit, base 31:24
+
+; Descriptor 28h covers the caller's stack with a 64K limit.  It is never
+; loaded into SS -- nothing touches the stack between the two writes to
+; CR0 -- but DS and ES are given it on the way out, so that no segment
+; leaves protected mode with a cached limit larger than real mode allows.
+	mov	ax,ss
+	movzx	eax,ax
+	shl	eax,4
+	mov	word [es:si+GDT_STACK],0xFFFF
+	mov	[es:si+GDT_STACK+2],eax
+	mov	byte [es:si+GDT_STACK+5],0x93	; present, ring 0, read/write
+	mov	word [es:si+GDT_STACK+6],0
+
+	lgdt	[es:si+8]
+
+	mov	ebx,cr0		; CR0 is held in EBX because the prefetch
+	or	bl,1		;  flush below eats EAX
+	mul	eax		; time waster for the prefetch queue
+	mov	cr0,ebx		; enter protected mode
+	jmp	GDT_CODE:.pm
+
+.pm:
+	mov	ax,GDT_SRC	; the caller's source
+	mov	ds,ax
+	mov	ax,GDT_DST	; the caller's destination
+	mov	es,ax
+	xor	si,si
+	xor	di,di
+	cld
+	rep	movsw		; CX words, DS:SI -> ES:DI
+
+	mov	ax,GDT_STACK	; 64K limits before leaving
+	mov	ds,ax
+	mov	es,ax
+
+	mov	eax,cr0
+	and	al,0xFE		; clear PE
+	mov	cr0,eax
+	jmp	0xF000:.rm
+.rm:
+	popf
+	pop	es
+	pop	ds
+	pop	edi
+	pop	esi
+	pop	edx
+	pop	ecx
+	pop	ebx
+	pop	eax
+.done:
+	xor	ah,ah		; no error
+	clc
+	retf	2
+
+.bad:
+	mov	ah,2		; "exception error" -- the nearest thing this
+	stc			;  interface has to say about a bad request
+	retf	2
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; INT 15h
+; Function 88h	Get the Extended memory size
+;
+;    Exit with:
+;	AX	kilobytes of memory above the first megabyte
+;	Carry	clear
+;
+;    Notes:
+;	start.asm sizes memory with ext_mem_size, subtracts the first
+;	megabyte and stores the remainder in kilobytes, which is exactly
+;	what this call reports.  HIMEM.SYS will not load without it.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+get_ext_mem_siz:
+	push	ds
+	get_bda	DS
+	mov	ax,[extended_memory]
+	pop	ds
+	clc
+	retf	2
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; INT 15h
+; Function C0h	Get the system configuration table
+;
+;    Exit with:
+;	ES:BX	-> the table below
+;	AH	00
+;	Carry	clear
+;
+;    Notes:
+;	Model FCh is the PC/AT, which is what this BIOS presents: a
+;	cascaded pair of interrupt controllers, a real-time clock, and
+;	INT 13h with the AT fixed-disk geometry calls.  The submodel and
+;	the revision are this board's own.
+;
+;	Feature byte 1 is the only one of the five with anything to say:
+;	  bit 6	 a second interrupt controller is present -- the 386EX ICU
+;		 is a cascaded pair, master at 20h and slave at A0h
+;	  bit 5	 a real-time clock is present -- the DS1302, reached
+;		 through INT 1Ah functions 02h..05h
+;	Bit 4 stays clear: the keyboard path in 16h_kbd.asm does not call
+;	INT 15h function 4Fh.  Bit 2 stays clear: no EBDA is allocated and
+;	function C1h still reports unsupported.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	align	2
+sys_config:
+	dw	sys_config_end - sys_config - 2	; count of the bytes following
+	db	0xFC		; model:    PC/AT
+	db	0x01		; submodel: SBC-386EX 2.0
+	db	0x00		; BIOS revision
+	db	BIT6+BIT5	; feature byte 1
+	db	0		; feature byte 2
+	db	0		; feature byte 3
+	db	0		; feature byte 4
+	db	0		; feature byte 5
+sys_config_end:
+
+get_sys_env:
+	push	cs		; the table sits in ROM alongside this code
+	pop	es
+	mov	bx,sys_config
+	xor	ah,ah
 	clc
 	retf	2

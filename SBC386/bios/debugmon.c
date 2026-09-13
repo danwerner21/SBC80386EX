@@ -1456,6 +1456,208 @@ void debugmon(void)
 			continue;
 		}
 
+/*
+ * INT15 -- exercise the INT 15h calls DOS and its drivers make.
+ *
+ * These four are the Phase 4 work, and none of them can be reached from
+ * the GO command: go_call() arrives with a FAR CALL, and every handler in
+ * this BIOS returns with RETF 2 to throw away the flags word a real INT
+ * pushed.  int15_call() in monitor.asm issues the interrupt instead.
+ *
+ * Each case checks the answer against something independent rather than
+ * reporting what the handler said about itself.
+ */
+		if( is_cmd(&cp,"INT15") )
+		{
+			T_REGS	regs;
+			word	fn, cur_ds;
+			dword	usec, src, dst, nwords;
+			word	t0, t1;
+			byte	*tp;
+			byte	gdt[6*8];
+			byte	chk[16];
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} u;
+			int	i;
+
+			if( !parse_word(&cp,&fn) ) {
+				printf("usage: INT15 86 [<usec>]\n"
+				       "       INT15 87 <src> <dst> [<words>]\n"
+				       "       INT15 88\n"
+				       "       INT15 C0\n");
+				continue;
+			}
+
+			ASM {
+				mov	ax,ds
+				mov	[cur_ds],ax
+			}
+			regs.ax = regs.bx = regs.cx = regs.dx = 0;
+			regs.si = regs.di = 0;
+			regs.ds = regs.es = cur_ds;
+			regs.flags = 0;
+
+			switch( fn ) {
+
+/*
+ * Function 86h.  The wait is timed against the 18.2hz tick, not against
+ * the 1mhz counter the handler reads, so a counter that never moves cannot
+ * certify its own delay.  One tick is 54.9ms, so the reading is coarse --
+ * which is enough: what is being checked is that a sub-250ms request waits
+ * roughly the right time instead of returning immediately, which is what
+ * it did before Phase 4.
+ */
+			case 0x86:
+				usec = 100000UL;
+				parse_val(&cp,&usec);
+				regs.ax = 0x8600;
+				regs.cx = (word)(usec >> 16);
+				regs.dx = (word)(usec & 0xFFFFUL);
+
+				t0 = bda.timer_count_low;
+				int15_call(&regs);
+				t1 = bda.timer_count_low;
+
+				printf("86h: asked %lu usec;"
+				       " %u tick(s) = %lu usec +/-1 tick  %s\n",
+					usec, (word)(t1 - t0),
+					(dword)(word)(t1 - t0) * 54925UL,
+					(regs.flags & 1) ? "CY -- refused"
+							 : "NC");
+				break;
+
+/*
+ * Function 87h.  The six-entry descriptor table is built here, on the
+ * stack, because the interface makes it the caller's job -- the BIOS has no
+ * writable data of its own to build one in.  Only the source at 10h and the
+ * destination at 18h are filled in; 08h, 20h and 28h are the handler's to
+ * write, and leaving them zero is how that gets tested.
+ *
+ * The move is then checked rather than believed: sixteen bytes of each end
+ * are read back through pm_read, which reaches above 1Mb where a Real Mode
+ * compare cannot follow.
+ */
+			case 0x87:
+				nwords = 256;
+				if( !parse_val(&cp,&src) ||
+				    !parse_val(&cp,&dst) ) {
+					printf("usage: INT15 87 <src linear>"
+					       " <dst linear> [<words>]\n"
+					       "       linear addresses, so"
+					       " 100000 is the 1Mb mark\n");
+					continue;
+				}
+				parse_val(&cp,&nwords);
+
+				if( nwords == 0 || nwords > 0x8000UL ) {
+					printf("87h: 1 to 8000 words\n");
+					continue;
+				}
+
+				for( i = 0; i < sizeof(gdt); i++ )
+					gdt[i] = 0;
+
+				/* 286 form: limit 15:0, base 23:0, access,
+				   then the two bytes a 386 added. */
+				tp = &gdt[0x10];		/* source */
+				tp[0] = 0xFF;	tp[1] = 0xFF;	/* limit 64K */
+				tp[2] = (byte)(src);
+				tp[3] = (byte)(src >> 8);
+				tp[4] = (byte)(src >> 16);
+				tp[5] = 0x93;			/* data, r/w */
+				tp[7] = (byte)(src >> 24);
+
+				tp = &gdt[0x18];		/* destination */
+				tp[0] = 0xFF;	tp[1] = 0xFF;
+				tp[2] = (byte)(dst);
+				tp[3] = (byte)(dst >> 8);
+				tp[4] = (byte)(dst >> 16);
+				tp[5] = 0x93;
+				tp[7] = (byte)(dst >> 24);
+
+				/* ES:SI has to be where the table really is,
+				   which is the stack, not DGROUP. */
+				u.p = &gdt[0];
+				regs.ax = 0x8700;
+				regs.cx = (word)nwords;
+				regs.si = u.fp.off;
+				regs.es = u.fp.seg;
+
+				printf("87h: %lu words, %08lX -> %08lX,"
+				       " GDT at %04X:%04X\n",
+					nwords, src, dst, regs.es, regs.si);
+
+				int15_call(&regs);
+
+				printf("87h: AH=%02X  %s\n",
+					(word)(regs.ax >> 8),
+					(regs.flags & 1) ? "CY -- failed"
+							 : "NC");
+				if( regs.flags & 1 )	break;
+
+				pm_read(src,chk,sizeof(chk));
+				printf("     src %08lX: ", src);
+				for( i = 0; i < sizeof(chk); i++ )
+					printf("%02X ", (word)chk[i]);
+				printf("\n");
+
+				pm_read(dst,chk,sizeof(chk));
+				printf("     dst %08lX: ", dst);
+				for( i = 0; i < sizeof(chk); i++ )
+					printf("%02X ", (word)chk[i]);
+				printf("\n     the two lines must agree\n");
+				break;
+
+/*
+ * Function 88h, checked against the BDA field it reports.  They have to
+ * agree, and the megabyte figure has to match what POST printed.
+ */
+			case 0x88:
+				regs.ax = 0x8800;
+				int15_call(&regs);
+				printf("88h: AX=%04X = %u Kb above 1Mb"
+				       " (%u Mb);  BDA holds %u Kb  %s\n",
+					regs.ax, regs.ax, regs.ax / 1024u,
+					bda.extended_memory,
+					(regs.flags & 1) ? "CY -- refused"
+							 : "NC");
+				break;
+
+			case 0xC0:
+				regs.ax = 0xC000;
+				int15_call(&regs);
+				if( regs.flags & 1 ) {
+					printf("C0h: CY -- not supported\n");
+					break;
+				}
+				u.fp.off = regs.bx;
+				u.fp.seg = regs.es;
+				tp = u.p;
+
+				printf("C0h: table at %04X:%04X,"
+				       " %u bytes follow\n",
+					regs.es, regs.bx, *(word *)tp);
+				printf("     model %02X  submodel %02X"
+				       "  BIOS rev %02X\n",
+					(word)tp[2], (word)tp[3], (word)tp[4]);
+				printf("     features %02X %02X %02X %02X"
+				       " %02X -- %s, %s\n",
+					(word)tp[5], (word)tp[6], (word)tp[7],
+					(word)tp[8], (word)tp[9],
+					(tp[5] & 0x40) ? "2nd ICU"
+						       : "no 2nd ICU",
+					(tp[5] & 0x20) ? "RTC" : "no RTC");
+				break;
+
+			default:
+				printf("INT15: 86, 87, 88 and C0 only\n");
+				break;
+			}
+			continue;
+		}
+
 		if( is_cmd(&cp,"EXIT") )
 		{
 			printf("Quit Monitor\n");

@@ -30,4 +30,7 @@ extern void __cdecl pm_read(dword linear, byte *dest, word count);
 /* in monitor.asm -- FAR CALL an arbitrary Real Mode address */
 extern void __cdecl go_call(word seg, word off, T_REGS *regs);
 
+/* in monitor.asm -- issue INT 15h with a given register set */
+extern void __cdecl int15_call(T_REGS *regs);
+
 #endif

@@ -116,3 +116,79 @@ _go_call:
 	popm	ax,bx,cx,dx,si,di,ds,es
 	pop	bp
 	ret			; __cdecl -- caller pops the arguments
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; int15_call -- issue INT 15h with a given register set, for INT15
+;
+;	void __cdecl int15_call(T_REGS *regs);
+;
+; go_call above cannot stand in for this.  It reaches its target with a FAR
+; CALL, and every handler in this BIOS returns with RETF 2 to discard the
+; flags word that a real INT pushed -- called rather than interrupted, that
+; return unbalances the stack by two bytes.  So this issues the interrupt
+; properly and lets the handler return the way it was written to.
+;
+; ES:SI and CX reach the handler as given, which is what function 87h needs,
+; and the flags come back so the Carry can be read.
+;
+;    Enter with (__cdecl -- the caller cleans up):
+;	[bp+4]	offset of T_REGS
+;	[bp+6]	segment of T_REGS
+;
+;    Exit with:
+;	*regs updated, every one of the monitor's own registers preserved
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	global	_int15_call
+_int15_call:
+	push	bp
+	mov	bp,sp
+	pushm	ax,bx,cx,dx,si,di,ds,es		; SP is now BP-16
+
+; Load the entry values.  DS and ES travel through the stack because
+; T_REGS is addressed through ES:DI right up to the last moment.
+	les	di,[bp+4]			; ES:DI -> T_REGS
+	push	word [es:di+14]			; ES for the handler
+	push	word [es:di+12]			; DS for the handler
+	mov	ax,[es:di+0]
+	mov	bx,[es:di+2]
+	mov	cx,[es:di+4]
+	mov	dx,[es:di+6]
+	mov	si,[es:di+8]
+	mov	di,[es:di+10]			; DI last: it held the pointer
+	pop	ds
+	pop	es				; SP is back to BP-16
+
+	int	0x15				; *** the call under test ***
+
+; Capture what came back.  PUSHF is first because nothing between the
+; interrupt and it may disturb the flags.
+	pushf
+	push	ax
+	push	bx
+	push	cx
+	push	dx
+	push	si
+	push	di
+	push	ds
+	push	es
+
+; Re-form BP.  The interrupt leaves the stack balanced at BP-16, and the
+; nine words just pushed put it at BP-34.
+	mov	bp,sp
+	add	bp,34
+
+	les	di,[bp+4]			; ES:DI -> T_REGS again
+	pop	word [es:di+14]			; ES	(pushed last)
+	pop	word [es:di+12]			; DS
+	pop	word [es:di+10]			; DI
+	pop	word [es:di+8]			; SI
+	pop	word [es:di+6]			; DX
+	pop	word [es:di+4]			; CX
+	pop	word [es:di+2]			; BX
+	pop	word [es:di+0]			; AX
+	pop	word [es:di+16]			; FLAGS
+
+	popm	ax,bx,cx,dx,si,di,ds,es
+	pop	bp
+	ret			; __cdecl -- caller pops the argument

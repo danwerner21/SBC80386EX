@@ -744,3 +744,79 @@
    116 00000078 585B595A5E5F1F07        	popm	ax,bx,cx,dx,si,di,ds,es
    117 00000080 5D                      	pop	bp
    118 00000081 C3                      	ret			; __cdecl -- caller pops the arguments
+   119                                  
+   120                                  
+   121                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   122                                  ; int15_call -- issue INT 15h with a given register set, for INT15
+   123                                  ;
+   124                                  ;	void __cdecl int15_call(T_REGS *regs);
+   125                                  ;
+   126                                  ; go_call above cannot stand in for this.  It reaches its target with a FAR
+   127                                  ; CALL, and every handler in this BIOS returns with RETF 2 to discard the
+   128                                  ; flags word that a real INT pushed -- called rather than interrupted, that
+   129                                  ; return unbalances the stack by two bytes.  So this issues the interrupt
+   130                                  ; properly and lets the handler return the way it was written to.
+   131                                  ;
+   132                                  ; ES:SI and CX reach the handler as given, which is what function 87h needs,
+   133                                  ; and the flags come back so the Carry can be read.
+   134                                  ;
+   135                                  ;    Enter with (__cdecl -- the caller cleans up):
+   136                                  ;	[bp+4]	offset of T_REGS
+   137                                  ;	[bp+6]	segment of T_REGS
+   138                                  ;
+   139                                  ;    Exit with:
+   140                                  ;	*regs updated, every one of the monitor's own registers preserved
+   141                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   142                                  	global	_int15_call
+   143                                  _int15_call:
+   144 00000082 55                      	push	bp
+   145 00000083 89E5                    	mov	bp,sp
+   146 00000085 061E575652515350        	pushm	ax,bx,cx,dx,si,di,ds,es		; SP is now BP-16
+   147                                  
+   148                                  ; Load the entry values.  DS and ES travel through the stack because
+   149                                  ; T_REGS is addressed through ES:DI right up to the last moment.
+   150 0000008D C47E04                  	les	di,[bp+4]			; ES:DI -> T_REGS
+   151 00000090 26FF750E                	push	word [es:di+14]			; ES for the handler
+   152 00000094 26FF750C                	push	word [es:di+12]			; DS for the handler
+   153 00000098 268B05                  	mov	ax,[es:di+0]
+   154 0000009B 268B5D02                	mov	bx,[es:di+2]
+   155 0000009F 268B4D04                	mov	cx,[es:di+4]
+   156 000000A3 268B5506                	mov	dx,[es:di+6]
+   157 000000A7 268B7508                	mov	si,[es:di+8]
+   158 000000AB 268B7D0A                	mov	di,[es:di+10]			; DI last: it held the pointer
+   159 000000AF 1F                      	pop	ds
+   160 000000B0 07                      	pop	es				; SP is back to BP-16
+   161                                  
+   162 000000B1 CD15                    	int	0x15				; *** the call under test ***
+   163                                  
+   164                                  ; Capture what came back.  PUSHF is first because nothing between the
+   165                                  ; interrupt and it may disturb the flags.
+   166 000000B3 9C                      	pushf
+   167 000000B4 50                      	push	ax
+   168 000000B5 53                      	push	bx
+   169 000000B6 51                      	push	cx
+   170 000000B7 52                      	push	dx
+   171 000000B8 56                      	push	si
+   172 000000B9 57                      	push	di
+   173 000000BA 1E                      	push	ds
+   174 000000BB 06                      	push	es
+   175                                  
+   176                                  ; Re-form BP.  The interrupt leaves the stack balanced at BP-16, and the
+   177                                  ; nine words just pushed put it at BP-34.
+   178 000000BC 89E5                    	mov	bp,sp
+   179 000000BE 83C522                  	add	bp,34
+   180                                  
+   181 000000C1 C47E04                  	les	di,[bp+4]			; ES:DI -> T_REGS again
+   182 000000C4 268F450E                	pop	word [es:di+14]			; ES	(pushed last)
+   183 000000C8 268F450C                	pop	word [es:di+12]			; DS
+   184 000000CC 268F450A                	pop	word [es:di+10]			; DI
+   185 000000D0 268F4508                	pop	word [es:di+8]			; SI
+   186 000000D4 268F4506                	pop	word [es:di+6]			; DX
+   187 000000D8 268F4504                	pop	word [es:di+4]			; CX
+   188 000000DC 268F4502                	pop	word [es:di+2]			; BX
+   189 000000E0 268F05                  	pop	word [es:di+0]			; AX
+   190 000000E3 268F4510                	pop	word [es:di+16]			; FLAGS
+   191                                  
+   192 000000E7 585B595A5E5F1F07        	popm	ax,bx,cx,dx,si,di,ds,es
+   193 000000EF 5D                      	pop	bp
+   194 000000F0 C3                      	ret			; __cdecl -- caller pops the argument

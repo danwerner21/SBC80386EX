@@ -10,16 +10,17 @@ was found on the way, and what is left.**
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
 | Assessed | 2026-09-06, by code inspection |
-| Last updated | 2026-09-07, **against hardware** |
+| Last updated | 2026-09-12 — Phase 4 written, **not yet built or run** |
 
 ---
 
 ## The short version
 
 **The board boots MS-DOS 6 to a `C:\>` prompt over the serial console, and the keyboard
-works.** Phases 0 through 3 are complete and verified on hardware. What remains is
-Phase 4 — the INT 15h calls DOS's standard drivers want — and a short list of smaller
-items collected in section 09.
+works.** Phases 0 through 3 are complete and verified on hardware. Phase 4 — the INT 15h
+calls DOS's standard drivers want — is now written, but it has **not been assembled or
+run**: the machine it was written on has neither NASM nor Open Watcom installed. Every
+claim about Phase 4 below is from inspection only. Section 06a says how to check it.
 
 The original assessment held up: nothing was architecturally wrong, and the work went in
 the predicted order. What it could not predict was the hardware, and most of the time
@@ -31,10 +32,11 @@ comments and the datasheet-derived guesses said.
 |---|---:|---:|---|
 | ROM image | 12,896 B | 30,592 B | of 65,536 — 53% free |
 | Writable data segment | 0 B | 0 B | `_DATA` + `_BSS` still empty, as required |
-| INT vectors that work | 4 | 12 | 10h, 11h, 12h, 13h, 14h, 15h*, 16h, 17h, 18h, 19h, 1Ah, IRQ0, IRQ4 |
+| INT vectors that work | 4 | 13 | 10h, 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h, 19h, 1Ah, 1Eh*, IRQ0, IRQ4 |
 | Blocking defects | 11 | 0 | all eleven fixed and confirmed on hardware |
 
-\* INT 15h is still partial — see Phase 4.
+\* INT 1Eh is a data vector, not a handler — it now points at a real diskette parameter
+table instead of an `IRET`.
 
 ---
 
@@ -107,14 +109,15 @@ The remaining stubs are deliberate.
 | `12` | Conventional memory | **working** | Reports 640K. |
 | `13` | Disk | **working** | CHS 00/02/03/04/08/15 and packet 41–44/47/48. `4Eh` still stubbed. |
 | `14` | Serial | **complete** | Console port now protected from re-initialisation. |
-| `15` | Misc / system | partial | Still only AH=86h (≥250 ms) and 4Fh. **Phase 4.** |
+| `15` | Misc / system | **written** | 86h, 87h, 88h, C0h and 4Fh. Phase 4 — not yet built or run. |
 | `16` | Keyboard | **working** | `16h_kbd.asm`. Interrupt-driven, 00/01/02 + 10h/11h/12h. |
 | `17` | Printer | **working** | `17h_prn.asm`. Returns a clean not-present status. |
 | `18` | Boot failure | **working** | Prints, drops into the monitor, retries on exit. |
 | `19` | Bootstrap loader | **working** | `19h_boot.asm`. Loads and enters the boot sector. |
 | `1A` | Time / RTC | **working** | Plus the DS1302 extension group. |
 | `1B` / `1C` | Break / user tick | IRET | Correct as-is. |
-| `1D` / `1E` / `1F` | Parameter tables | **not tables** | Still vectors to code. **Phase 4.** |
+| `1E` | Diskette parameter table | **written** | Real 1.44 Mb table in `stub.asm`. Not yet built or run. |
+| `1D` / `1F` | Parameter tables | **not tables** | Still vector to code. No reader has ever asked. |
 | `40` | Floppy | invalid cmd | Correct — no FDC. `floppy_call` now returns `RETF 2`. |
 | `41` / `46` | Fixed disk parameter tables | **working** | Real `T_DISKTAB`s in the BDA, written at POST. |
 | `70–77` | IRQ8–15 | EOI only | Cascade EOI handled correctly. |
@@ -371,20 +374,60 @@ console emulation. Effort figures assume you already know this codebase.
 - **plumbing** — Point `VIDEO_putchar_` in `stub.asm` at INT 10h so POST messages and DOS
   output share one path. Set the video bits (4:5) and floppy bits in `equip_flag`.
 
-### Phase 4 · INT 15h and the parameter tables — **NEXT**
+### Phase 4 · INT 15h and the parameter tables — **WRITTEN, NOT YET BUILT**
 
 > The remaining calls DOS and its standard drivers make. None are needed for a bare boot;
 > all are needed before the system feels finished.
 
-- **AH=88h** — Return `bda.extended_memory`. HIMEM.SYS will not load without it.
-- **AH=87h** — Extended-memory block move. `sizer.asm` already contains working
-  protected-mode entry and exit; lift that machinery rather than writing it again.
-- **AH=86h** — Handle delays under 250 ms; the current code rejects them. Use the 1 MHz
-  Timer 1.
-- **AH=C0h** — Return a system configuration table (model FCh, submodel, BIOS revision,
-  feature bytes). Cheap, and several utilities query it.
-- **tables** — Point INT 1Eh at a real disk base table. Verify the INT 41h/46h tables from
-  Phase 1 are what DOS expects to find.
+All five items are implemented. None has been assembled, let alone run — see the warning
+in the short version, and section 06a for how to take it to hardware.
+
+- **AH=88h** — Returns `bda.extended_memory` directly. That field is already the count of
+  kilobytes above the first megabyte: `start.asm` sizes memory with `ext_mem_size`,
+  subtracts one megabyte and stores the remainder, which is exactly what the call wants.
+  HIMEM.SYS will not load without it.
+- **AH=87h** — Extended-memory block move, in `15h_misc.asm`. It does **not** reuse
+  `sizer.asm`'s machinery as the plan assumed, and the reason is worth recording: the
+  interface hands the BIOS a GDT built by the *caller*, so `sizer.asm`'s ROM-resident
+  `gdt0` is the wrong table. The three descriptors the interface reserves for the BIOS —
+  08h, 20h and 28h — are written into the caller's table, which is the only writable
+  memory this ROM has. The move runs in **16-bit** protected mode, not 32-bit: the
+  caller's source and destination descriptors are 286-form with a 16-bit limit, so a plain
+  `REP MOVSW` from offset zero reaches every byte either one can describe, and none of the
+  32-bit entry and exit `sizer.asm` needs applies. Descriptor 08h is used as the `LGDT`
+  operand where it sits — in 16-bit operand size `LGDT` takes a 16-bit limit and a 24-bit
+  base, which is the first six bytes of a 286 descriptor exactly.
+- **AH=86h** — Waits below 250 ms now go to `short_delay`, which samples Timer 1 at 1 µs.
+  Two things the plan did not know: POST leaves **counter 1 gated off** (`start_timer0_`
+  in `1Ah_time.asm` writes `TIMER_STOP+BIT1`, opening counter 0's gate only), so the gate
+  has to be opened before the counter can be read; and `timer.inc` cannot be included to
+  get the constants, because it emits a `binit` record at file scope that would plant three
+  stray bytes in `_TEXT`. The ports and gate bits are spelled out locally instead, with a
+  note saying why. The loop also watches the 18.2 Hz tick and gives up after eight of
+  them: a counter that never moves would otherwise hang DOS inside INT 15h forever, and
+  the tick comes from a different counter on a different clock, so it is independent
+  evidence that time is passing.
+- **AH=C0h** — Returns `ES:BX` pointing at a ten-byte configuration table in ROM: model
+  FCh (PC/AT), submodel 01h, revision 00h, and feature byte 1 = 60h — bit 6 for the second
+  interrupt controller (the 386EX ICU is a cascaded pair, master 20h and slave A0h) and
+  bit 5 for the real-time clock (the DS1302, reached through INT 1Ah functions 02h–05h).
+  Bit 4 stays clear because the keyboard path does not call AH=4Fh; bit 2 stays clear
+  because no EBDA is allocated.
+- **tables** — INT 1Eh now points at `disk_base_table` in `stub.asm`, the standard 1.44 Mb
+  diskette parameter block, instead of at an `IRET`. Nothing ever acts on it — INT 13h
+  sends every floppy call to `int_40h`, which returns invalid-command — but DOS reads it at
+  startup and some drivers copy it into RAM and patch it rather than calling the BIOS at
+  all, so what used to happen was that they read eleven bytes of a code stream and believed
+  it.
+- **verified by inspection, no change needed** — the INT 41h/46h tables from Phase 1 are
+  what DOS expects. `T_DISKTAB` is `-zp1` packed, and every field a DOS-era reader looks
+  for lands on its PC/AT offset: cylinders at 00h, heads at 02h, write-precompensation
+  cylinder at 05h, the control byte at 08h (with bit 3 set for more than 8 heads), and
+  sectors per track at 0Eh. `hd_identify()` zeroes the table before filling it, so the
+  reduced-write-current and precompensation words read as 0, which is the AT convention.
+  The private fields sit only where the standard put things no DOS reads: `unit_number` at
+  07h (ECC burst length), `max_lba` across 0Ah–0Dh (the XT timeouts and the landing zone)
+  and `disk_flags` at 0Fh (reserved).
 
 ### Phase 5 · Hardening — **not started**
 
@@ -447,6 +490,42 @@ Start with **MS-DOS 6.22**. Its BIOS demands are the most predictable and best d
 and the AT BIOS listing you already have in `SBC386/ATBIOS` is the exact reference for
 what it expects. Keep FreeDOS as a second target — it is more tolerant and more talkative
 about what it finds, which makes it a useful diagnostic when 6.22 fails silently.
+
+---
+
+## 06a · Checking Phase 4
+
+Phase 4 was written on a machine with no NASM and no Open Watcom, so none of it has been
+assembled. Treat the first build as part of the work, not a formality.
+
+**Build first, and read the output.** The risky spellings are the two far jumps in
+`mov_ext_mem` — `jmp GDT_CODE:.pm` and `jmp 0xF000:.rm` — which follow the form
+`sizer.asm` already uses and links, and the forward `ja .bad` over roughly 200 bytes,
+which needs the `-O9` NASM already passes to size itself as a near jump. If either
+bites, it bites at assembly time and says so.
+
+Then, from the monitor (SETUP entry 5), the new `INT15` command. Each case checks the
+answer against something other than the handler's own word for it.
+
+| Rung | Command | What it proves | What failure looks like |
+|---|---|---|---|
+| 1 | `INT15 88` | AH=88h agrees with the BDA field and with what POST printed | `CY`, or a figure that does not match the `ExtMem` line |
+| 2 | `INT15 C0` | the configuration table reads back with model FCh and features 60h | a length that is not 8, or a garbage model byte |
+| 3 | `INT15 86 1000` | a 1 ms request returns quickly but not instantly | `0 tick(s)` every time means the counter never moved |
+| 4 | `INT15 86 200000` | a 200 ms request waits about 4 ticks | `8 tick(s)` means the bailout tripped — counter 1 is not running |
+| 5 | `INT15 87 100000 200000 256` | a 512-byte move between two extended-memory addresses | `CY`, a hang, or two lines that disagree |
+
+Rung 3 is where a dead Timer 1 shows up, and rung 4 is where it shows up unmistakably:
+the bailout exists precisely so that a counter that never moves costs 439 ms instead of
+hanging DOS, and seeing 8 ticks is the symptom. If that happens, the gate write to
+`TMRCFG` is the first thing to check — `IOR F834` reads it back.
+
+Rung 5 is the one that can take the board down rather than return an error: a protected
+mode fault has no IDT to land in. Write something recognisable into the source first
+(`DUMP 100000` to see what is there), and expect to reset if it goes wrong.
+
+Once those pass, the real test is DOS: `HIMEM.SYS` in `CONFIG.SYS` exercises 88h and 87h
+together and is the reason 88h was the first item of the phase.
 
 ---
 
@@ -625,6 +704,14 @@ DOS prompt.
 - **INT 13h `4Eh`** (set hardware configuration) still returns invalid-command. Normal.
 - **`equip_flag` floppy bits** are still never set. Video bits now are.
 - **Multi-sector transfers are unverified** — see the ladder note above.
+- **All of Phase 4 is unverified.** Written, never assembled, never run. Section 06a.
+- **No boot-device byte in NVRAM.** Phase 2 called for one; `set_fixed()` stores geometry
+  overrides instead, and `19h_boot.asm` has drive 80h hardwired. Nothing needs it yet,
+  but the plan said otherwise and the plan was not followed here.
+- **INT 15h `C1h`** (get EBDA) still reports unsupported, and feature byte 1 bit 2 says so.
+  Nothing allocates an EBDA.
+- **INT 15h `89h`** (enter protected mode) still reports unsupported. `AH=87h` now
+  contains most of the machinery it would need.
 
 ### Housekeeping
 
@@ -653,10 +740,13 @@ DOS prompt.
 | `16h_kbd.asm` | INT 16h, the IRQ4 receive ISR, and the ASCII→scan-code table. |
 | `17h_prn.asm` | INT 17h. |
 
+Phase 4 added no files. `15h_misc.asm`, `stub.asm`, `start.asm`, `monitor.asm`,
+`debugmon.c` and `debugmon.h` were extended.
+
 ### Monitor commands
 
 `DUMP` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST` `MKBOOT`
-`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `EXIT`
+`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `INT15` `EXIT`
 
 Several were written to answer one question and kept because they answered it — `IRQFIND`
 found the SIO0 interrupt line, `SECRAW` proved a card was short a byte per sector,

@@ -75,7 +75,9 @@ global	clear_irq7	;
 global	int_1Bh		; (ctrl-Break)
 global	int_1Ch		; (timer tick)
 global	int_1Dh		; (video parameter table)
-global	int_1Eh		; (floppy disk params)
+global	int_1Eh		; (floppy disk params -- now unused, see
+			;  disk_base_table below)
+global	disk_base_table	; (floppy disk params, where INT 1Eh points)
 global	int_1Fh		; (font 80h..0FFh)
 ;
 ;  MSDOS reserved	20h .. 3Fh
@@ -182,6 +184,35 @@ int_40h:	; floppy disk handler
 	mov	ah,INVALID_COMMAND
 	stc
 	retf	2
+
+
+;
+; INT 1Eh -- the diskette parameter table
+;
+; There is no floppy controller on this board, but the vector still has to
+; point at a well-formed table.  DOS reads it during startup, and some of
+; its drivers copy it into RAM and patch it rather than calling the BIOS at
+; all, so the IRET this vector used to carry left them reading the first
+; eleven bytes of a code stream and believing it.
+;
+; The values are the standard 1.44Mb set -- what a PC/AT-class BIOS reports
+; and what any reader will accept.  Nothing here is ever acted on, since
+; INT 13h sends every floppy call to int_40h above, which returns
+; "invalid command".
+;
+	align	2
+disk_base_table:
+	db	0xDF		; step rate 0Dh, head unload time Fh
+	db	0x02		; head load time 1, DMA used
+	db	0x25		; ticks to wait before the motor is stopped
+	db	0x02		; bytes per sector, 2 = 512
+	db	18		; sectors per track
+	db	0x1B		; gap length between sectors
+	db	0xFF		; data length
+	db	0x54		; gap length when formatting
+	db	0xF6		; fill byte for formatting
+	db	0x0F		; head settle time, milliseconds
+	db	0x08		; motor start time, eighths of a second
 
 
 param_hd0:

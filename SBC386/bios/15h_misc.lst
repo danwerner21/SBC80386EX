@@ -869,16 +869,16 @@
    110                                  ; decode the 0x8? series
    111                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    112 00000012 80EC80                  .2:	sub	ah,0x80		;
-   113 00000015 7449                    	jz	device_open	; function 0x80
+   113 00000015 744F                    	jz	device_open	; function 0x80
    114 00000017 80FC0A                  	cmp	ah,0x0A
-   115 0000001A 7322                    	jae	.3
+   115 0000001A 7326                    	jae	.3
    116                                  ; 0x87 series
    117 0000001C FECC                    	dec	ah
-   118 0000001E 7440                    	jz	device_close	; function 0x81
+   118 0000001E 7446                    	jz	device_close	; function 0x81
    119 00000020 FECC                    	dec	ah
-   120 00000022 743C                    	jz	process_term	; function 0x82
+   120 00000022 7442                    	jz	process_term	; function 0x82
    121 00000024 FECC                    	dec	ah
-   122 00000026 7438                    	jz	event_wait	; function 0x83
+   122 00000026 743E                    	jz	event_wait	; function 0x83
    123 00000028 FECC                    	dec	ah
    124 0000002A 74E0                    	jz	read_joystick	; function 0x84
    125                                  read_joystick	equ	.86
@@ -886,37 +886,37 @@
    127 0000002E 74DC                    	jz	sys_req_key	; function 0x85
    128                                  sys_req_key	equ	.86
    129 00000030 FECC                    	dec	ah
-   130 00000032 742E                    	jz	delay		; function 0x86
+   130 00000032 7434                    	jz	delay		; function 0x86
    131 00000034 FECC                    	dec	ah
-   132 00000036 7428                    	jz	mov_ext_mem	; function 0x87
-   133 00000038 FECC                    	dec	ah
-   134 0000003A 7424                    	jz	get_ext_mem_siz	; function 0x88
-   135 0000003C EB22                    	jmp	enter_protected	; function 0x89
+   132 00000036 0F84E600                	jz	mov_ext_mem	; function 0x87
+   133 0000003A FECC                    	dec	ah
+   134 0000003C 0F84AC01                	jz	get_ext_mem_siz	; function 0x88
+   135 00000040 EB24                    	jmp	enter_protected	; function 0x89
    136                                  
    137                                  
    138                                  
-   139 0000003E 80FC10                  .3:	cmp	ah,0x10		;
-   140 00000041 741D                    	jz	device_wait	; function 0x90
-   141 00000043 80FC11                  	cmp	ah,0x11
-   142 00000046 7418                    	jz	device_post
+   139 00000042 80FC10                  .3:	cmp	ah,0x10		;
+   140 00000045 741F                    	jz	device_wait	; function 0x90
+   141 00000047 80FC11                  	cmp	ah,0x11
+   142 0000004A 741A                    	jz	device_post
    143                                  
    144                                  ; check the 0xC0++ series
    145                                  
-   146 00000048 80EC40                  	sub	ah,0x40		; 0xC0 subtracted now
-   147 0000004B 7413                    	jz	get_sys_env
-   148 0000004D 80FC05                  	cmp	ah,5		; all calls below 5
-   149 00000050 73BA                    	jae	.86		; function not supported
+   146 0000004C 80EC40                  	sub	ah,0x40		; 0xC0 subtracted now
+   147 0000004F 0F84AF01                	jz	get_sys_env
+   148 00000053 80FC05                  	cmp	ah,5		; all calls below 5
+   149 00000056 73B4                    	jae	.86		; function not supported
    150                                  
    151                                  ; the 0xC0 series
-   152 00000052 FECC                    	dec	ah
-   153 00000054 740A                    	jz	get_EBDA	; function 0xC1
-   154 00000056 FECC                    	dec	ah
-   155 00000058 74B2                    	jz	point_dev
+   152 00000058 FECC                    	dec	ah
+   153 0000005A 740A                    	jz	get_EBDA	; function 0xC1
+   154 0000005C FECC                    	dec	ah
+   155 0000005E 74AC                    	jz	point_dev
    156                                  point_dev	equ	.86	; function 0xC2
-   157 0000005A FECC                    	dec	ah
-   158 0000005C 74AE                    	jz	watchdog	; function 0xC3
+   157 00000060 FECC                    	dec	ah
+   158 00000062 74A8                    	jz	watchdog	; function 0xC3
    159                                  watchdog	equ	.86
-   160 0000005E EBAC                    	jmp	prog_opt	; function 0xC4
+   160 00000064 EBA6                    	jmp	prog_opt	; function 0xC4
    161                                  prog_opt	equ	.86
    162                                  
    163                                  
@@ -927,16 +927,16 @@
    168                                  device_close:		; function 0x81
    169                                  process_term:		; function 0x82
    170                                  event_wait:		; function 0x83
-   171                                  ;delay:			; function 0x86
-   172                                  mov_ext_mem:		; function 0x87
-   173                                  get_ext_mem_siz:	; function 0x88
+   171                                  ;delay:			; function 0x86	-- below
+   172                                  ;mov_ext_mem:		; function 0x87	-- below
+   173                                  ;get_ext_mem_siz:	; function 0x88	-- below
    174                                  enter_protected:	; function 0x89
    175                                  
    176                                  device_wait:		; function 0x90
    177                                  device_post:		; function 0x91
-   178                                  get_sys_env:		; function 0xC0
+   178                                  ;get_sys_env:		; function 0xC0	-- below
    179                                  get_EBDA:		; function 0xC1
-   180 00000060 EBAA                    	jmp	int_15h.86	;for now
+   180 00000066 EBA4                    	jmp	int_15h.86	;for now
    181                                  
    182                                  
    183                                  
@@ -964,68 +964,410 @@
    205                                  ;  interrupts are enabled by the time we get to here
    206                                  ;
    207                                  delay:
-   208 00000062 83F904                  	cmp	cx,4		;about 250,000 usec
-   209 00000065 72A5                    	jb	int_15h.86	;for now
-   210                                  ; the very short delays are not handled at the moment !!!!!!
-   211                                  
-   212                                  ; Low resolution delays below:
-   213                                  ;
-   214                                  ; calculate the tick count (approximate)
-   215                                  
-   216 00000067 1E52515350              	pushm	ax,bx,cx,dx,ds
-   217                                  
-   218                                  ; microsecond count is in CX:DX
-   219                                  ;
-   220                                  ; if clock ticks have been converted to 65536/hr, then
-   221                                  ;  usec * 64 / 1875 / 1875 gives the clock tick count (18.2hz)
-   222                                  
-   223 0000006C 89C8                    	mov	ax,cx		; AX:DX
-   224 0000006E 89D3                    	mov	bx,dx		; AX:BX
-   225 00000070 31D2                    	xor	dx,dx		; 0:AX:BX
-   226 00000072 B90600                  	mov	cx,6		; set for * 64 (by shifting)
-   227 00000075 D1E3                    .1:	shl	bx,1
-   228 00000077 D1D0                    	rcl	ax,1
-   229 00000079 D1D2                    	rcl	dx,1
-   230 0000007B E2F8                    	loop	.1		; DX:AX:BX is 6-byte usec * 64
-   231                                  
-   232 0000007D B95307                  	mov	cx,1875
-   233                                  ; do the first long division
-   234 00000080 F7F1                    	div	cx		; (DX=rem, AX=quo)
-   235 00000082 93                      	xchg	ax,bx
-   236 00000083 F7F1                    	div	cx		; BX:AX is first quotient
-   237                                  
-   238 00000085 31D2                    	xor	dx,dx
-   239 00000087 93                      	xchg	ax,bx		; DX:AX:BX
-   240 00000088 F7F1                    	div	cx
-   241 0000008A 93                      	xchg	ax,bx
-   242 0000008B F7F1                    	div	cx		; BX:AX is final tick count
-   243                                  %if 0
-   244                                  	pushm	ax,bx
-   245                                  	mov	dx,bx
-   246                                  	extern	dout
-   247                                  	call	dout
-   248                                  	popm	ax,bx
-   249                                  %endif
-   250 0000008D 6A401F                  	get_bda	DS
-   251                                  
-   252                                  loc	equ	printer_timeout+3	;PRT4
-   253                                  
-   254                                  do_delay:
-   255                                  ; only very short delays are handled at this time !!!!!!
-   256 00000090 08DF                    	or	bh,bl
-   257 00000092 08E7                    	or	bh,ah
-   258 00000094 7402                    	jz	.1
-   259 00000096 B0FF                    	mov	al,255
-   260                                  .1:
-   261 00000098 A27B00                  	mov	byte [loc],al
-   262                                  
-   263                                  .2:
-   264 0000009B F4                      	hlt			; HALT here doubles the delay unless
-   265                                  				;  HSREADY is set in PWRCON
-   266 0000009C 803E7B0000              	cmp	byte [loc],0
-   267 000000A1 75F8                    	jne	.2
-   268                                  
-   269                                  .9:
-   270 000000A3 585B595A1F              	popm	ax,bx,cx,dx,ds
-   271 000000A8 F8                      	clc
-   272 000000A9 CA0200                  	retf	2
+   208 00000068 83F904                  	cmp	cx,4		;about 250,000 usec
+   209 0000006B 725A                    	jb	short_delay	;below that, the 1mhz counter
+   210                                  
+   211                                  ; Low resolution delays below:
+   212                                  ;
+   213                                  ; calculate the tick count (approximate)
+   214                                  
+   215 0000006D 1E52515350              	pushm	ax,bx,cx,dx,ds
+   216                                  
+   217                                  ; microsecond count is in CX:DX
+   218                                  ;
+   219                                  ; if clock ticks have been converted to 65536/hr, then
+   220                                  ;  usec * 64 / 1875 / 1875 gives the clock tick count (18.2hz)
+   221                                  
+   222 00000072 89C8                    	mov	ax,cx		; AX:DX
+   223 00000074 89D3                    	mov	bx,dx		; AX:BX
+   224 00000076 31D2                    	xor	dx,dx		; 0:AX:BX
+   225 00000078 B90600                  	mov	cx,6		; set for * 64 (by shifting)
+   226 0000007B D1E3                    .1:	shl	bx,1
+   227 0000007D D1D0                    	rcl	ax,1
+   228 0000007F D1D2                    	rcl	dx,1
+   229 00000081 E2F8                    	loop	.1		; DX:AX:BX is 6-byte usec * 64
+   230                                  
+   231 00000083 B95307                  	mov	cx,1875
+   232                                  ; do the first long division
+   233 00000086 F7F1                    	div	cx		; (DX=rem, AX=quo)
+   234 00000088 93                      	xchg	ax,bx
+   235 00000089 F7F1                    	div	cx		; BX:AX is first quotient
+   236                                  
+   237 0000008B 31D2                    	xor	dx,dx
+   238 0000008D 93                      	xchg	ax,bx		; DX:AX:BX
+   239 0000008E F7F1                    	div	cx
+   240 00000090 93                      	xchg	ax,bx
+   241 00000091 F7F1                    	div	cx		; BX:AX is final tick count
+   242                                  %if 0
+   243                                  	pushm	ax,bx
+   244                                  	mov	dx,bx
+   245                                  	extern	dout
+   246                                  	call	dout
+   247                                  	popm	ax,bx
+   248                                  %endif
+   249 00000093 6A401F                  	get_bda	DS
+   250                                  
+   251                                  loc	equ	printer_timeout+3	;PRT4
+   252                                  
+   253                                  do_delay:
+   254                                  ; only very short delays are handled at this time !!!!!!
+   255 00000096 08DF                    	or	bh,bl
+   256 00000098 08E7                    	or	bh,ah
+   257 0000009A 7402                    	jz	.1
+   258 0000009C B0FF                    	mov	al,255
+   259                                  .1:
+   260 0000009E A27B00                  	mov	byte [loc],al
+   261                                  
+   262                                  .2:
+   263 000000A1 F4                      	hlt			; HALT here doubles the delay unless
+   264                                  				;  HSREADY is set in PWRCON
+   265 000000A2 803E7B0000              	cmp	byte [loc],0
+   266 000000A7 75F8                    	jne	.2
+   267                                  
+   268                                  .9:
+   269 000000A9 585B595A1F              	popm	ax,bx,cx,dx,ds
+   270 000000AE F8                      	clc
+   271 000000AF CA0200                  	retf	2
+   272                                  
+   273                                  
+   274                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   275                                  ; The 1mhz counter -- Timer 1
+   276                                  ;
+   277                                  ; CLKPRS is calibrated at POST from the measured CPU clock so that PSCLK
+   278                                  ; comes out at 1.000mhz (start.asm), and counters 1 and 2 are driven from
+   279                                  ; PSCLK.  Counter 1 is programmed MODE0 with a count of 65536, so once its
+   280                                  ; gate is open it is simply a free-running 16-bit DOWN counter ticking once
+   281                                  ; per microsecond and wrapping every 65.536ms.
+   282                                  ;
+   283                                  ; POST opens counter 0's gate only -- start_timer0_ in 1Ah_time.asm writes
+   284                                  ; TIMER_STOP+BIT1 -- so the gate has to be opened here before the counter
+   285                                  ; can be read.  Nothing unmasks a timer interrupt (OCW1M masks everything
+   286                                  ; and only IRQ0 and IRQ4 are ever unmasked), so letting counter 1 run costs
+   287                                  ; nothing and it is left running.
+   288                                  ;
+   289                                  ; The port numbers and the gate bits are spelled out here rather than taken
+   290                                  ; from timer.inc: that file emits a binit record of its own at file scope,
+   291                                  ; so including it would plant three stray bytes in _TEXT.
+   292                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   293                                  T1_LATCH	equ	0x40	; counter 1, counter-latch command
+   294                                  T1_GATES	equ	0x4B	; timer.inc TIMER_RUN: gates for counters 0 and 1
+   295                                  
+   296                                  
+   297                                  ;-----------------------------------------------------------------------------
+   298                                  ; t1_read -- the current value of the 1mhz counter
+   299                                  ;
+   300                                  ;    Exit with:
+   301                                  ;	AX	counter 1, counting down
+   302                                  ;	every other register and the flags preserved
+   303                                  ;
+   304                                  ; The latch command and the two reads that follow it are one indivisible
+   305                                  ; operation: an interrupt that latched again between them would leave the
+   306                                  ; two halves coming from different samples.
+   307                                  ;-----------------------------------------------------------------------------
+   308                                  t1_read:
+   309 000000B2 52                      	push	dx
+   310 000000B3 9C                      	pushf
+   311 000000B4 FA                      	cli
+   312                                  
+   313 000000B5 B040                    	mov	al,T1_LATCH
+   314 000000B7 BA43F0                  	mov	dx,TMRCON
+   315 000000BA EE                      	out	dx,al
+   316 000000BB BA41F0                  	mov	dx,TMR1
+   317 000000BE EC                      	in	al,dx		; count low
+   318 000000BF 88C4                    	mov	ah,al
+   319 000000C1 EC                      	in	al,dx		; count high
+   320 000000C2 86C4                    	xchg	al,ah		; AX = the latched count
+   321                                  
+   322 000000C4 9D                      	popf
+   323 000000C5 5A                      	pop	dx
+   324 000000C6 C3                      	ret
+   325                                  
+   326                                  
+   327                                  ;-----------------------------------------------------------------------------
+   328                                  ; short_delay -- INT 15h function 86h, for waits below 250ms
+   329                                  ;
+   330                                  ;    Enter with:
+   331                                  ;	CX:DX	the delay in microseconds (CX <= 3, so 262143 at most)
+   332                                  ;
+   333                                  ;    Exit with:
+   334                                  ;	Carry	clear
+   335                                  ;	all registers preserved
+   336                                  ;
+   337                                  ; The counter is sampled, not programmed: each pass subtracts however many
+   338                                  ; microseconds have gone by since the previous sample, and the 16-bit
+   339                                  ; subtraction rides through the counter's wrap the same way the 18.2hz
+   340                                  ; deadlines in diskide.asm ride through theirs.  A pass of this loop is a
+   341                                  ; few microseconds, far short of the 65.536ms wrap, so no wrap is missed.
+   342                                  ;
+   343                                  ; Interrupts stay enabled.  A tick or a received character taken during the
+   344                                  ; wait is real elapsed time, and is counted as such.
+   345                                  ;
+   346                                  ; The 18.2hz tick is watched as well, and not for timekeeping: if counter 1
+   347                                  ; never moves -- a gate that did not open, a PSCLK that is not running --
+   348                                  ; the subtraction above would never reach zero and DOS would hang inside
+   349                                  ; INT 15h.  The tick is driven from counter 0 by a different gate bit and a
+   350                                  ; different clock, so it is independent evidence that time is passing.  Six
+   351                                  ; ticks is 439ms, comfortably past the 262ms this path is ever asked for, even
+   352                                  ; allowing a whole tick of slop in the sample taken on the way in.
+   353                                  ;-----------------------------------------------------------------------------
+   354                                  T1_BAILOUT	equ	8		; 18.2hz ticks: ~439ms
+   355                                  
+   356                                  short_delay:
+   357 000000C7 6650                    	push	eax
+   358 000000C9 6653                    	push	ebx
+   359 000000CB 6651                    	push	ecx
+   360 000000CD 6652                    	push	edx
+   361 000000CF 6656                    	push	esi
+   362 000000D1 6657                    	push	edi
+   363 000000D3 06                      	push	es
+   364                                  
+   365 000000D4 660FB7F1                	movzx	esi,cx		; ESI = the requested microseconds
+   366 000000D8 66C1E610                	shl	esi,16
+   367 000000DC 89D6                    	mov	si,dx
+   368                                  
+   369 000000DE B04B                    	mov	al,T1_GATES	; open counter 1's gate.  Counter 0's gate bit
+   370 000000E0 BA34F8                  	mov	dx,TMRCFG	;  is set in the same write, so the 18.2hz tick
+   371 000000E3 EE                      	out	dx,al		;  is not disturbed
+   372                                  
+   373 000000E4 6A4007                  	get_bda	ES
+   374 000000E7 268B0E6C00                  es	mov	cx,[timer_count_low]	; CX = the tick we started on
+   375                                  
+   376 000000EC E8C3FF                  	call	t1_read
+   377 000000EF 89C7                    	mov	di,ax		; DI = the previous sample
+   378                                  .1:
+   379 000000F1 E8BEFF                  	call	t1_read
+   380 000000F4 89FB                    	mov	bx,di
+   381 000000F6 29C3                    	sub	bx,ax		; counting down, so previous - current
+   382 000000F8 89C7                    	mov	di,ax
+   383 000000FA 660FB7DB                	movzx	ebx,bx
+   384 000000FE 6629DE                  	sub	esi,ebx		; microseconds still to wait
+   385 00000101 760C                    	jbe	.9
+   386                                  
+   387 00000103 268B166C00                  es	mov	dx,[timer_count_low]
+   388 00000108 29CA                    	sub	dx,cx			; ticks gone by, riding the wrap
+   389 0000010A 83FA08                  	cmp	dx,T1_BAILOUT
+   390 0000010D 72E2                    	jb	.1			; counter 1 is dead -- stop waiting
+   391                                  .9:
+   392 0000010F 07                      	pop	es
+   393 00000110 665F                    	pop	edi
+   394 00000112 665E                    	pop	esi
+   395 00000114 665A                    	pop	edx
+   396 00000116 6659                    	pop	ecx
+   397 00000118 665B                    	pop	ebx
+   398 0000011A 6658                    	pop	eax
+   399 0000011C F8                      	clc
+   400 0000011D CA0200                  	retf	2
+   401                                  
+   402                                  
+   403                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   404                                  ; INT 15h
+   405                                  ; Function 87h	Move a block of Extended memory
+   406                                  ;
+   407                                  ;    Enter with:
+   408                                  ;	AH	87h originally, now 0x00 due to decode
+   409                                  ;	CX	the number of WORDS to move, 8000h (64Kb) at most
+   410                                  ;	ES:SI	a six-entry Global Descriptor Table:
+   411                                  ;		  00h	null
+   412                                  ;		  08h	the GDT itself	-- filled in here
+   413                                  ;		  10h	source		-- the caller's
+   414                                  ;		  18h	destination	-- the caller's
+   415                                  ;		  20h	BIOS code	-- filled in here
+   416                                  ;		  28h	stack		-- filled in here
+   417                                  ;
+   418                                  ;    Exit with:
+   419                                  ;	AH	00 on success, 02 if the request cannot be honoured
+   420                                  ;	Carry	clear on success, set on failure
+   421                                  ;
+   422                                  ;    Notes:
+   423                                  ;	The caller supplies the table because this BIOS has nowhere to build
+   424                                  ;	one: _DATA and _BSS are empty by design and ROM cannot be written.
+   425                                  ;	The three entries the interface reserves for the BIOS are written
+   426                                  ;	into the caller's table, which is in RAM.
+   427                                  ;
+   428                                  ;	The move runs in 16-bit protected mode.  The caller's source and
+   429                                  ;	destination descriptors are 286-style, with a 16-bit limit, so a
+   430                                  ;	plain REP MOVSW from offset zero reaches every byte either one can
+   431                                  ;	describe and the 32-bit machinery in sizer.asm is not needed.  A
+   432                                  ;	caller that asks for more words than its own descriptors cover will
+   433                                  ;	fault, with no IDT to catch it -- the same exposure the PC/AT BIOS
+   434                                  ;	has always had here.
+   435                                  ;
+   436                                  ;	There is no A20 gate to open on this board.  PORT92_AT bit 1 is set
+   437                                  ;	at POST and nothing masks address line 20 in any case.
+   438                                  ;
+   439                                  ;	Interrupts are off across the switch: there is no protected mode
+   440                                  ;	IDT, so an interrupt taken in protected mode would fault with
+   441                                  ;	nothing to catch it.  A full 64Kb move is short enough that the
+   442                                  ;	18.2hz tick is not lost.
+   443                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   444                                  GDT_SRC		equ	0x10
+   445                                  GDT_DST		equ	0x18
+   446                                  GDT_CODE	equ	0x20
+   447                                  GDT_STACK	equ	0x28
+   448                                  GDT_LEN		equ	6*8		; six descriptors
+   449                                  
+   450                                  mov_ext_mem:
+   451 00000120 81F90080                	cmp	cx,0x8000	; 64Kb is the most one call can move
+   452 00000124 0F87BE00                	ja	.bad
+   453 00000128 09C9                    	or	cx,cx
+   454 0000012A 0F84B200                	jz	.done		; nothing to move
+   455                                  
+   456 0000012E 6650                    	push	eax
+   457 00000130 6653                    	push	ebx
+   458 00000132 6651                    	push	ecx
+   459 00000134 6652                    	push	edx
+   460 00000136 6656                    	push	esi
+   461 00000138 6657                    	push	edi
+   462 0000013A 1E                      	push	ds
+   463 0000013B 06                      	push	es
+   464 0000013C 9C                      	pushf
+   465 0000013D FA                      	cli
+   466                                  
+   467                                  ; the linear address of the caller's table
+   468 0000013E 8CC0                    	mov	ax,es
+   469 00000140 660FB7C0                	movzx	eax,ax
+   470 00000144 66C1E004                	shl	eax,4
+   471 00000148 660FB7DE                	movzx	ebx,si
+   472 0000014C 6601D8                  	add	eax,ebx		; EAX = the GDT's linear base
+   473                                  
+   474                                  ; Descriptor 08h is the table itself.  In 16-bit operand size LGDT takes a
+   475                                  ; 16-bit limit and a 24-bit base -- exactly the first six bytes of a
+   476                                  ; 286-style descriptor -- so the entry serves as the LGDT operand where it
+   477                                  ; sits.  Storing the base as a dword also puts zero in the access byte,
+   478                                  ; which leaves a null descriptor behind rather than a bogus one.
+   479 0000014F 26C744082F00            	mov	word [es:si+8],GDT_LEN-1
+   480 00000155 266689440A              	mov	[es:si+10],eax
+   481                                  
+   482                                  ; Descriptor 20h is this code: base F0000, limit 64K, 16-bit exec/read.
+   483 0000015A 26C74420FFFF            	mov	word [es:si+GDT_CODE],0xFFFF	; limit 15:0
+   484 00000160 26C744220000            	mov	word [es:si+GDT_CODE+2],0	; base 15:0
+   485 00000166 26C644240F              	mov	byte [es:si+GDT_CODE+4],0x0F	; base 23:16
+   486 0000016B 26C644259B              	mov	byte [es:si+GDT_CODE+5],0x9B	; present, ring 0, exec/read
+   487 00000170 26C744260000            	mov	word [es:si+GDT_CODE+6],0	; limit 19:16, byte granular,
+   488                                  						;  16-bit, base 31:24
+   489                                  
+   490                                  ; Descriptor 28h covers the caller's stack with a 64K limit.  It is never
+   491                                  ; loaded into SS -- nothing touches the stack between the two writes to
+   492                                  ; CR0 -- but DS and ES are given it on the way out, so that no segment
+   493                                  ; leaves protected mode with a cached limit larger than real mode allows.
+   494 00000176 8CD0                    	mov	ax,ss
+   495 00000178 660FB7C0                	movzx	eax,ax
+   496 0000017C 66C1E004                	shl	eax,4
+   497 00000180 26C74428FFFF            	mov	word [es:si+GDT_STACK],0xFFFF
+   498 00000186 266689442A              	mov	[es:si+GDT_STACK+2],eax
+   499 0000018B 26C6442D93              	mov	byte [es:si+GDT_STACK+5],0x93	; present, ring 0, read/write
+   500 00000190 26C7442E0000            	mov	word [es:si+GDT_STACK+6],0
+   501                                  
+   502 00000196 260F015408              	lgdt	[es:si+8]
+   503                                  
+   504 0000019B 0F20C3                  	mov	ebx,cr0		; CR0 is held in EBX because the prefetch
+   505 0000019E 80CB01                  	or	bl,1		;  flush below eats EAX
+   506 000001A1 66F7E0                  	mul	eax		; time waster for the prefetch queue
+   507 000001A4 0F22C3                  	mov	cr0,ebx		; enter protected mode
+   508 000001A7 EA[AC01]2000            	jmp	GDT_CODE:.pm
+   509                                  
+   510                                  .pm:
+   511 000001AC B81000                  	mov	ax,GDT_SRC	; the caller's source
+   512 000001AF 8ED8                    	mov	ds,ax
+   513 000001B1 B81800                  	mov	ax,GDT_DST	; the caller's destination
+   514 000001B4 8EC0                    	mov	es,ax
+   515 000001B6 31F6                    	xor	si,si
+   516 000001B8 31FF                    	xor	di,di
+   517 000001BA FC                      	cld
+   518 000001BB F3A5                    	rep	movsw		; CX words, DS:SI -> ES:DI
+   519                                  
+   520 000001BD B82800                  	mov	ax,GDT_STACK	; 64K limits before leaving
+   521 000001C0 8ED8                    	mov	ds,ax
+   522 000001C2 8EC0                    	mov	es,ax
+   523                                  
+   524 000001C4 0F20C0                  	mov	eax,cr0
+   525 000001C7 24FE                    	and	al,0xFE		; clear PE
+   526 000001C9 0F22C0                  	mov	cr0,eax
+   527 000001CC EA[D101]00F0            	jmp	0xF000:.rm
+   528                                  .rm:
+   529 000001D1 9D                      	popf
+   530 000001D2 07                      	pop	es
+   531 000001D3 1F                      	pop	ds
+   532 000001D4 665F                    	pop	edi
+   533 000001D6 665E                    	pop	esi
+   534 000001D8 665A                    	pop	edx
+   535 000001DA 6659                    	pop	ecx
+   536 000001DC 665B                    	pop	ebx
+   537 000001DE 6658                    	pop	eax
+   538                                  .done:
+   539 000001E0 30E4                    	xor	ah,ah		; no error
+   540 000001E2 F8                      	clc
+   541 000001E3 CA0200                  	retf	2
+   542                                  
+   543                                  .bad:
+   544 000001E6 B402                    	mov	ah,2		; "exception error" -- the nearest thing this
+   545 000001E8 F9                      	stc			;  interface has to say about a bad request
+   546 000001E9 CA0200                  	retf	2
+   547                                  
+   548                                  
+   549                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   550                                  ; INT 15h
+   551                                  ; Function 88h	Get the Extended memory size
+   552                                  ;
+   553                                  ;    Exit with:
+   554                                  ;	AX	kilobytes of memory above the first megabyte
+   555                                  ;	Carry	clear
+   556                                  ;
+   557                                  ;    Notes:
+   558                                  ;	start.asm sizes memory with ext_mem_size, subtracts the first
+   559                                  ;	megabyte and stores the remainder in kilobytes, which is exactly
+   560                                  ;	what this call reports.  HIMEM.SYS will not load without it.
+   561                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   562                                  get_ext_mem_siz:
+   563 000001EC 1E                      	push	ds
+   564 000001ED 6A401F                  	get_bda	DS
+   565 000001F0 A1DB00                  	mov	ax,[extended_memory]
+   566 000001F3 1F                      	pop	ds
+   567 000001F4 F8                      	clc
+   568 000001F5 CA0200                  	retf	2
+   569                                  
+   570                                  
+   571                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   572                                  ; INT 15h
+   573                                  ; Function C0h	Get the system configuration table
+   574                                  ;
+   575                                  ;    Exit with:
+   576                                  ;	ES:BX	-> the table below
+   577                                  ;	AH	00
+   578                                  ;	Carry	clear
+   579                                  ;
+   580                                  ;    Notes:
+   581                                  ;	Model FCh is the PC/AT, which is what this BIOS presents: a
+   582                                  ;	cascaded pair of interrupt controllers, a real-time clock, and
+   583                                  ;	INT 13h with the AT fixed-disk geometry calls.  The submodel and
+   584                                  ;	the revision are this board's own.
+   585                                  ;
+   586                                  ;	Feature byte 1 is the only one of the five with anything to say:
+   587                                  ;	  bit 6	 a second interrupt controller is present -- the 386EX ICU
+   588                                  ;		 is a cascaded pair, master at 20h and slave at A0h
+   589                                  ;	  bit 5	 a real-time clock is present -- the DS1302, reached
+   590                                  ;		 through INT 1Ah functions 02h..05h
+   591                                  ;	Bit 4 stays clear: the keyboard path in 16h_kbd.asm does not call
+   592                                  ;	INT 15h function 4Fh.  Bit 2 stays clear: no EBDA is allocated and
+   593                                  ;	function C1h still reports unsupported.
+   594                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   595                                  	align	2
+   596                                  sys_config:
+   597 000001F8 0800                    	dw	sys_config_end - sys_config - 2	; count of the bytes following
+   598 000001FA FC                      	db	0xFC		; model:    PC/AT
+   599 000001FB 01                      	db	0x01		; submodel: SBC-386EX 2.0
+   600 000001FC 00                      	db	0x00		; BIOS revision
+   601 000001FD 60                      	db	BIT6+BIT5	; feature byte 1
+   602 000001FE 00                      	db	0		; feature byte 2
+   603 000001FF 00                      	db	0		; feature byte 3
+   604 00000200 00                      	db	0		; feature byte 4
+   605 00000201 00                      	db	0		; feature byte 5
+   606                                  sys_config_end:
+   607                                  
+   608                                  get_sys_env:
+   609 00000202 0E                      	push	cs		; the table sits in ROM alongside this code
+   610 00000203 07                      	pop	es
+   611 00000204 BB[F801]                	mov	bx,sys_config
+   612 00000207 30E4                    	xor	ah,ah
+   613 00000209 F8                      	clc
+   614 0000020A CA0200                  	retf	2

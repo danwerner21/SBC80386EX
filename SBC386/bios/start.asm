@@ -93,7 +93,7 @@ extern	int_1Ah		; (CMOS clock)
 extern	int_1Bh		; (ctrl-Break)
 extern	int_1Ch		; (timer tick)
 extern	int_1Dh		; (video parameter table)
-extern	int_1Eh		; (floppy disk params)
+extern	disk_base_table	; (floppy disk params, INT 1Eh)
 extern	int_1Fh		; (font 80h..0FFh)
 
 extern	int_msdos	; returns error code
@@ -170,7 +170,7 @@ page0vectors:	; these are condensed
 	dw	int_1Bh		; (ctrl-Break)
 	dw	int_1Ch		; (timer tick)
 	dw	int_1Dh		; (video parameter table)
-	dw	int_1Eh		; (floppy disk params)
+	dw	disk_base_table	; (floppy disk params)
 	dw	int_1Fh		; (font 80h..0FFh)
 ;
 ;  MSDOS reserved	20h .. 3Fh

@@ -1,0 +1,373 @@
+EESchema Schematic File Version 2
+LIBS:KISS68030-cache
+LIBS:00N8VEM
+LIBS:01RetroBrew
+LIBS:power
+LIBS:device
+LIBS:transistors
+LIBS:conn
+LIBS:linear
+LIBS:regul
+LIBS:74xx
+LIBS:cmos4000
+LIBS:adc-dac
+LIBS:memory
+LIBS:xilinx
+LIBS:microcontrollers
+LIBS:dsp
+LIBS:microchip
+LIBS:analog_switches
+LIBS:motorola
+LIBS:texas
+LIBS:intel
+LIBS:audio
+LIBS:interface
+LIBS:digital-audio
+LIBS:philips
+LIBS:display
+LIBS:cypress
+LIBS:siliconi
+LIBS:opto
+LIBS:atmel
+LIBS:contrib
+LIBS:valves
+LIBS:SBC-188
+LIBS:SBC-386EX-2-cache
+EELAYER 25 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 10 11
+Title "SBC-386EX-2"
+Date "2018-01-19"
+Rev "002"
+Comp "RetroBrew Computer Group"
+Comment1 "Licensed for hobbyist use only."
+Comment2 "Copyright (C) 2017 John R Coffman.  All rights  reserved."
+Comment3 ""
+Comment4 ""
+$EndDescr
+Text Notes 1900 5550 0    60   ~ 0
+VOLTAGE DIVIDER:\n\n2700/4700   or   3000/5600\n5% TOLERANCE (GOLD BAND)
+Text Label 7200 2150 2    60   ~ 0
+SD-CLK
+Text Label 7200 1750 2    60   ~ 0
+SD-DI
+Text GLabel 3100 3800 0    60   Input ~ 0
+SD-CXS
+$Comp
+L R R6
+U 1 1 52695252
+P 3300 4150
+F 0 "R6" V 3380 4150 50  0000 C CNN
+F 1 "2700" V 3300 4150 50  0000 C CNN
+F 2 "discret:R3" H 3300 4150 60  0001 C CNN
+F 3 "" H 3300 4150 60  0001 C CNN
+	1    3300 4150
+	1    0    0    -1  
+$EndComp
+$Comp
+L R R8
+U 1 1 52695251
+P 3300 4650
+F 0 "R8" V 3380 4650 50  0000 C CNN
+F 1 "4700" V 3300 4650 50  0000 C CNN
+F 2 "discret:R3" H 3300 4650 60  0001 C CNN
+F 3 "" H 3300 4650 60  0001 C CNN
+	1    3300 4650
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR030
+U 1 1 52695250
+P 3300 4900
+F 0 "#PWR030" H 3300 4900 30  0001 C CNN
+F 1 "GND" H 3300 4830 30  0001 C CNN
+F 2 "" H 3300 4900 60  0001 C CNN
+F 3 "" H 3300 4900 60  0001 C CNN
+	1    3300 4900
+	1    0    0    -1  
+$EndComp
+Text Label 2850 4400 0    60   ~ 0
+SD-CLK
+Text Label 2100 4400 0    60   ~ 0
+SD-DI
+$Comp
+L GND #PWR031
+U 1 1 526951E5
+P 2550 4900
+F 0 "#PWR031" H 2550 4900 30  0001 C CNN
+F 1 "GND" H 2550 4830 30  0001 C CNN
+F 2 "" H 2550 4900 60  0001 C CNN
+F 3 "" H 2550 4900 60  0001 C CNN
+	1    2550 4900
+	1    0    0    -1  
+$EndComp
+$Comp
+L R R7
+U 1 1 526951D7
+P 2550 4650
+F 0 "R7" V 2630 4650 50  0000 C CNN
+F 1 "4700" V 2550 4650 50  0000 C CNN
+F 2 "discret:R3" H 2550 4650 60  0001 C CNN
+F 3 "" H 2550 4650 60  0001 C CNN
+	1    2550 4650
+	1    0    0    -1  
+$EndComp
+$Comp
+L R R5
+U 1 1 526951CF
+P 2550 4150
+F 0 "R5" V 2630 4150 50  0000 C CNN
+F 1 "2700" V 2550 4150 50  0000 C CNN
+F 2 "discret:R3" H 2550 4150 60  0001 C CNN
+F 3 "" H 2550 4150 60  0001 C CNN
+	1    2550 4150
+	1    0    0    -1  
+$EndComp
+Text GLabel 2350 3800 0    60   Input ~ 0
+SD-TXS
+Text GLabel 6050 1950 0    60   Output ~ 0
+SD-RXS
+$Comp
+L GND #PWR032
+U 1 1 52641F6E
+P 8350 3100
+F 0 "#PWR032" H 8350 3100 30  0001 C CNN
+F 1 "GND" H 8350 3030 30  0001 C CNN
+F 2 "" H 8350 3100 60  0001 C CNN
+F 3 "" H 8350 3100 60  0001 C CNN
+	1    8350 3100
+	1    0    0    -1  
+$EndComp
+$Comp
+L DIODE D7
+U 1 1 52641EFD
+P 2600 1600
+F 0 "D7" H 2600 1700 40  0000 C CNN
+F 1 "1N4148" H 2600 1500 40  0000 C CNN
+F 2 "discret:D3" H 2600 1600 60  0001 C CNN
+F 3 "" H 2600 1600 60  0001 C CNN
+	1    2600 1600
+	-1   0    0    1   
+$EndComp
+Text Notes 2250 2000 0    60   ~ 0
+Jameco part\nno. 1323397
+$Comp
+L C C42
+U 1 1 52641E54
+P 3700 2400
+F 0 "C42" H 3750 2500 50  0000 L CNN
+F 1 "0.1" H 3750 2300 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:C_Disc_D5.0mm_W2.5mm_P5.00mm" H 3700 2400 60  0001 C CNN
+F 3 "" H 3700 2400 60  0001 C CNN
+	1    3700 2400
+	1    0    0    -1  
+$EndComp
+$Comp
+L CP C41
+U 1 1 52641E1F
+P 3200 2400
+F 0 "C41" H 3250 2500 50  0000 L CNN
+F 1 "4.7uF" H 3250 2300 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:CP_Radial_D5.0mm_P2.00mm" H 3200 2400 60  0001 C CNN
+F 3 "" H 3200 2400 60  0001 C CNN
+	1    3200 2400
+	1    0    0    -1  
+$EndComp
+$Comp
+L GND #PWR033
+U 1 1 52641E03
+P 2500 2800
+F 0 "#PWR033" H 2500 2800 30  0001 C CNN
+F 1 "GND" H 2500 2730 30  0001 C CNN
+F 2 "" H 2500 2800 60  0001 C CNN
+F 3 "" H 2500 2800 60  0001 C CNN
+	1    2500 2800
+	1    0    0    -1  
+$EndComp
+$Comp
+L VCC #PWR034
+U 1 1 52641DB6
+P 1800 1200
+F 0 "#PWR034" H 1800 1300 30  0001 C CNN
+F 1 "VCC" H 1800 1300 30  0000 C CNN
+F 2 "" H 1800 1200 60  0001 C CNN
+F 3 "" H 1800 1200 60  0001 C CNN
+	1    1800 1200
+	1    0    0    -1  
+$EndComp
+$Comp
+L LP2950-3.3_TO92 U5
+U 1 1 5A5BCD29
+P 2500 2200
+F 0 "U5" H 2350 2325 50  0000 C CNN
+F 1 "LP2950-3.3_TO92" H 2500 2325 50  0000 L CNN
+F 2 "TO_SOT_Packages_THT:TO-92_Inline_Narrow_Oval" H 2500 2425 50  0001 C CIN
+F 3 "" H 2500 2150 50  0001 C CNN
+	1    2500 2200
+	1    0    0    -1  
+$EndComp
+Connection ~ 6700 1950
+Wire Wire Line
+	6700 1950 6700 3700
+Wire Wire Line
+	6950 2150 7200 2150
+Wire Wire Line
+	2800 4400 3300 4400
+Wire Wire Line
+	3100 3800 3300 3800
+Wire Wire Line
+	3300 3800 3300 4000
+Wire Wire Line
+	2550 4000 2550 3800
+Wire Wire Line
+	2550 3800 2350 3800
+Wire Wire Line
+	6050 1550 7200 1550
+Connection ~ 3700 2200
+Wire Wire Line
+	2800 2200 4500 2200
+Wire Wire Line
+	7950 3500 7950 2800
+Connection ~ 6600 950 
+Wire Wire Line
+	8350 3100 8350 2800
+Connection ~ 3200 1600
+Wire Wire Line
+	3200 950  3200 2250
+Wire Wire Line
+	3200 950  8050 950 
+Connection ~ 1800 1600
+Wire Wire Line
+	2400 1600 1800 1600
+Wire Wire Line
+	1800 2200 2200 2200
+Wire Wire Line
+	1800 1200 1800 2250
+Wire Wire Line
+	8900 1400 9650 1400
+Wire Wire Line
+	2500 2500 2500 2800
+Connection ~ 3200 2200
+Wire Wire Line
+	1800 2600 3700 2600
+Connection ~ 2500 2600
+Connection ~ 3200 2600
+Wire Wire Line
+	2800 1600 3200 1600
+Wire Wire Line
+	7850 3800 7850 2800
+Wire Wire Line
+	2050 4400 2550 4400
+Wire Wire Line
+	6950 1750 7200 1750
+Wire Wire Line
+	6050 1950 7200 1950
+Wire Wire Line
+	3200 2550 3200 2600
+Wire Wire Line
+	3700 2600 3700 2550
+Wire Wire Line
+	3700 2250 3700 2200
+Wire Wire Line
+	2550 4300 2550 4500
+Connection ~ 2550 4400
+Wire Wire Line
+	2550 4800 2550 4900
+Wire Wire Line
+	3300 4800 3300 4900
+Wire Wire Line
+	3300 4300 3300 4500
+Connection ~ 3300 4400
+Text GLabel 9650 1400 2    60   Output ~ 0
+~SD-CD
+Text Label 4150 2200 2    60   ~ 0
+VDD
+Text GLabel 6050 1550 0    60   Input ~ 0
+~SD-CS
+$Comp
+L RR4 RR5
+U 1 1 5A5E4DD8
+P 6250 3600
+F 0 "RR5" H 6300 3900 70  0000 C CNN
+F 1 "10K" V 6280 3600 70  0000 C CNN
+F 2 "01N8VEM:r_pack4" H 6250 3600 60  0001 C CNN
+F 3 "" H 6250 3600 60  0000 C CNN
+	1    6250 3600
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	6600 3400 6600 950 
+Wire Wire Line
+	6700 3700 6600 3700
+Wire Wire Line
+	7850 3800 6600 3800
+Wire Wire Line
+	6800 1550 6800 3600
+Wire Wire Line
+	6800 3600 6600 3600
+Connection ~ 6800 1550
+Wire Wire Line
+	6600 3500 7950 3500
+Text Notes 5450 1450 0    70   ~ 0
+open collector
+$Comp
+L CP C43
+U 1 1 5A5EE5EC
+P 1800 2400
+F 0 "C43" H 1850 2500 50  0000 L CNN
+F 1 "10uF" H 1850 2300 50  0000 L CNN
+F 2 "Capacitors_ThroughHole:CP_Radial_D5.0mm_P2.00mm" H 1800 2400 60  0001 C CNN
+F 3 "" H 1800 2400 60  0001 C CNN
+	1    1800 2400
+	1    0    0    -1  
+$EndComp
+Connection ~ 1800 2200
+Wire Wire Line
+	1800 2550 1800 2600
+$Comp
+L microSD-01 P2
+U 1 1 5A5EDE91
+P 8050 1900
+F 0 "P2" H 8050 2000 60  0000 C CNN
+F 1 "microSD-01" H 8050 1900 60  0000 C CNN
+F 2 "Kicad:microSD-Molex-47309" H 8050 1900 60  0001 C CNN
+F 3 "" H 8050 1900 60  0000 C CNN
+	1    8050 1900
+	1    0    0    -1  
+$EndComp
+$Comp
+L LED D8
+U 1 1 5A5F3839
+P 4500 2500
+F 0 "D8" H 4500 2600 50  0000 C CNN
+F 1 "LED" H 4500 2400 50  0000 C CNN
+F 2 "LEDs:LED_D3.0mm" H 4500 2500 60  0001 C CNN
+F 3 "" H 4500 2500 60  0001 C CNN
+	1    4500 2500
+	0    1    1    0   
+$EndComp
+$Comp
+L R R4
+U 1 1 5A5F39E2
+P 4500 2950
+F 0 "R4" V 4580 2950 50  0000 C CNN
+F 1 "270" V 4500 2950 50  0000 C CNN
+F 2 "discret:R3" H 4500 2950 60  0001 C CNN
+F 3 "" H 4500 2950 60  0001 C CNN
+	1    4500 2950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4500 2200 4500 2300
+Wire Wire Line
+	4500 2700 4500 2800
+Wire Wire Line
+	4500 3100 4500 3200
+Wire Wire Line
+	4500 3200 6800 3200
+Connection ~ 6800 3200
+Text Notes 4750 2550 0    60   ~ 0
+Activity LED
+$EndSCHEMATC

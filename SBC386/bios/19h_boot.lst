@@ -657,222 +657,407 @@
    225                              <1> %endm
    226                              <1> 
    227                              <1> ;/* End of macro.inc */
-    32                                  ; ASCII_CR and ASCII_LF come from i386EX.inc -- "ascii.h" is a C
-    33                                  ; header and NASM cannot read it
-    34                                  
-    35                                  	global	int_18h
-    36                                  	global	int_19h
-    37                                  
-    38                                  segment	_TEXT
-    39                                  
-    40                                  BOOT_SEG	equ	0x0000		; the boot sector is loaded and entered
-    41                                  BOOT_OFF	equ	0x7C00		;  at 0000:7C00, by long convention
-    42                                  BOOT_DRIVE	equ	0x80		; first fixed disk
-    43                                  BOOT_RETRIES	equ	4		; as the PC/AT did
-    44                                  
+    32                                  %include "bda.inc"		; serial_dev, for the console drain in reboot_
+    33                              <1> XXX
+    34                              <1> ; bda.h -- definitions of the BIOS Data Area at 0040:0000 (0x400)  */
+    35                              <1> %define BDA_segment 0x40
+    36                              <1> struc _BDA
+    37                              <1> ; first items at 0x40:0	*/
+    38 00000000 ????????????????    <1> serial_dev	resw	4	; serial port device codes */
+    39 00000008 ????????????????    <1> parallel_dev	resw	4	; printer port device codes */
+    40 00000010 ????                <1> equip_flag	resw	1		; int 12h equipment flags */
+    41 00000012 ??                  <1> mfg_test	resb	1		; initialization flags */
+    42 00000013 ????                <1> memory_size	resw	1	; base memory size in Kilowords (1224) */
+    43 00000015 ??                  <1> mfg_err_flag	resb	1
+    44 00000016 ??                  <1> mfg_err_flag2	resb	1
+    45                              <1> ; */
+    46                              <1> ; first Keyboard data area */
+    47 00000017 ??                  <1> kbd_flag	resb	1	; shift status &c. */
+    48 00000018 ??                  <1> kbd_flag1	resb	1	;  mrre  */
+    49 00000019 ??                  <1> alt_input	resb	1	; save alternate kbd entry code */
+    50 0000001A ????                <1> buffer_head	resw	1
+    51 0000001C ????                <1> buffer_tail	resw	1
+    52                              <1> ; */
+    53 0000001E <res 20h>           <1> kbd_buffer	resw	16	; buffer empty when  head==tail**/
+    54                              <1> ; */
+    55                              <1> ; Diskette data area */
+    56 0000003E ??                  <1> seek_status	resb	1	; drive recalibration status */
+    57                              <1> ; bits 3..0 drive must recalibrate before next seek */
+    58 0000003F ??                  <1> motor_status	resb	1	; bits 3..0 motor running */
+    59                              <1> ; bit 7 current op is write */
+    60 00000040 ??                  <1> motor_count	resb	1	; timeout counter for motor turn-off */
+    61 00000041 ??                  <1> fd_status	resb	1	; return code status byte */
+    62 00000042 ??????????????      <1> fd_ctrl_stat	resb	7	; controller return bytes */
+    63                              <1> ; */
+    64                              <1> ; Video Display data area -- also used for video emulation */
+    65 00000049 ??                  <1> vid_mode	resb	1	; current display mode */
+    66 0000004A ????                <1> vid_columns	resw	1	; no. of columns on the screen */
+    67 0000004C ????                <1> vid_buf_len	resw	1	; length of video buffer in bytes*//
+    68 0000004E ????                <1> vid_start	resw	1	; start address of screen regeneration (in vid buf)*//
+    69 00000050 <res 10h>           <1> vid_cursor	resw	8	; cursor postition on up to 8 screens */
+    70 00000060 ????                <1> vid_cursor_mode	resw	1
+    71 00000062 ??                  <1> vid_active_page	resb	1
+    72 00000063 ????                <1> vid_addr_chip	resw	1	; I/O address for the video chip (6845,EGA,VGA)*//
+    73 00000065 ??                  <1> vid_crt_mode	resb	1	; current setting of the 3x8 register ???? */
+    74 00000066 ??                  <1> vid_palette	resb	1	; current color setting / palette **/
+    75                              <1> ; */
+    76                              <1> ; POST and ROM data */
+    77 00000067 ????????            <1> io_rom_addr	resd	1	; far word to ROM initialization routine */
+    78                              <1> %define io_rom_addr_low io_rom_addr
+    79                              <1> %define io_rom_addr_seg (io_rom_addr+2)
+    80 0000006B ??                  <1> interrupt_flag	resb	1	; indicates an interrupt occurred */
+    81                              <1> ; */
+    82                              <1> ; Timer data area  18.206602 hz  = ~54.925 ms  */
+    83 0000006C ????                <1> timer_count_low	resw	1	; low word of timer count */
+    84 0000006E ????                <1> timer_count_high	resw	1
+    85                              <1> %define timer_count timer_count_low
+    86                              <1> ; use timer_count as the double word timer counter */
+    87 00000070 ??                  <1> timer_overflow	resb	1	; timer has rolled over since last read */
+    88                              <1> ; */
+    89                              <1> ; System & Keboard data area */
+    90 00000071 ??                  <1> kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
+    91 00000072 ????                <1> reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
+    92                              <1> ; */
+    93                              <1> ; Fixed (Hard) disk data area */
+    94 00000074 ??                  <1> hd_status	resb	1	; status info for hard disk */
+    95                              <1> %define disk_status1 hd_status
+    96 00000075 ??                  <1> hd_number	resb	1	; number of hard disks (for int 13h, fn 8h) */
+    97 00000076 ??                  <1> control_byte	resb	1	; head control ???? */
+    98 00000077 ??                  <1> port_offset	resb	1	; obsolete, maybe ???? */
+    99                              <1> ; */
+   100                              <1> ; Timeout counters */
+   101 00000078 ????????            <1> printer_timeout	resb	4	; four bytes for each interaace */
+   102 0000007C ????????            <1> serial_timeout	resb	4	; four bytes for each interacce */
+   103                              <1> ; */
+   104                              <1> ; Keyboard additional data area -- buffer location within segment 40h */
+   105 00000080 ????                <1> buffer_start	resw	1	; offset of keyboard buffer start**/
+   106 00000082 ????                <1> buffer_end	resw	1		; offset of end of kbd buffer */
+   107                              <1> ; */
+   108                              <1> ; EGA/PGA? data work area (graphic mode?  probably available) */
+   109 00000084 ??                  <1> ega_rows	resb	1		; rows on the active screen (less 1)**/
+   110 00000085 ????                <1> ega_points	resw	1		; bytes per charateer	*/
+   111 00000087 ??                  <1> ega_info	resb	1		; mode options ????*//
+   112 00000088 ??                  <1> ega_info_3	resb	1		; switch settings*//
+   113 00000089 ????                <1> ega_rsvd	resb	2	; reserved for adapter mfgrs */
+   114                              <1> ; */
+   115                              <1> ; Disk / Diskette media data */
+   116 0000008B ??                  <1> fd_last_data_rate	resb	1	; last data rate selected */
+   117 0000008C ??                  <1> hd_status_reg	resb	1		; hard disk status register */
+   118 0000008D ??                  <1> hd_error_reg	resb	1		; hard disk error register */
+   119 0000008E ??                  <1> hd_int_flag	resb	1	; HD interrupt flag */
+   120 0000008F ??                  <1> hd_cntrl	resb	1		; HD/FD combo controller bit flag */
+   121 00000090 ????                <1> hd_media	resb	2	; media state */
+   122 00000092 ????                <1> hd_op_start	resb	2	; operation start state */
+   123 00000094 ????                <1> hd_track	resw	1		; HD present cylinder number */
+   124                              <1> ; */
+   125                              <1> ; Additional Keyboard flags */
+   126 00000096 ??                  <1> kbd_flag3	resb	1	; mode state & type flags */
+   127 00000097 ??                  <1> kbd_flag2	resb	1	; kbd LED flags */
+   128                              <1> ; */
+   129                              <1> ; Real Time Clock data area */
+   130 00000098 ????????            <1> rtc_user_flag_addr	resd	1	; far address of user's wait flag */
+   131 0000009C ????????            <1> rtc_user_wait_flag	resd	1	; user wait flag */
+   132 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
+   133                              <1> ; */
+   134                              <1> ; Miscellaneous */
+   135 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
+   136 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   137                              <1> ; */
+   138                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   139 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   140 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   141 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   142 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   143                              <1> ; this size is stored in CMOS on the PC/AT */
+   144 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   145 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   146                              <1> ; */
+   147                              <1> ; start of 31 bytes of NVRAM informaiion */
+   148 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   149                              <1> ; starts with 2 bytes of SIO0 params */
+   150 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   151 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   152 000000ED <res 11h>           <1> nvram_unused	resb	17
+   153 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   154                              <1> ; end of 31 bytes of NVRAM information */
+   155                              <1> ; */
+   156 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   157                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   158 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   159                              <1> ; */
+   160                              <1> ; Extentsion to BDA during BIOS startup */
+   161                              <1> ; */
+   162                              <1> endstruc
+   162          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+    33                                  ; ASCII_CR and ASCII_LF come from i386EX.inc -- "ascii.h" is a C
+    34                                  ; header and NASM cannot read it
+    35                                  
+    36                                  	global	int_18h
+    37                                  	global	int_19h
+    38                                  
+    39                                  segment	_TEXT
+    40                                  
+    41                                  BOOT_SEG	equ	0x0000		; the boot sector is loaded and entered
+    42                                  BOOT_OFF	equ	0x7C00		;  at 0000:7C00, by long convention
+    43                                  BOOT_DRIVE	equ	0x80		; first fixed disk
+    44                                  BOOT_RETRIES	equ	4		; as the PC/AT did
     45                                  
-    46                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    47                                  ; INT 19h -- Bootstrap Loader
-    48                                  ;
-    49                                  ; Read cylinder 0, head 0, sector 1 of drive 80h into 0000:7C00, check
-    50                                  ; that it ends in AA55h, and enter it.
-    51                                  ;
-    52                                  ; This call does not return.  It replaces the stack it was entered on,
-    53                                  ; because the boot sector is entitled to assume nothing about whatever
-    54                                  ; POST was using -- and on this board POST's stack lives up in the SRAM
-    55                                  ; at A800:xxxx, which is no use to anything that follows.
-    56                                  ;
-    57                                  ;  Hands control over with:
-    58                                  ;	CS:IP	0000:7C00
-    59                                  ;	DL	80h, the drive it was read from
-    60                                  ;	DS,ES	0000
-    61                                  ;	SS:SP	0000:7C00, growing down away from the sector
-    62                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    63                                  int_19h:
-    64 00000000 FA                      	cli
-    65 00000001 31C0                    	xor	ax,ax
-    66 00000003 8ED0                    	mov	ss,ax			; the stack the boot sector expects:
-    67                                  	cnop
-    68 00000005 BC007C                  	mov	sp,BOOT_OFF		;  0000:7C00, growing downward
-    69 00000008 8ED8                    	mov	ds,ax
-    70                                  	cnop
-    71 0000000A 8EC0                    	mov	es,ax
-    72                                  	cnop
-    73 0000000C FB                      	sti
-    74 0000000D FC                      	cld
-    75                                  
-    76                                  ; Clear the boot location first.  A read that fails part way through, or
-    77                                  ; a drive that returns short, must not be able to leave anything
-    78                                  ; executable sitting there from an earlier attempt.
-    79 0000000E BF007C                  	mov	di,BOOT_OFF
-    80 00000011 B90001                  	mov	cx,256			; 256 words == one sector
-    81 00000014 F3AB                    	rep	stosw			; AX is still zero
-    82                                  
-    83 00000016 B90400                  	mov	cx,BOOT_RETRIES
-    84                                  .retry:
-    85 00000019 51                      	push	cx
-    86                                  
-    87                                  ; Reset first.  On this BIOS that also puts the drives back into 8-bit
-    88                                  ; PIO after the soft reset -- see fn00 in 13h_disk.asm.
-    89 0000001A B400                    	mov	ah,0
-    90 0000001C B280                    	mov	dl,BOOT_DRIVE
-    91 0000001E CD13                    	int	0x13
-    92 00000020 7215                    	jc	.again
-    93                                  
-    94 00000022 B80102                  	mov	ax,0x0201		; read, one sector
-    95 00000025 B90100                  	mov	cx,0x0001		; cylinder 0, sector 1
-    96 00000028 B600                    	mov	dh,0			; head 0
-    97 0000002A B280                    	mov	dl,BOOT_DRIVE
-    98 0000002C 31DB                    	xor	bx,bx
-    99 0000002E 8EC3                    	mov	es,bx			; ES:BX = 0000:7C00
-   100                                  	cnop
-   101 00000030 BB007C                  	mov	bx,BOOT_OFF
-   102 00000033 CD13                    	int	0x13
-   103 00000035 7308                    	jnc	.loaded
-   104                                  
-   105                                  .again:
-   106 00000037 59                      	pop	cx
-   107 00000038 E2DF                    	loop	.retry
-   108 0000003A BE[C300]                	mov	si,msg_noread
-   109 0000003D EB0C                    	jmp	short .give_up
-   110                                  
-   111                                  .loaded:
-   112 0000003F 59                      	pop	cx
-   113                                  
-   114                                  ; The last two bytes of a bootable sector are AA55h.  Without this test
-   115                                  ; a blank or data-only disk would be executed as code.
-   116 00000040 813EFE7D55AA            	cmp	word [BOOT_OFF+510],0xAA55
-   117 00000046 740B                    	je	.enter
-   118                                  
-   119 00000048 BE[EC00]                	mov	si,msg_nosig
-   120                                  
-   121                                  .give_up:
-   122 0000004B E81800                  	call	boot_msg
-   123                                  ; INT 18h is where the PC/AT went when nothing would boot.  Here it
-   124                                  ; prints and drops into the debug monitor, and retries the boot when the
-   125                                  ; monitor is left -- so this call does not normally come back.
-   126 0000004E CD18                    	int	0x18
-   127                                  .hang:
-   128 00000050 F4                      	hlt
-   129 00000051 EBFD                    	jmp	.hang
-   130                                  
-   131                                  .enter:
-   132 00000053 BE[A400]                	mov	si,msg_booting
-   133 00000056 E80D00                  	call	boot_msg
-   134                                  
-   135 00000059 B280                    	mov	dl,BOOT_DRIVE		; the sector is told where it came from
-   136 0000005B 31C0                    	xor	ax,ax
-   137 0000005D 8ED8                    	mov	ds,ax
-   138                                  	cnop
-   139 0000005F 8EC0                    	mov	es,ax
-   140                                  	cnop
-   141 00000061 EA007C0000              	jmp	BOOT_SEG:BOOT_OFF
-   142                                  
+    46                                  
+    47                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    48                                  ; INT 19h -- Bootstrap Loader
+    49                                  ;
+    50                                  ; Read cylinder 0, head 0, sector 1 of drive 80h into 0000:7C00, check
+    51                                  ; that it ends in AA55h, and enter it.
+    52                                  ;
+    53                                  ; This call does not return.  It replaces the stack it was entered on,
+    54                                  ; because the boot sector is entitled to assume nothing about whatever
+    55                                  ; POST was using -- and on this board POST's stack lives up in the SRAM
+    56                                  ; at A800:xxxx, which is no use to anything that follows.
+    57                                  ;
+    58                                  ;  Hands control over with:
+    59                                  ;	CS:IP	0000:7C00
+    60                                  ;	DL	80h, the drive it was read from
+    61                                  ;	DS,ES	0000
+    62                                  ;	SS:SP	0000:7C00, growing down away from the sector
+    63                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    64                                  int_19h:
+    65 00000000 FA                      	cli
+    66 00000001 31C0                    	xor	ax,ax
+    67 00000003 8ED0                    	mov	ss,ax			; the stack the boot sector expects:
+    68                                  	cnop
+    69 00000005 BC007C                  	mov	sp,BOOT_OFF		;  0000:7C00, growing downward
+    70 00000008 8ED8                    	mov	ds,ax
+    71                                  	cnop
+    72 0000000A 8EC0                    	mov	es,ax
+    73                                  	cnop
+    74 0000000C FB                      	sti
+    75 0000000D FC                      	cld
+    76                                  
+    77                                  ; Clear the boot location first.  A read that fails part way through, or
+    78                                  ; a drive that returns short, must not be able to leave anything
+    79                                  ; executable sitting there from an earlier attempt.
+    80 0000000E BF007C                  	mov	di,BOOT_OFF
+    81 00000011 B90001                  	mov	cx,256			; 256 words == one sector
+    82 00000014 F3AB                    	rep	stosw			; AX is still zero
+    83                                  
+    84 00000016 B90400                  	mov	cx,BOOT_RETRIES
+    85                                  .retry:
+    86 00000019 51                      	push	cx
+    87                                  
+    88                                  ; Reset first.  On this BIOS that also puts the drives back into 8-bit
+    89                                  ; PIO after the soft reset -- see fn00 in 13h_disk.asm.
+    90 0000001A B400                    	mov	ah,0
+    91 0000001C B280                    	mov	dl,BOOT_DRIVE
+    92 0000001E CD13                    	int	0x13
+    93 00000020 7215                    	jc	.again
+    94                                  
+    95 00000022 B80102                  	mov	ax,0x0201		; read, one sector
+    96 00000025 B90100                  	mov	cx,0x0001		; cylinder 0, sector 1
+    97 00000028 B600                    	mov	dh,0			; head 0
+    98 0000002A B280                    	mov	dl,BOOT_DRIVE
+    99 0000002C 31DB                    	xor	bx,bx
+   100 0000002E 8EC3                    	mov	es,bx			; ES:BX = 0000:7C00
+   101                                  	cnop
+   102 00000030 BB007C                  	mov	bx,BOOT_OFF
+   103 00000033 CD13                    	int	0x13
+   104 00000035 7308                    	jnc	.loaded
+   105                                  
+   106                                  .again:
+   107 00000037 59                      	pop	cx
+   108 00000038 E2DF                    	loop	.retry
+   109 0000003A BE[C300]                	mov	si,msg_noread
+   110 0000003D EB0C                    	jmp	short .give_up
+   111                                  
+   112                                  .loaded:
+   113 0000003F 59                      	pop	cx
+   114                                  
+   115                                  ; The last two bytes of a bootable sector are AA55h.  Without this test
+   116                                  ; a blank or data-only disk would be executed as code.
+   117 00000040 813EFE7D55AA            	cmp	word [BOOT_OFF+510],0xAA55
+   118 00000046 740B                    	je	.enter
+   119                                  
+   120 00000048 BE[EC00]                	mov	si,msg_nosig
+   121                                  
+   122                                  .give_up:
+   123 0000004B E81800                  	call	boot_msg
+   124                                  ; INT 18h is where the PC/AT went when nothing would boot.  Here it
+   125                                  ; prints and drops into the debug monitor, and retries the boot when the
+   126                                  ; monitor is left -- so this call does not normally come back.
+   127 0000004E CD18                    	int	0x18
+   128                                  .hang:
+   129 00000050 F4                      	hlt
+   130 00000051 EBFD                    	jmp	.hang
+   131                                  
+   132                                  .enter:
+   133 00000053 BE[A400]                	mov	si,msg_booting
+   134 00000056 E80D00                  	call	boot_msg
+   135                                  
+   136 00000059 B280                    	mov	dl,BOOT_DRIVE		; the sector is told where it came from
+   137 0000005B 31C0                    	xor	ax,ax
+   138 0000005D 8ED8                    	mov	ds,ax
+   139                                  	cnop
+   140 0000005F 8EC0                    	mov	es,ax
+   141                                  	cnop
+   142 00000061 EA007C0000              	jmp	BOOT_SEG:BOOT_OFF
    143                                  
-   144                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   145                                  ; boot_msg -- write the ASCIIZ string at CS:SI to the serial console
-   146                                  ;
-   147                                  ; The CS override matters: by the time this runs DS has been set to zero
-   148                                  ; for the boot sector, while the strings are still up in the ROM.
-   149                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   150                                  boot_msg:
-   151 00000066 5652515350              	pushm	ax,bx,cx,dx,si
-   152                                  .1:
-   153 0000006B 2EAC                       cs	lodsb
-   154 0000006D 08C0                    	or	al,al
-   155 0000006F 7408                    	jz	.9
-   156 00000071 B401                    	mov	ah,1			; write character
-   157 00000073 31D2                    	xor	dx,dx			; COM1
-   158 00000075 CD14                    	int	0x14
-   159 00000077 EBF2                    	jmp	.1
-   160                                  .9:
-   161 00000079 585B595A5E              	popm	ax,bx,cx,dx,si
-   162 0000007E C3                      	ret
-   163                                  
+   144                                  
+   145                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   146                                  ; boot_msg -- write the ASCIIZ string at CS:SI to the serial console
+   147                                  ;
+   148                                  ; The CS override matters: by the time this runs DS has been set to zero
+   149                                  ; for the boot sector, while the strings are still up in the ROM.
+   150                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   151                                  boot_msg:
+   152 00000066 5652515350              	pushm	ax,bx,cx,dx,si
+   153                                  .1:
+   154 0000006B 2EAC                       cs	lodsb
+   155 0000006D 08C0                    	or	al,al
+   156 0000006F 7408                    	jz	.9
+   157 00000071 B401                    	mov	ah,1			; write character
+   158 00000073 31D2                    	xor	dx,dx			; COM1
+   159 00000075 CD14                    	int	0x14
+   160 00000077 EBF2                    	jmp	.1
+   161                                  .9:
+   162 00000079 585B595A5E              	popm	ax,bx,cx,dx,si
+   163 0000007E C3                      	ret
    164                                  
    165                                  
-   166                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   167                                  ; INT 18h -- no bootable device
-   168                                  ;
-   169                                  ; On a PC/AT this went to ROM BASIC.  There is none here, and halting
-   170                                  ; leaves a failed boot silent and costs a power cycle to get back to
-   171                                  ; SETUP.  Drop into the debug monitor instead: at this point the machine
-   172                                  ; itself is healthy -- it is the disk that would not boot -- so
-   173                                  ; everything the monitor needs is already working.
-   174                                  ;
-   175                                  ; Reached from INT 19h when the boot sector cannot be read or carries no
-   176                                  ; signature, and from a boot sector in its own right: the MBR on a
-   177                                  ; partitioned card issues INT 18h when it finds no active partition.
-   178                                  ;
-   179                                  ; Leaving the monitor retries the boot.
-   180                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   181                                  	extern	debugmon_
-   182                                  
-   183                                  int_18h:
-   184 0000007F FA                      	cli
-   185 00000080 31C0                    	xor	ax,ax
-   186 00000082 8ED0                    	mov	ss,ax			; a stack of our own: whatever called
-   187                                  	cnop				;  us may have moved SS:SP somewhere
-   188 00000084 BC007C                  	mov	sp,BOOT_OFF		;  unhelpful, and a boot sector that
-   189 00000087 FB                      	sti				;  failed is not to be trusted with it
-   190 00000088 FC                      	cld
-   191                                  
-   192 00000089 BE[1C01]                	mov	si,msg_nodisk
-   193 0000008C E8D7FF                  	call	boot_msg
-   194                                  
-   195 0000008F B8[ssss]                	mov	ax,DGROUP		; the C code addresses through DGROUP
-   196 00000092 8ED8                    	mov	ds,ax
-   197                                  	cnop
-   198 00000094 8EC0                    	mov	es,ax
-   199                                  	cnop
-   200                                  
-   201 00000096 E8(0000)                	call	debugmon_
-   202                                  
-   203                                  ; The operator has left the monitor.  Try the disk again -- a card may
-   204                                  ; have been changed, or SETUP used, in the meantime.
-   205 00000099 BE[7801]                	mov	si,msg_retry
-   206 0000009C E8C7FF                  	call	boot_msg
-   207 0000009F CD19                    	int	0x19
-   208                                  
-   209                                  ; INT 19h does not return.  If its vector were wrong we would arrive
-   210                                  ; here rather than running off into memory.
-   211                                  .hang:
-   212 000000A1 F4                      	hlt
-   213 000000A2 EBFD                    	jmp	.hang
-   214                                  
-   215                                  msg_booting:
-   216 000000A4 0D0A426F6F74696E67-     	db	ASCII_CR,ASCII_LF,"Booting from drive 80h ...",ASCII_CR,ASCII_LF,0
-   216 000000AD 2066726F6D20647269-
-   216 000000B6 766520383068202E2E-
-   216 000000BF 2E0D0A00           
-   217                                  msg_noread:
-   218 000000C3 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
-   218 000000CC 3A2063616E6E6F7420-
-   218 000000D5 726561642074686520-
-   218 000000DE 626F6F742073656374-
-   218 000000E7 6F720D0A00         
-   219                                  msg_nosig:
-   220 000000EC 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: no AA55h signature -- not bootable",ASCII_CR,ASCII_LF,0
-   220 000000F5 3A206E6F2041413535-
-   220 000000FE 68207369676E617475-
-   220 00000107 7265202D2D206E6F74-
-   220 00000110 20626F6F7461626C65-
-   220 00000119 0D0A00             
-   221                                  msg_nodisk:
-   222 0000011C 0D0A                    	db	ASCII_CR,ASCII_LF
-   223 0000011E 494E54203138683A20-     	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
-   223 00000127 6E6F20626F6F746162-
-   223 00000130 6C6520646576696365-
-   223 00000139 2E0D0A             
-   224 0000013C 44726F7070696E6720-     	db	"Dropping into the debug monitor -- EXIT retries the boot."
-   224 00000145 696E746F2074686520-
-   224 0000014E 6465627567206D6F6E-
-   224 00000157 69746F72202D2D2045-
-   224 00000160 584954207265747269-
-   224 00000169 65732074686520626F-
-   224 00000172 6F742E             
-   225 00000175 0D0A00                  	db	ASCII_CR,ASCII_LF,0
-   226                                  msg_retry:
-   227 00000178 0D0A5265747279696E-     	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
-   227 00000181 672074686520626F6F-
-   227 0000018A 74202E2E2E0D0A00   
+   166                                  
+   167                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   168                                  ; INT 18h -- no bootable device
+   169                                  ;
+   170                                  ; On a PC/AT this went to ROM BASIC.  There is none here, and halting
+   171                                  ; leaves a failed boot silent and costs a power cycle to get back to
+   172                                  ; SETUP.  Drop into the debug monitor instead: at this point the machine
+   173                                  ; itself is healthy -- it is the disk that would not boot -- so
+   174                                  ; everything the monitor needs is already working.
+   175                                  ;
+   176                                  ; Reached from INT 19h when the boot sector cannot be read or carries no
+   177                                  ; signature, and from a boot sector in its own right: the MBR on a
+   178                                  ; partitioned card issues INT 18h when it finds no active partition.
+   179                                  ;
+   180                                  ; Leaving the monitor retries the boot.
+   181                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   182                                  	extern	debugmon_
+   183                                  
+   184                                  int_18h:
+   185 0000007F FA                      	cli
+   186 00000080 31C0                    	xor	ax,ax
+   187 00000082 8ED0                    	mov	ss,ax			; a stack of our own: whatever called
+   188                                  	cnop				;  us may have moved SS:SP somewhere
+   189 00000084 BC007C                  	mov	sp,BOOT_OFF		;  unhelpful, and a boot sector that
+   190 00000087 FB                      	sti				;  failed is not to be trusted with it
+   191 00000088 FC                      	cld
+   192                                  
+   193 00000089 BE[1C01]                	mov	si,msg_nodisk
+   194 0000008C E8D7FF                  	call	boot_msg
+   195                                  
+   196 0000008F B8[ssss]                	mov	ax,DGROUP		; the C code addresses through DGROUP
+   197 00000092 8ED8                    	mov	ds,ax
+   198                                  	cnop
+   199 00000094 8EC0                    	mov	es,ax
+   200                                  	cnop
+   201                                  
+   202 00000096 E8(0000)                	call	debugmon_
+   203                                  
+   204                                  ; The operator has left the monitor.  Try the disk again -- a card may
+   205                                  ; have been changed, or SETUP used, in the meantime.
+   206 00000099 BE[7801]                	mov	si,msg_retry
+   207 0000009C E8C7FF                  	call	boot_msg
+   208 0000009F CD19                    	int	0x19
+   209                                  
+   210                                  ; INT 19h does not return.  If its vector were wrong we would arrive
+   211                                  ; here rather than running off into memory.
+   212                                  .hang:
+   213 000000A1 F4                      	hlt
+   214 000000A2 EBFD                    	jmp	.hang
+   215                                  
+   216                                  msg_booting:
+   217 000000A4 0D0A426F6F74696E67-     	db	ASCII_CR,ASCII_LF,"Booting from drive 80h ...",ASCII_CR,ASCII_LF,0
+   217 000000AD 2066726F6D20647269-
+   217 000000B6 766520383068202E2E-
+   217 000000BF 2E0D0A00           
+   218                                  msg_noread:
+   219 000000C3 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
+   219 000000CC 3A2063616E6E6F7420-
+   219 000000D5 726561642074686520-
+   219 000000DE 626F6F742073656374-
+   219 000000E7 6F720D0A00         
+   220                                  msg_nosig:
+   221 000000EC 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: no AA55h signature -- not bootable",ASCII_CR,ASCII_LF,0
+   221 000000F5 3A206E6F2041413535-
+   221 000000FE 68207369676E617475-
+   221 00000107 7265202D2D206E6F74-
+   221 00000110 20626F6F7461626C65-
+   221 00000119 0D0A00             
+   222                                  msg_nodisk:
+   223 0000011C 0D0A                    	db	ASCII_CR,ASCII_LF
+   224 0000011E 494E54203138683A20-     	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
+   224 00000127 6E6F20626F6F746162-
+   224 00000130 6C6520646576696365-
+   224 00000139 2E0D0A             
+   225 0000013C 44726F7070696E6720-     	db	"Dropping into the debug monitor -- EXIT retries the boot."
+   225 00000145 696E746F2074686520-
+   225 0000014E 6465627567206D6F6E-
+   225 00000157 69746F72202D2D2045-
+   225 00000160 584954207265747269-
+   225 00000169 65732074686520626F-
+   225 00000172 6F742E             
+   226 00000175 0D0A00                  	db	ASCII_CR,ASCII_LF,0
+   227                                  msg_retry:
+   228 00000178 0D0A5265747279696E-     	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
+   228 00000181 672074686520626F6F-
+   228 0000018A 74202E2E2E0D0A00   
+   229                                  
+   230                                  
+   231                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   232                                  ; reboot -- restart the board through the ROM's own reset entry
+   233                                  ;
+   234                                  ;	void reboot(void);
+   235                                  ;
+   236                                  ; Does not return.
+   237                                  ;
+   238                                  ; FFFF:0000 is where the processor begins after a reset and where
+   239                                  ; 'bootstrap' in boot.asm sits: a five-byte far jump to F000:0000.  Going
+   240                                  ; through it rather than straight to F000:0000 means a warm start takes
+   241                                  ; exactly the path a cold one does, including anything that ever gets added
+   242                                  ; to that stub.
+   243                                  ;
+   244                                  ; This is not a hardware reset -- the peripherals keep whatever state they
+   245                                  ; are in -- but start.asm is written to survive being re-entered.  The
+   246                                  ; expanded I/O unlock opens with a read of REMAPCFGH precisely to put that
+   247                                  ; state machine back to a known state from wherever it was, and every port
+   248                                  ; the BIOS depends on is written from wtab1/btab1 rather than assumed.  What
+   249                                  ; it does not do is reset the IDE drive, so the first thing POST does to the
+   250                                  ; card is the soft reset in hd_reset(), which is what that is for.
+   251                                  ;
+   252                                  ; SETUP is the caller: it used to print "Reboot required!" and then call
+   253                                  ; exit(15), which lands in exit_ and powers the board down.  Telling someone
+   254                                  ; a reboot is required and then making the machine unresponsive is the
+   255                                  ; wrong pair of actions, and it is the reason this exists.
+   256                                  ;
+   257                                  ; The console is drained first.  The last line of output is still sitting
+   258                                  ; in the UART when the chip selects are reprogrammed, and without the wait
+   259                                  ; the user sees a truncated message and reads it as a crash.  The port comes
+   260                                  ; from bda.serial_dev[0] rather than a constant, since the console may be
+   261                                  ; the on-chip SIO0 at 3F8h or the MF/PIC at 448h.
+   262                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   263                                  	global	reboot_
+   264                                  reboot_:
+   265 00000192 FA                      	cli
+   266                                  
+   267 00000193 6A401F                  	get_bda	DS
+   268 00000196 8B160000                	mov	dx,[serial_dev]		; console base, 0 if none was installed
+   269 0000019A 09D2                    	or	dx,dx
+   270 0000019C 740D                    	jz	.2
+   271                                  
+   272 0000019E 83C205                  	add	dx,LSR0-TBR0		; the line status register
+   273 000001A1 B90000                  	mov	cx,0			; 65536 reads is far longer than a
+   274                                  					;  character takes at any rate we use
+   275                                  .1:
+   276 000001A4 EC                      	in	al,dx
+   277 000001A5 A840                    	test	al,LSR_TE		; transmitter completely empty?
+   278 000001A7 7502                    	jnz	.2
+   279 000001A9 E2F9                    	loop	.1
+   280                                  .2:
+   281 000001AB EA0000FFFF              	jmp	0xFFFF:0x0000		; the reset entry, into boot.asm

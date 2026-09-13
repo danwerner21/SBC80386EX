@@ -617,8 +617,12 @@ rwv_common:
 	cmp	word lcl_count,0
 	je	.done
 
-; One sector per call.  The DRQ wait in diskide.asm sits outside its own
-; sector loop, so a multi-sector request there runs ahead of the drive.
+; One sector per call.  This used to say that the DRQ wait in diskide.asm
+; sat outside its own sector loop so a multi-sector request ran ahead of
+; the drive -- defect 08, fixed there since.  The loop stays one sector at
+; a time anyway, and now for a better reason: the buffer advance below
+; carries across a 64K segment boundary, which a single multi-sector
+; command handed to the drive cannot do.
 	push	word 1
 	push	dword lcl_lba
 	mov	bx,lcl_off

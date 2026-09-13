@@ -38,6 +38,7 @@
 #include "hdinit.h"	/* HD_GEO_NVRAM */
 
 void testmain(void);	/* the POST self test, in testmain.c */
+void reboot(void);	/* restart through the reset entry, in 19h_boot.asm */
 
 
 #define Rnone	0
@@ -198,9 +199,15 @@ VOID set_top(int modified)
 
 		bda.nvram_checksum = temp;
 		put_nvram_info();
-		printf("\nReboot required!\n");
 		temp = get_nvram_crc(31);
-		exit(15);
+
+		/* This used to print "Reboot required!" and call exit(15),
+		   which lands in exit_ and powers the board down -- telling
+		   someone a reboot is needed and then making the machine
+		   unresponsive.  Reboot for them instead.  reboot_() drains
+		   the console first and does not return. */
+		printf("\nSettings stored.  Rebooting ...\n");
+		reboot();
 	}
 }
 

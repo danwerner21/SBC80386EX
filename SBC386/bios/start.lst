@@ -1105,1103 +1105,1111 @@
    138 00000132 01FC                <1>  dw %2
    252                                  ;
    253                                  ; set up CS1# for the IDE I/O at 01F0..01FF	-- ZBIT0 disables it
-   254                                  	winit	CS1ADH, (0x1F0 >> 6) & 0xFFFF
+   254                                  ;
+   255                                  ; 7 wait states, not the 3 this carried for years.  3 was never measured;
+   256                                  ; 7 was, from the monitor -- C007 written into CS1ADL by hand, then a full
+   257                                  ; pass of IDENT, LBA and SECTEST against the card with no change in
+   258                                  ; behaviour except that it stopped being marginal.  It matches what CS0
+   259                                  ; already uses for the ECB I/O window, and the IDE path is nowhere near
+   260                                  ; fast enough for four extra wait states per byte to matter: the transfer
+   261                                  ; is 8-bit PIO through a single port either way.
+   262                                  	winit	CS1ADH, (0x1F0 >> 6) & 0xFFFF
    137 00000134 0AF4                <1>  dw %1
    138 00000136 0700                <1>  dw %2
-   255                                  	winit	CS1ADL, (0x1F0 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 3;w.s.
+   263                                  	winit	CS1ADL, (0x1F0 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 7;w.s.
    137 00000138 08F4                <1>  dw %1
-   138 0000013A 03C0                <1>  dw %2
-   256                                  	winit	CS1MSKH, ~(0x00FFF0 >> 6) & 0xFFFF
+   138 0000013A 07C0                <1>  dw %2
+   264                                  	winit	CS1MSKH, ~(0x00FFF0 >> 6) & 0xFFFF
    137 0000013C 0EF4                <1>  dw %1
    138 0000013E 00FC                <1>  dw %2
-   257                                  	winit	CS1MSKL, ~(0x00FFF0 <<10) & 0xF800 | BIT10+ BIT0
+   265                                  	winit	CS1MSKL, ~(0x00FFF0 <<10) & 0xF800 | BIT10+ BIT0
    137 00000140 0CF4                <1>  dw %1
    138 00000142 013C                <1>  dw %2
-   258                                  ;
-   259                                  ; set up CS3# for the external Memory select at $000B_xxxx
-   260                                  	winit	CS3ADH, 0x000B
+   266                                  ;
+   267                                  ; set up CS3# for the external Memory select at $000B_xxxx
+   268                                  	winit	CS3ADH, 0x000B
    137 00000144 1AF4                <1>  dw %1
    138 00000146 0B00                <1>  dw %2
-   261                                  	winit	CS3ADL, 0x0000 | ZBIT9+BIT8+ZBIT7 + 5;w.s.
+   269                                  	winit	CS3ADL, 0x0000 | ZBIT9+BIT8+ZBIT7 + 5;w.s.
    137 00000148 18F4                <1>  dw %1
    138 0000014A 0501                <1>  dw %2
-   262                                  	winit	CS3MSKH, 0x0000
+   270                                  	winit	CS3MSKH, 0x0000
    137 0000014C 1EF4                <1>  dw %1
    138 0000014E 0000                <1>  dw %2
-   263                                  	winit	CS3MSKL, 0xF800 | BIT10+BIT0
+   271                                  	winit	CS3MSKL, 0xF800 | BIT10+BIT0
    137 00000150 1CF4                <1>  dw %1
    138 00000152 01FC                <1>  dw %2
-   264                                  
-   265                                  ;
-   266                                  ; set up CS2# for the DRAM address range
-   267                                  	winit	CS2ADH, 0x0000		; address == 00000000
+   272                                  
+   273                                  ;
+   274                                  ; set up CS2# for the DRAM address range
+   275                                  	winit	CS2ADH, 0x0000		; address == 00000000
    137 00000154 12F4                <1>  dw %1
    138 00000156 0000                <1>  dw %2
-   268                                  	winit	CS2ADL, 0x0000 | BIT9+BIT8+ZBIT7 + 2;w.s.
+   276                                  	winit	CS2ADL, 0x0000 | BIT9+BIT8+ZBIT7 + 2;w.s.
    137 00000158 10F4                <1>  dw %1
    138 0000015A 0203                <1>  dw %2
-   269                                  %if HALF_MEM
-   270                                  	winit	CS2MSKH, 0x03F7		; 8000:xxxx .. F000:xxxx off limits
-   271                                  %else
-   272                                  	winit	CS2MSKH, 0x03FF		; DRAM and ROM overlap
+   277                                  %if HALF_MEM
+   278                                  	winit	CS2MSKH, 0x03F7		; 8000:xxxx .. F000:xxxx off limits
+   279                                  %else
+   280                                  	winit	CS2MSKH, 0x03FF		; DRAM and ROM overlap
    137 0000015C 16F4                <1>  dw %1
    138 0000015E FF03                <1>  dw %2
-   273                                  %endif
-   274                                  	winit	CS2MSKL, 0xF800 | BIT10 + BIT0  ; enable the chip select
+   281                                  %endif
+   282                                  	winit	CS2MSKL, 0xF800 | BIT10 + BIT0  ; enable the chip select
    137 00000160 14F4                <1>  dw %1
    138 00000162 01FC                <1>  dw %2
-   275                                  
-   276                                  %if 1
-   277                                  ;
-   278                                  ; set up the Refresh unit
-   279                                  	winit	RFSBAD, (REFRESH_AD>>14) & 0xFFFF  ; Base Address
+   283                                  
+   284                                  %if 1
+   285                                  ;
+   286                                  ; set up the Refresh unit
+   287                                  	winit	RFSBAD, (REFRESH_AD>>14) & 0xFFFF  ; Base Address
    137 00000164 A0F4                <1>  dw %1
    138 00000166 0800                <1>  dw %2
-   280                                  	winit	RFSADD, (REFRESH_AD & 0x3FFF) | 1  ; low 14 address bits
+   288                                  	winit	RFSADD, (REFRESH_AD & 0x3FFF) | 1  ; low 14 address bits
    137 00000168 A6F4                <1>  dw %1
    138 0000016A 0100                <1>  dw %2
-   281                                  	winit	RFSCIR, 16000/64 | 0xFC00	   ; for a 16mhz clk (clk2=32mhz)
+   289                                  	winit	RFSCIR, 16000/64 | 0xFC00	   ; for a 16mhz clk (clk2=32mhz)
    137 0000016C A2F4                <1>  dw %1
    138 0000016E FAFC                <1>  dw %2
-   282                                  	winit	RFSCON, BIT15		; enable/disable the refresh
+   290                                  	winit	RFSCON, BIT15		; enable/disable the refresh
    137 00000170 A4F4                <1>  dw %1
    138 00000172 0080                <1>  dw %2
-   283                                  %endif
-   284                                  
-   285                                  %if WATCH_BUS
-   286                                  ; set up the WATCHDOG timer to monitor the bus
-   287                                  ;  try to trap FPU hangs
-   288                                  ;
-   289                                  	winit	WDTSTATUS, BIT1		; set BUSMON
-   137 00000174 CAF4                <1>  dw %1
-   138 00000176 0200                <1>  dw %2
-   290                                  ; PWRCON must also be set to enable this function (a byte init)
    291                                  %endif
    292                                  
-   293 00000178 FFFF                    	dw	-1		;EOF marker
-   294                                  
-   295                                  
-   296                                  
-   297                                  
-   298                                  btab1:
-   299                                          binit   PORT92_AT,0x02  ; enable the A20 line
+   293                                  %if WATCH_BUS
+   294                                  ; set up the WATCHDOG timer to monitor the bus
+   295                                  ;  try to trap FPU hangs
+   296                                  ;
+   297                                  	winit	WDTSTATUS, BIT1		; set BUSMON
+   137 00000174 CAF4                <1>  dw %1
+   138 00000176 0200                <1>  dw %2
+   298                                  ; PWRCON must also be set to enable this function (a byte init)
+   299                                  %endif
+   300                                  
+   301 00000178 FFFF                    	dw	-1		;EOF marker
+   302                                  
+   303                                  
+   304                                  
+   305                                  
+   306                                  btab1:
+   307                                          binit   PORT92_AT,0x02  ; enable the A20 line
    128 0000017A 9200                <1>  dw %1
    129 0000017C 02                  <1>  db %2
-   300                                  ;    LITES[3:0], DSRST, DSCLK, RTS0#, DSDAT
-   301                                  	binit   P1LTC, 0x63	; LITES (weak)1100 --> 1001 (inverted outputs)
+   308                                  ;    LITES[3:0], DSRST, DSCLK, RTS0#, DSDAT
+   309                                  	binit   P1LTC, 0x63	; LITES (weak)1100 --> 1001 (inverted outputs)
    128 0000017D 62F8                <1>  dw %1
    129 0000017F 63                  <1>  db %2
-   302                                  				; DSRST asserted, DSCLK low, RTS0# de-asserted, DSDAT o.c. high
-   303                                  	binit	P1DIR, 0x00+BIT0 	; LITES (7..4) are DRIVEN now, DSDAT is input
+   310                                  				; DSRST asserted, DSCLK low, RTS0# de-asserted, DSDAT o.c. high
+   311                                  	binit	P1DIR, 0x00+BIT0 	; LITES (7..4) are DRIVEN now, DSDAT is input
    128 00000180 64F8                <1>  dw %1
    129 00000182 01                  <1>  db %2
-   304                                          binit   P1CFG, BIT1     ; RTS0# is connected to SIO0
+   312                                          binit   P1CFG, BIT1     ; RTS0# is connected to SIO0
    128 00000183 20F8                <1>  dw %1
    129 00000185 02                  <1>  db %2
-   305                                  
-   306                                  %if WATCH_BUS|1
-   307                                  ; for the WATCHDOG timer bus monitor READY function
-   308                                  	binit	PWRCON, BIT3+BIT2	; WDTRDY | HSREADY  enable
+   313                                  
+   314                                  %if WATCH_BUS|1
+   315                                  ; for the WATCHDOG timer bus monitor READY function
+   316                                  	binit	PWRCON, BIT3+BIT2	; WDTRDY | HSREADY  enable
    128 00000186 00F8                <1>  dw %1
    129 00000188 0C                  <1>  db %2
-   309                                  %endif
-   310                                  
-   311                                  ;    CTS0#, TXD0, RXD0, CS4, CS3, CS2, CS1, CS0
-   312                                          binit   P2LTC,0xFF      ; set all high
+   317                                  %endif
+   318                                  
+   319                                  ;    CTS0#, TXD0, RXD0, CS4, CS3, CS2, CS1, CS0
+   320                                          binit   P2LTC,0xFF      ; set all high
    128 00000189 6AF8                <1>  dw %1
    129 0000018B FF                  <1>  db %2
-   313                                          binit   P2DIR,0xA0      ; CTS0# & RXD0 are inputs
+   321                                          binit   P2DIR,0xA0      ; CTS0# & RXD0 are inputs
    128 0000018C 6CF8                <1>  dw %1
    129 0000018E A0                  <1>  db %2
-   314                                          binit   P2CFG,0xFF      ; all are alternate function:
+   322                                          binit   P2CFG,0xFF      ; all are alternate function:
    128 0000018F 22F8                <1>  dw %1
    129 00000191 FF                  <1>  db %2
-   315                                  
-   316                                  ;    COMCLK, SD-CS#, IR7, IR6, IR5, IR1, SD-CD#, PEREQ(sense)
-   317                                  	binit   P3LTC,0xFF      ; set all high
+   323                                  
+   324                                  ;    COMCLK, SD-CS#, IR7, IR6, IR5, IR1, SD-CD#, PEREQ(sense)
+   325                                  	binit   P3LTC,0xFF      ; set all high
    128 00000192 72F8                <1>  dw %1
    129 00000194 FF                  <1>  db %2
-   318                                          binit   P3DIR,0xFF	; all are O.C. or inputs
+   326                                          binit   P3DIR,0xFF	; all are O.C. or inputs
    128 00000195 74F8                <1>  dw %1
    129 00000197 FF                  <1>  db %2
-   319                                          binit   P3CFG,BIT7+ ZBIT6 +BIT5+BIT4+BIT3+BIT2 +ZBIT1+ZBIT0
+   327                                          binit   P3CFG,BIT7+ ZBIT6 +BIT5+BIT4+BIT3+BIT2 +ZBIT1+ZBIT0
    128 00000198 24F8                <1>  dw %1
    129 0000019A BC                  <1>  db %2
-   320                                  ; move to SDcard codes, later
-   321                                  ;
-   322                                  SDLTC	equ	P3LTC		;Latch (output) port for SDcard bits
-   323                                  SDPIN	equ	P3PIN		;Pin (input) value for port
-   324                                  SDnCS	equ	BIT6		;'not' Chip Select
-   325                                  SDnCD	equ	BIT1		;'not' Card Detect
-   326                                  
-   327                                  
-   328                                          binit   PINCFG, BIT6+ZBIT5+ZBIT4+ZBIT3+ZBIT2+ZBIT1+ZBIT0
+   328                                  ; move to SDcard codes, later
+   329                                  ;
+   330                                  SDLTC	equ	P3LTC		;Latch (output) port for SDcard bits
+   331                                  SDPIN	equ	P3PIN		;Pin (input) value for port
+   332                                  SDnCS	equ	BIT6		;'not' Chip Select
+   333                                  SDnCD	equ	BIT1		;'not' Card Detect
+   334                                  
+   335                                  
+   336                                          binit   PINCFG, BIT6+ZBIT5+ZBIT4+ZBIT3+ZBIT2+ZBIT1+ZBIT0
    128 0000019B 26F8                <1>  dw %1
    129 0000019D 40                  <1>  db %2
-   329                                  ;
-   330                                  ; constants below have been moved to "timer.inc"
-   331                                  ;
-   332                                  
-   333                                          binit   TMRCFG, ZBIT7+TIMER_STOP ; bit6: s/w control of GATEn, bit7=0 enables all clocks
+   337                                  ;
+   338                                  ; constants below have been moved to "timer.inc"
+   339                                  ;
+   340                                  
+   341                                          binit   TMRCFG, ZBIT7+TIMER_STOP ; bit6: s/w control of GATEn, bit7=0 enables all clocks
    128 0000019E 34F8                <1>  dw %1
    129 000001A0 41                  <1>  db %2
-   334                                  
-   335                                  	binit	TMRCON, CTR0 + CWR01 + MODE0 + ZBIT0	;binary
+   342                                  
+   343                                  	binit	TMRCON, CTR0 + CWR01 + MODE0 + ZBIT0	;binary
    128 000001A1 43F0                <1>  dw %1
    129 000001A3 30                  <1>  db %2
-   336                                  	binit	TMR0, MS50LO	;low byte
+   344                                  	binit	TMR0, MS50LO	;low byte
    128 000001A4 40F0                <1>  dw %1
    129 000001A6 00                  <1>  db %2
-   337                                  	binit	TMR0, MS50HI	;high byte = 46080
+   345                                  	binit	TMR0, MS50HI	;high byte = 46080
    128 000001A7 40F0                <1>  dw %1
    129 000001A9 B4                  <1>  db %2
-   338                                  	binit	TMRCON, CTR1 + CWR01 + MODE0 + ZBIT0	;binary
+   346                                  	binit	TMRCON, CTR1 + CWR01 + MODE0 + ZBIT0	;binary
    128 000001AA 43F0                <1>  dw %1
    129 000001AC 70                  <1>  db %2
-   339                                  	binit	TMR1, 0
+   347                                  	binit	TMR1, 0
    128 000001AD 41F0                <1>  dw %1
    129 000001AF 00                  <1>  db %2
-   340                                  	binit	TMR1, 0		; 65536
+   348                                  	binit	TMR1, 0		; 65536
    128 000001B0 41F0                <1>  dw %1
    129 000001B2 00                  <1>  db %2
-   341                                  	binit	TMRCON, CTR2 + CWR01 + MODE0 + ZBIT0	;binary
+   349                                  	binit	TMRCON, CTR2 + CWR01 + MODE0 + ZBIT0	;binary
    128 000001B3 43F0                <1>  dw %1
    129 000001B5 B0                  <1>  db %2
-   342                                  	binit	TMR2, 0
+   350                                  	binit	TMR2, 0
    128 000001B6 42F0                <1>  dw %1
    129 000001B8 00                  <1>  db %2
-   343                                  	binit	TMR2, 0		; 65536
+   351                                  	binit	TMR2, 0		; 65536
    128 000001B9 42F0                <1>  dw %1
    129 000001BB 00                  <1>  db %2
-   344                                  
-   345                                  ;		  0
-   346                                  ; Initialize the Serial output channel 0  (SIO0)
-   347                                  ;
-   348                                          binit   SIOCFG, BIT7+ZBIT6 + BIT2+ZBIT1+ZBIT0
+   352                                  
+   353                                  ;		  0
+   354                                  ; Initialize the Serial output channel 0  (SIO0)
+   355                                  ;
+   356                                          binit   SIOCFG, BIT7+ZBIT6 + BIT2+ZBIT1+ZBIT0
    128 000001BC 36F8                <1>  dw %1
    129 000001BE 84                  <1>  db %2
-   349                                          binit   LCR0, 0x80      ; enable divisor latch
+   357                                          binit   LCR0, 0x80      ; enable divisor latch
    128 000001BF FB03                <1>  dw %1
    129 000001C1 80                  <1>  db %2
-   350                                          binit   DLL0, DIVISOR & 0xFF	   ; 9600 bps
+   358                                          binit   DLL0, DIVISOR & 0xFF	   ; 9600 bps
    128 000001C2 F803                <1>  dw %1
    129 000001C4 0C                  <1>  db %2
-   351                                          binit   DLH0, (DIVISOR>>8) & 0xFF  ; **
+   359                                          binit   DLH0, (DIVISOR>>8) & 0xFF  ; **
    128 000001C5 F903                <1>  dw %1
    129 000001C7 00                  <1>  db %2
-   352                                          binit   LCR0, 7         ; 8-bit, no parity, 2 stop bits
+   360                                          binit   LCR0, 7         ; 8-bit, no parity, 2 stop bits
    128 000001C8 FB03                <1>  dw %1
    129 000001CA 07                  <1>  db %2
-   353                                          binit   IER0, 0         ; disable interrupts
+   361                                          binit   IER0, 0         ; disable interrupts
    128 000001CB F903                <1>  dw %1
    129 000001CD 00                  <1>  db %2
-   354                                          binit   MCR0, 3         ; set RTS & DTR
+   362                                          binit   MCR0, 3         ; set RTS & DTR
    128 000001CE FC03                <1>  dw %1
    129 000001D0 03                  <1>  db %2
-   355                                  
-   356                                  ;;moved down        binit   TBR0, '*'       ;Test output one character
-   357                                  
-   358                                  ;
-   359                                  ; ICU initialization (must be last):
-   360                                  ;
-   361                                  	binit   INTCFG, BIT6+ZBIT5+BIT4+BIT3+BIT2+BIT1+ZBIT0
+   363                                  
+   364                                  ;;moved down        binit   TBR0, '*'       ;Test output one character
+   365                                  
+   366                                  ;
+   367                                  ; ICU initialization (must be last):
+   368                                  ;
+   369                                  	binit   INTCFG, BIT6+ZBIT5+BIT4+BIT3+BIT2+BIT1+ZBIT0
    128 000001D1 32F8                <1>  dw %1
    129 000001D3 5E                  <1>  db %2
-   362                                  
-   363                                  	binit	ICW1M,	BIT4+ ZBIT3 +BIT0	;bit3: 0=edge
+   370                                  
+   371                                  	binit	ICW1M,	BIT4+ ZBIT3 +BIT0	;bit3: 0=edge
    128 000001D4 20F0                <1>  dw %1
    129 000001D6 11                  <1>  db %2
-   364                                  	binit	ICW2M,	0x08			;INT 8..F vectors
+   372                                  	binit	ICW2M,	0x08			;INT 8..F vectors
    128 000001D7 21F0                <1>  dw %1
    129 000001D9 08                  <1>  db %2
-   365                                  	binit	ICW3M,	BIT2			;slave on IR2 is used
+   373                                  	binit	ICW3M,	BIT2			;slave on IR2 is used
    128 000001DA 21F0                <1>  dw %1
    129 000001DC 04                  <1>  db %2
-   366                                  	binit	ICW4M,	ZBIT4+ZBIT1+BIT0	;bit4: SFNM off; bit1: AEOI off
+   374                                  	binit	ICW4M,	ZBIT4+ZBIT1+BIT0	;bit4: SFNM off; bit1: AEOI off
    128 000001DD 21F0                <1>  dw %1
    129 000001DF 01                  <1>  db %2
-   367                                  	binit	OCW1M,	0xFF			;mask all interrupts
+   375                                  	binit	OCW1M,	0xFF			;mask all interrupts
    128 000001E0 21F0                <1>  dw %1
    129 000001E2 FF                  <1>  db %2
-   368                                  	binit	OCW3M,	BIT6+ZBIT5+ ZBIT4+BIT3+BIT1+BIT0 ;disable SpMskM,
+   376                                  	binit	OCW3M,	BIT6+ZBIT5+ ZBIT4+BIT3+BIT1+BIT0 ;disable SpMskM,
    128 000001E3 20F0                <1>  dw %1
    129 000001E5 4B                  <1>  db %2
-   369                                  						; enable read of ISreg
-   370                                  
-   371                                  	binit	ICW1S,	BIT4+ ZBIT3 +BIT0	;bit3 0=edge
+   377                                  						; enable read of ISreg
+   378                                  
+   379                                  	binit	ICW1S,	BIT4+ ZBIT3 +BIT0	;bit3 0=edge
    128 000001E6 A0F0                <1>  dw %1
    129 000001E8 11                  <1>  db %2
-   372                                  	binit	ICW2S,	0x70			;INT 70h-77h vectors
+   380                                  	binit	ICW2S,	0x70			;INT 70h-77h vectors
    128 000001E9 A1F0                <1>  dw %1
    129 000001EB 70                  <1>  db %2
-   373                                  	binit	ICW3S,	2			;slave is #2
+   381                                  	binit	ICW3S,	2			;slave is #2
    128 000001EC A1F0                <1>  dw %1
    129 000001EE 02                  <1>  db %2
-   374                                  	binit	ICW4S,	ZBIT4+ZBIT1+BIT0	;no SFNM, no AEOI on slave
+   382                                  	binit	ICW4S,	ZBIT4+ZBIT1+BIT0	;no SFNM, no AEOI on slave
    128 000001EF A1F0                <1>  dw %1
    129 000001F1 01                  <1>  db %2
-   375                                  	binit	OCW1S,	0xFF			;mask all interrupts
+   383                                  	binit	OCW1S,	0xFF			;mask all interrupts
    128 000001F2 A1F0                <1>  dw %1
    129 000001F4 FF                  <1>  db %2
-   376                                  	binit	OCW3S,	BIT6+ZBIT5+ ZBIT4+BIT3 +BIT1+BIT0 ;disable SpMskM,
+   384                                  	binit	OCW3S,	BIT6+ZBIT5+ ZBIT4+BIT3 +BIT1+BIT0 ;disable SpMskM,
    128 000001F5 A0F0                <1>  dw %1
    129 000001F7 4B                  <1>  db %2
-   377                                  
-   378                                  
-   379                                  
-   380                                  ; enable read of ISreg
-   381                                  ;  serial character output:
-   382                                  	binit   TBR0, '*'       ;Test output one character
+   385                                  
+   386                                  
+   387                                  
+   388                                  ; enable read of ISreg
+   389                                  ;  serial character output:
+   390                                  	binit   TBR0, '*'       ;Test output one character
    128 000001F8 F803                <1>  dw %1
    129 000001FA 2A                  <1>  db %2
-   383                                  
-   384 000001FB FFFF                            dw      -1
-   385                                  
-   386                                  	global	_bda_ptr
-   387                                  	global	bda_ptr
-   388                                  _bda_ptr:
-   389 000001FD 00004000                bda_ptr:	dw	0, BDA_segment
-   390                                  
-   391                                  ; initial contents of NVRAM on ice-cold start
-   392                                  ;
-   393                                  NVRAM00:
-   394 00000201 E700                    	dw	00_0000_00111_00_1_11B		;serial line
-   395                                  ; no protocols, rsvd, baud=9600, no parity, 2 stop, 8-bit
-   396                                  
-   397 00000203 0000                    	db	0,0		; 2 empty floppy slots
-   398 00000205 0000000000000000        	db	0,0,0,0,0,0,0,0	; 8 empty disk table slots
-   399 0000020D 00<rep 13h>             	times (NVRAM00+31-$) db 0
-   400                                  
-   401                                  
-   402                                  
-   403                                  segment _TEXT
-   404                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   405                                  ; initb_cx	primitive entry
-   406                                  ; initb		callable entry (but uses CX)
-   407                                  ;
-   408                                  ;    Enter with:
-   409                                  ;
-   410                                  ;	DS:SI	pointing at the table of BYTES to init.
-   411                                  ;	CX	used to hold the return address
-   412                                  ;
-   413                                  ;    Exit with:
-   414                                  ;	AX,DX	trashed
-   415                                  ;	CX	used to hold the return
-   416                                  ;	SI	updated
+   391                                  
+   392 000001FB FFFF                            dw      -1
+   393                                  
+   394                                  	global	_bda_ptr
+   395                                  	global	bda_ptr
+   396                                  _bda_ptr:
+   397 000001FD 00004000                bda_ptr:	dw	0, BDA_segment
+   398                                  
+   399                                  ; initial contents of NVRAM on ice-cold start
+   400                                  ;
+   401                                  NVRAM00:
+   402 00000201 E700                    	dw	00_0000_00111_00_1_11B		;serial line
+   403                                  ; no protocols, rsvd, baud=9600, no parity, 2 stop, 8-bit
+   404                                  
+   405 00000203 0000                    	db	0,0		; 2 empty floppy slots
+   406 00000205 0000000000000000        	db	0,0,0,0,0,0,0,0	; 8 empty disk table slots
+   407 0000020D 00<rep 13h>             	times (NVRAM00+31-$) db 0
+   408                                  
+   409                                  
+   410                                  
+   411                                  segment _TEXT
+   412                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   413                                  ; initb_cx	primitive entry
+   414                                  ; initb		callable entry (but uses CX)
+   415                                  ;
+   416                                  ;    Enter with:
    417                                  ;
-   418                                  ;	All other registers preserved
-   419                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   420                                  	global	initb
-   421                                  initb:
-   422 00000040 59                              pop     cx
-   423                                  initb_cx:
-   424 00000041 AD                      	lodsw                   ; get destination port
-   425 00000042 89C2                            mov     dx,ax		; put where useful
-   426 00000044 40                              inc     ax              ; test for EOF
-   427 00000045 7404                    	jz	.9		; EOF? if so, return
-   428                                  
-   429 00000047 AC                      	lodsb                   ; get port value
-   430 00000048 EE                              out     dx,al           ; output port value
-   431 00000049 EBF6                            jmp     initb_cx
-   432                                  .9:
-   433 0000004B FFE1                            jmp     cx              ; EOF, return
-   434                                  
-   435                                  
-   436                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   437                                  ; initw_cx	primitive entry
-   438                                  ; initw		callable entry (but uses CX)
-   439                                  ;
-   440                                  ;    Enter with:
-   441                                  ;
-   442                                  ;	DS:SI	pointing at the table of WORDS to init.
-   443                                  ;	CX	used to hold the return address
-   444                                  ;
-   445                                  ;    Exit with:
-   446                                  ;	AX,DX	trashed
-   447                                  ;	CX	used to hold the return
-   448                                  ;	SI	updated
+   418                                  ;	DS:SI	pointing at the table of BYTES to init.
+   419                                  ;	CX	used to hold the return address
+   420                                  ;
+   421                                  ;    Exit with:
+   422                                  ;	AX,DX	trashed
+   423                                  ;	CX	used to hold the return
+   424                                  ;	SI	updated
+   425                                  ;
+   426                                  ;	All other registers preserved
+   427                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   428                                  	global	initb
+   429                                  initb:
+   430 00000040 59                              pop     cx
+   431                                  initb_cx:
+   432 00000041 AD                      	lodsw                   ; get destination port
+   433 00000042 89C2                            mov     dx,ax		; put where useful
+   434 00000044 40                              inc     ax              ; test for EOF
+   435 00000045 7404                    	jz	.9		; EOF? if so, return
+   436                                  
+   437 00000047 AC                      	lodsb                   ; get port value
+   438 00000048 EE                              out     dx,al           ; output port value
+   439 00000049 EBF6                            jmp     initb_cx
+   440                                  .9:
+   441 0000004B FFE1                            jmp     cx              ; EOF, return
+   442                                  
+   443                                  
+   444                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   445                                  ; initw_cx	primitive entry
+   446                                  ; initw		callable entry (but uses CX)
+   447                                  ;
+   448                                  ;    Enter with:
    449                                  ;
-   450                                  ;	All other registers preserved
-   451                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   452                                  initw:
-   453 0000004D 59                              pop     cx
-   454                                  initw_cx:
-   455 0000004E AD                      	lodsw                   ; get destination port
-   456 0000004F 89C2                            mov     dx,ax		; put where useful
-   457 00000051 40                              inc     ax              ; test for EOF
-   458 00000052 7404                    	jz	.9		; EOF? if so, return
-   459                                  
-   460 00000054 AD                      	lodsw                   ; get port value
-   461 00000055 EF                              out     dx,ax           ; output to word port
-   462 00000056 EBF6                            jmp     initw_cx
-   463 00000058 FFE1                    .9:	jmp	cx		; EOF, return
-   464                                  
-   465                                  
-   466                                  
-   467                                  segment _TEXT
-   468                                  ;	global	start		; declared above
-   469                                  start:
-   470 0000005A FA                              cli
-   471 0000005B 81FA0923                	cmp	dx,0x2309	; device ID
-   472 0000005F 7404                    	je	start1
-   473                                  error_halt:
-   474 00000061 FA                      	cli
-   475 00000062 F4                      	hlt
-   476 00000063 EBFD                    	jmp	$-1
-   477                                  
-   478                                  start1:
-   479                                  ; test the Flags register
-   480                                  %if 1
-   481 00000065 B4D5                    	mov	ah,0xD5		;set the S, Z, A, P, C flags
-   482 00000067 9E                      	sahf
-   483 00000068 90                      	nop
-   484 00000069 90                      	nop
-   485 0000006A 73F5                    	jnc	error_halt
-   486 0000006C 75F3                    	jnz	error_halt
-   487 0000006E 79F1                    	jns	error_halt
-   488 00000070 7BEF                    	jnp	error_halt
-   489                                  
-   490 00000072 F8                      	clc
-   491 00000073 72EC                    	jc	error_halt
-   492 00000075 30E4                    	xor	ah,ah
-   493 00000077 72E8                    	jc	error_halt
-   494 00000079 75E6                    	jnz	error_halt
-   495 0000007B 9E                      	sahf
-   496 0000007C 7AE3                    	jp	error_halt
-   497 0000007E 78E1                    	js	error_halt
-   498 00000080 74DF                    	jz	error_halt
-   499 00000082 72DD                    	jc	error_halt
-   500                                  
-   501                                  %endif
-   502                                  
-   503                                  ; Enable access to the Expanded I/O ports (F000..FXXX)
-   504 00000084 E423                            in	al,REMAPCFGH	; reset the state machine (state A)
-   505 00000086 B80080                          mov     ax,0x8000
-   506 00000089 E623                            out     REMAPCFGH,al	; move to (state B)
-   507 0000008B 86E0                            xchg    ah,al
-   508 0000008D E622                            out     REMAPCFGL,al	; move to (state C)
-   509 0000008F E722                            out     REMAPCFG,ax	; move to (state D), sets ESE bit
-   510                                  ; Expanded I/O is now available -- ESE bit is set
-   511 00000091 FC                              cld                     ; do this as insurance (direction=forward)
-   512                                  
-   513 00000092 B8[ssss]                	mov	ax,DGROUP	; set up data area (CONST & CONST2)
-   514 00000095 8ED8                    	mov	ds,ax		;  addressing thru DS
-   515                                  	cnop
-   516 00000097 8EC0                    	mov	es,ax		;  and ES
-   517                                  	cnop
-   518                                  
-   519                                  ; Do the word port initialization
-   520                                  ;
-   521 00000099 BE[0001]                        mov     si,wtab1        ; get table address to SI
-   522 0000009C B9[A100]                        mov     cx,return2      ; set return address
-   523 0000009F EBAD                            jmp     initw_cx        ; simulate call
-   524                                  return2:
-   525                                  
-   526                                  ; Do the byte port initialization
-   527                                  ;
-   528 000000A1 BE[7A01]                        mov     si,btab1        ; get table address to SI
-   529 000000A4 B9[A900]                        mov     cx,return1      ; set return address
-   530 000000A7 EB98                            jmp     initb_cx        ; simulate call
-   531                                  return1:
-   532                                  
+   450                                  ;	DS:SI	pointing at the table of WORDS to init.
+   451                                  ;	CX	used to hold the return address
+   452                                  ;
+   453                                  ;    Exit with:
+   454                                  ;	AX,DX	trashed
+   455                                  ;	CX	used to hold the return
+   456                                  ;	SI	updated
+   457                                  ;
+   458                                  ;	All other registers preserved
+   459                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   460                                  initw:
+   461 0000004D 59                              pop     cx
+   462                                  initw_cx:
+   463 0000004E AD                      	lodsw                   ; get destination port
+   464 0000004F 89C2                            mov     dx,ax		; put where useful
+   465 00000051 40                              inc     ax              ; test for EOF
+   466 00000052 7404                    	jz	.9		; EOF? if so, return
+   467                                  
+   468 00000054 AD                      	lodsw                   ; get port value
+   469 00000055 EF                              out     dx,ax           ; output to word port
+   470 00000056 EBF6                            jmp     initw_cx
+   471 00000058 FFE1                    .9:	jmp	cx		; EOF, return
+   472                                  
+   473                                  
+   474                                  
+   475                                  segment _TEXT
+   476                                  ;	global	start		; declared above
+   477                                  start:
+   478 0000005A FA                              cli
+   479 0000005B 81FA0923                	cmp	dx,0x2309	; device ID
+   480 0000005F 7404                    	je	start1
+   481                                  error_halt:
+   482 00000061 FA                      	cli
+   483 00000062 F4                      	hlt
+   484 00000063 EBFD                    	jmp	$-1
+   485                                  
+   486                                  start1:
+   487                                  ; test the Flags register
+   488                                  %if 1
+   489 00000065 B4D5                    	mov	ah,0xD5		;set the S, Z, A, P, C flags
+   490 00000067 9E                      	sahf
+   491 00000068 90                      	nop
+   492 00000069 90                      	nop
+   493 0000006A 73F5                    	jnc	error_halt
+   494 0000006C 75F3                    	jnz	error_halt
+   495 0000006E 79F1                    	jns	error_halt
+   496 00000070 7BEF                    	jnp	error_halt
+   497                                  
+   498 00000072 F8                      	clc
+   499 00000073 72EC                    	jc	error_halt
+   500 00000075 30E4                    	xor	ah,ah
+   501 00000077 72E8                    	jc	error_halt
+   502 00000079 75E6                    	jnz	error_halt
+   503 0000007B 9E                      	sahf
+   504 0000007C 7AE3                    	jp	error_halt
+   505 0000007E 78E1                    	js	error_halt
+   506 00000080 74DF                    	jz	error_halt
+   507 00000082 72DD                    	jc	error_halt
+   508                                  
+   509                                  %endif
+   510                                  
+   511                                  ; Enable access to the Expanded I/O ports (F000..FXXX)
+   512 00000084 E423                            in	al,REMAPCFGH	; reset the state machine (state A)
+   513 00000086 B80080                          mov     ax,0x8000
+   514 00000089 E623                            out     REMAPCFGH,al	; move to (state B)
+   515 0000008B 86E0                            xchg    ah,al
+   516 0000008D E622                            out     REMAPCFGL,al	; move to (state C)
+   517 0000008F E722                            out     REMAPCFG,ax	; move to (state D), sets ESE bit
+   518                                  ; Expanded I/O is now available -- ESE bit is set
+   519 00000091 FC                              cld                     ; do this as insurance (direction=forward)
+   520                                  
+   521 00000092 B8[ssss]                	mov	ax,DGROUP	; set up data area (CONST & CONST2)
+   522 00000095 8ED8                    	mov	ds,ax		;  addressing thru DS
+   523                                  	cnop
+   524 00000097 8EC0                    	mov	es,ax		;  and ES
+   525                                  	cnop
+   526                                  
+   527                                  ; Do the word port initialization
+   528                                  ;
+   529 00000099 BE[0001]                        mov     si,wtab1        ; get table address to SI
+   530 0000009C B9[A100]                        mov     cx,return2      ; set return address
+   531 0000009F EBAD                            jmp     initw_cx        ; simulate call
+   532                                  return2:
    533                                  
-   534                                  %if 1
-   535 000000A9 BAFF04                  	mov	dx,0x4FF
-   536 000000AC 88D0                    	mov	al,dl
-   537 000000AE EE                      	out	dx,al		; Zap jrc LEDs to 0xFF
-   538                                  %endif
-   539                                  
-   540 000000AF B003                    	mov al,0011b
-   541 000000B1 E8DF01                  	call lites
-   542                                  
-   543                                  ; Size the SRAM
-   544                                  
-   545                                  size_SRAM:
-   546 000000B4 BF00A8                  	mov	di,SRAM_AD>>4	; SRAM segment
-   547 000000B7 8ED7                    	mov	ss,di		; set up SS
-   548                                  	cnop
-   549 000000B9 8EC7                    	mov	es,di		; set ES for later testing
-   550                                  	cnop
-   551 000000BB BA0020                  	mov	dx,(32<<8)	; DH=32, DL=0
-   552                                  .2:
-   553 000000BE 89D7                    	mov	di,dx		; get address
-   554 000000C0 C1E70A                  	shl	di,10		; convert to Kilobytes
-   555 000000C3 368815                     ss	mov	[di],dl		; store a byte
-   556 000000C6 FEC2                       	inc	dl
-   557 000000C8 38F2                    	cmp	dl,dh		; test up to 32K
-   558 000000CA 72F2                    	jb	.2
-   559                                  ; compute SRAM size
-   560 000000CC 362A160000                 ss	sub	dl,[0]
-   561 000000D1 C1E20A                     	shl	dx,10		; convert DL to DX=?? Kilobytes
-   562 000000D4 89D4                    	mov	sp,dx		; SS:8000h is stack start for 32K SRAM
-   563                                  
-   564                                  ; test the SRAM
-   565 000000D6 C1EA02                  	shr	dx,2		; count of DWORDs
-   566 000000D9 31F6                    	xor	si,si		; ES:SI is area to test
-   567 000000DB BB[E100]                	mov	bx, .3
-   568 000000DE E98701                  	jmp	seg_test_bx	; do the single bit test
-   569                                  .3:  ; return here
-   570                                  
+   534                                  ; Do the byte port initialization
+   535                                  ;
+   536 000000A1 BE[7A01]                        mov     si,btab1        ; get table address to SI
+   537 000000A4 B9[A900]                        mov     cx,return1      ; set return address
+   538 000000A7 EB98                            jmp     initb_cx        ; simulate call
+   539                                  return1:
+   540                                  
+   541                                  
+   542                                  %if 1
+   543 000000A9 BAFF04                  	mov	dx,0x4FF
+   544 000000AC 88D0                    	mov	al,dl
+   545 000000AE EE                      	out	dx,al		; Zap jrc LEDs to 0xFF
+   546                                  %endif
+   547                                  
+   548 000000AF B003                    	mov al,0011b
+   549 000000B1 E8DF01                  	call lites
+   550                                  
+   551                                  ; Size the SRAM
+   552                                  
+   553                                  size_SRAM:
+   554 000000B4 BF00A8                  	mov	di,SRAM_AD>>4	; SRAM segment
+   555 000000B7 8ED7                    	mov	ss,di		; set up SS
+   556                                  	cnop
+   557 000000B9 8EC7                    	mov	es,di		; set ES for later testing
+   558                                  	cnop
+   559 000000BB BA0020                  	mov	dx,(32<<8)	; DH=32, DL=0
+   560                                  .2:
+   561 000000BE 89D7                    	mov	di,dx		; get address
+   562 000000C0 C1E70A                  	shl	di,10		; convert to Kilobytes
+   563 000000C3 368815                     ss	mov	[di],dl		; store a byte
+   564 000000C6 FEC2                       	inc	dl
+   565 000000C8 38F2                    	cmp	dl,dh		; test up to 32K
+   566 000000CA 72F2                    	jb	.2
+   567                                  ; compute SRAM size
+   568 000000CC 362A160000                 ss	sub	dl,[0]
+   569 000000D1 C1E20A                     	shl	dx,10		; convert DL to DX=?? Kilobytes
+   570 000000D4 89D4                    	mov	sp,dx		; SS:8000h is stack start for 32K SRAM
    571                                  
-   572                                  ; All okay with the SRAM
-   573                                  ; We now have a stack, & can use CALL
-   574                                  ;	shr	dx,8    (already shifted by 2) == Kbytes in DL
-   575                                  ;   so we will just use DH as the Kilobyte count
-   576                                  %if HALF_MEM | 1
-   577 000000E1 89D5                    	mov	bp,dx		; Save SRAM size in BP for later
-   578                                  %else
-   579                                  	xor	bp,bp		; No SRAM, just DRAM was tested
-   580                                  %endif
-   581                                  
-   582                                  
-   583                                  ;
-   584                                  ; Test low 64K memory and ROM checksum
-   585                                  ;
-   586 000000E3 B001                    	mov	al,0001b	; show '0001' in the LITES
-   587 000000E5 E8AB01                  	call	lites
-   588                                  ;
-   589                                  ; Test and zero the entirety of SEGMENT 0x0000:xxxx
-   590                                  ;
-   591 000000E8 31F6                    	xor	si,si
-   592 000000EA 8EC6                    	mov	es,si		; select segment 0
-   593 000000EC BA0040                  	mov	dx,1<<14	; 16K dwords = 64K bytes
-   594 000000EF E87501                  	call	seg_test
-   595                                  
-   596                                  ; Will halt with '0001' in the LITES if there is a memory problem
-   597                                  
-   598                                  
-   599                                  ; Calculate ROM CRC
-   600                                  ;
-   601                                  ; removed for debug purposes
-   602                                  crc_computation:
-   603                                  ;	mov	ax,cs
-   604                                  ;	mov	es,ax		; ES:BX addresses ROM
-   605                                  ;	cnop
-   606                                  ;
-   607                                  ;	xor	ax,ax
-   608                                  ;	mov	bx,(CRC_AT+2)&0xFFFF	;start here
-   609                                  ;	xor	cx,cx
-   610                                  ;	xor	dx,dx		;overflow for 1's complement
-   611                                  ; CRC16 computation
-   612                                  	extern	crc16
-   613                                  ;
-   614                                  ;	call	crc16
-   615                                  ;	or	ax,ax		; test for zero checksum
-   616                                  ;	jz	.1
-   617                                  ;	hlt
-   618                                  .1:
-   619                                  
-   620                                  
-   621                                  
-   622                                  ; Determine the CPU frequency
-   623                                  
-   624                                  get_CLKOUT:
-   625                                  %if MFPIC & 0
-   626                                  	mov	bx,33000	; 33mhz clock
-   627                                  %else
-   628 000000F2 BA34F8                  	mov	dx,TMRCFG	; Timer control
-   629 000000F5 B04B                    	mov	al,TIMER_RUN	;start counters 0 & 1
-   630 000000F7 EE                      	out	dx,al		; **
+   572                                  ; test the SRAM
+   573 000000D6 C1EA02                  	shr	dx,2		; count of DWORDs
+   574 000000D9 31F6                    	xor	si,si		; ES:SI is area to test
+   575 000000DB BB[E100]                	mov	bx, .3
+   576 000000DE E98701                  	jmp	seg_test_bx	; do the single bit test
+   577                                  .3:  ; return here
+   578                                  
+   579                                  
+   580                                  ; All okay with the SRAM
+   581                                  ; We now have a stack, & can use CALL
+   582                                  ;	shr	dx,8    (already shifted by 2) == Kbytes in DL
+   583                                  ;   so we will just use DH as the Kilobyte count
+   584                                  %if HALF_MEM | 1
+   585 000000E1 89D5                    	mov	bp,dx		; Save SRAM size in BP for later
+   586                                  %else
+   587                                  	xor	bp,bp		; No SRAM, just DRAM was tested
+   588                                  %endif
+   589                                  
+   590                                  
+   591                                  ;
+   592                                  ; Test low 64K memory and ROM checksum
+   593                                  ;
+   594 000000E3 B001                    	mov	al,0001b	; show '0001' in the LITES
+   595 000000E5 E8AB01                  	call	lites
+   596                                  ;
+   597                                  ; Test and zero the entirety of SEGMENT 0x0000:xxxx
+   598                                  ;
+   599 000000E8 31F6                    	xor	si,si
+   600 000000EA 8EC6                    	mov	es,si		; select segment 0
+   601 000000EC BA0040                  	mov	dx,1<<14	; 16K dwords = 64K bytes
+   602 000000EF E87501                  	call	seg_test
+   603                                  
+   604                                  ; Will halt with '0001' in the LITES if there is a memory problem
+   605                                  
+   606                                  
+   607                                  ; Calculate ROM CRC
+   608                                  ;
+   609                                  ; removed for debug purposes
+   610                                  crc_computation:
+   611                                  ;	mov	ax,cs
+   612                                  ;	mov	es,ax		; ES:BX addresses ROM
+   613                                  ;	cnop
+   614                                  ;
+   615                                  ;	xor	ax,ax
+   616                                  ;	mov	bx,(CRC_AT+2)&0xFFFF	;start here
+   617                                  ;	xor	cx,cx
+   618                                  ;	xor	dx,dx		;overflow for 1's complement
+   619                                  ; CRC16 computation
+   620                                  	extern	crc16
+   621                                  ;
+   622                                  ;	call	crc16
+   623                                  ;	or	ax,ax		; test for zero checksum
+   624                                  ;	jz	.1
+   625                                  ;	hlt
+   626                                  .1:
+   627                                  
+   628                                  
+   629                                  
+   630                                  ; Determine the CPU frequency
    631                                  
-   632 000000F8 BA20F0                  	mov	dx,OCW3M
-   633 000000FB B04A                    	mov	al,BIT6+ZBIT5+ ZBIT4+BIT3 +BIT1+ZBIT0  ;IRreg
-   634 000000FD EE                      	out	dx,al
-   635                                  wait00:
-   636 000000FE EB00                    	jmp	$+2
-   637 00000100 EB00                    	jmp	$+2
-   638 00000102 EB00                    	jmp	$+2
-   639 00000104 EC                      	in	al,dx		;has an interrupt been generated
-   640 00000105 A801                    	test	al,BIT0		; from Timer 0
-   641 00000107 74F5                    	jz	wait00		;Out0 is still low
-   642                                  
-   643 00000109 BA34F8                  	mov	dx,TMRCFG
-   644 0000010C B041                    	mov	al,TIMER_STOP	; turn off all the gates
-   645 0000010E EE                      	out	dx,al
-   646                                  
-   647 0000010F BA41F0                  	mov	dx,TMR1		; read what is left in timer 1
-   648 00000112 EC                      	in	al,dx		;low byte
-   649 00000113 88C3                    	mov	bl,al
-   650 00000115 EC                      	in	al,dx		;high byte
-   651 00000116 88C7                    	mov	bh,al
-   652 00000118 F7D3                    	not	bx		; -count-1
-   653                                  %endif
-   654                                  %if MFPIC
-   655                                  	mov	ax,bx
-   656                                  	call	wout
-   657                                  %endif
-   658                                  ;
-   659                                  
-   660                                  ; set up the refresh counter correctly
-   661 0000011A 89D8                    	mov	ax,bx		; count in khz
-   662 0000011C 83C005                  	add	ax,5		; round up a bit
-   663 0000011F C1E806                  	shr	ax,6		; divide by 64khz
-   664 00000122 BAA2F4                  	mov	dx,RFSCIR	; Refresh Count
-   665 00000125 EF                      	out	dx,ax
-   666                                  
-   667                                  ; put out CPU frequency message
-   668                                  
-   669 00000126 8D87F401                	lea	ax,[bx+500]	; round to nearest integer
-   670 0000012A B9E803                  	mov	cx,1000
-   671 0000012D 31D2                    	xor	dx,dx
-   672 0000012F F7F1                    	div	cx		;integer frequency
-   673                                  %if 1
-   674 00000131 BAFF04                  	mov	dx,0x4FF	; jrc LEDs
-   675 00000134 EE                      	out	dx,al
-   676                                  %endif
-   677 00000135 48                      	dec	ax
-   678 00000136 48                      	dec	ax		; divisor is 2 less
-   679 00000137 BA04F8                  	mov	dx,CLKPRS	; pre-scale clock
-   680 0000013A EF                      	out	dx,ax		; PSCLK is now 1.000 mhz (1 usec clock)
-   681                                  
-   682                                  ;;	pushm	bx,bp		; save CPU_freq & SRAM_size
-   683                                    ;; 	popm	bx,bp
-   684                                  
-   685 0000013B 6A4007                  	get_bda	ES
-   686 0000013E 26891EDD00                 es	mov	[CPU_freq],bx
-   687 00000143 89EB                    	mov	bx,bp		;restore SRAM size to BH
-   688 00000145 26883E0101                 es	mov	[SRAM_size],bh
+   632                                  get_CLKOUT:
+   633                                  %if MFPIC & 0
+   634                                  	mov	bx,33000	; 33mhz clock
+   635                                  %else
+   636 000000F2 BA34F8                  	mov	dx,TMRCFG	; Timer control
+   637 000000F5 B04B                    	mov	al,TIMER_RUN	;start counters 0 & 1
+   638 000000F7 EE                      	out	dx,al		; **
+   639                                  
+   640 000000F8 BA20F0                  	mov	dx,OCW3M
+   641 000000FB B04A                    	mov	al,BIT6+ZBIT5+ ZBIT4+BIT3 +BIT1+ZBIT0  ;IRreg
+   642 000000FD EE                      	out	dx,al
+   643                                  wait00:
+   644 000000FE EB00                    	jmp	$+2
+   645 00000100 EB00                    	jmp	$+2
+   646 00000102 EB00                    	jmp	$+2
+   647 00000104 EC                      	in	al,dx		;has an interrupt been generated
+   648 00000105 A801                    	test	al,BIT0		; from Timer 0
+   649 00000107 74F5                    	jz	wait00		;Out0 is still low
+   650                                  
+   651 00000109 BA34F8                  	mov	dx,TMRCFG
+   652 0000010C B041                    	mov	al,TIMER_STOP	; turn off all the gates
+   653 0000010E EE                      	out	dx,al
+   654                                  
+   655 0000010F BA41F0                  	mov	dx,TMR1		; read what is left in timer 1
+   656 00000112 EC                      	in	al,dx		;low byte
+   657 00000113 88C3                    	mov	bl,al
+   658 00000115 EC                      	in	al,dx		;high byte
+   659 00000116 88C7                    	mov	bh,al
+   660 00000118 F7D3                    	not	bx		; -count-1
+   661                                  %endif
+   662                                  %if MFPIC
+   663                                  	mov	ax,bx
+   664                                  	call	wout
+   665                                  %endif
+   666                                  ;
+   667                                  
+   668                                  ; set up the refresh counter correctly
+   669 0000011A 89D8                    	mov	ax,bx		; count in khz
+   670 0000011C 83C005                  	add	ax,5		; round up a bit
+   671 0000011F C1E806                  	shr	ax,6		; divide by 64khz
+   672 00000122 BAA2F4                  	mov	dx,RFSCIR	; Refresh Count
+   673 00000125 EF                      	out	dx,ax
+   674                                  
+   675                                  ; put out CPU frequency message
+   676                                  
+   677 00000126 8D87F401                	lea	ax,[bx+500]	; round to nearest integer
+   678 0000012A B9E803                  	mov	cx,1000
+   679 0000012D 31D2                    	xor	dx,dx
+   680 0000012F F7F1                    	div	cx		;integer frequency
+   681                                  %if 1
+   682 00000131 BAFF04                  	mov	dx,0x4FF	; jrc LEDs
+   683 00000134 EE                      	out	dx,al
+   684                                  %endif
+   685 00000135 48                      	dec	ax
+   686 00000136 48                      	dec	ax		; divisor is 2 less
+   687 00000137 BA04F8                  	mov	dx,CLKPRS	; pre-scale clock
+   688 0000013A EF                      	out	dx,ax		; PSCLK is now 1.000 mhz (1 usec clock)
    689                                  
-   690                                  
-   691                                  %if 0
-   692                                  	pusha
-   693                                  
-   694                                  	extern	uart_det_
-   695                                  ;;;	mov	ax,RBR0
-   696                                  	mov	ax,0x03F8	;;; see what is on-chip
-   697                                  ; this call will trash AX,BX,CX,DX
-   698                                  	call	uart_det_
-   699                                  ; this detection code confirms that the UART on the 386EX is a 16450
-   700                                  
-   701                                  %if 1
-   702                                  	mov	dx,0x4FF	; jrc LEDs
-   703                                  	out	dx,al
-   704                                  %endif
-   705                                  	popa
-   706                                  %endif
-   707                                  
+   690                                  ;;	pushm	bx,bp		; save CPU_freq & SRAM_size
+   691                                    ;; 	popm	bx,bp
+   692                                  
+   693 0000013B 6A4007                  	get_bda	ES
+   694 0000013E 26891EDD00                 es	mov	[CPU_freq],bx
+   695 00000143 89EB                    	mov	bx,bp		;restore SRAM size to BH
+   696 00000145 26883E0101                 es	mov	[SRAM_size],bh
+   697                                  
+   698                                  
+   699                                  %if 0
+   700                                  	pusha
+   701                                  
+   702                                  	extern	uart_det_
+   703                                  ;;;	mov	ax,RBR0
+   704                                  	mov	ax,0x03F8	;;; see what is on-chip
+   705                                  ; this call will trash AX,BX,CX,DX
+   706                                  	call	uart_det_
+   707                                  ; this detection code confirms that the UART on the 386EX is a 16450
    708                                  
-   709 0000014A B002                    	mov	al,0010b	; show '0010' in the LITES
-   710 0000014C E84401                  	call	lites
-   711                                  
-   712                                  ;
-   713                                  ; Test memory from 1000:0000h to 7000:FFFFh
-   714                                  ;
-   715                                  test_1to8:
-   716 0000014F 31F6                    	xor	si,si
-   717 00000151 BA0040                  	mov	dx,1<<14	; 16K dwords
-   718 00000154 B80010                  	mov	ax,1000h	; 2nd 64K segment
-   719 00000157 8EC0                    .1:	mov	es,ax		; set the segment register
-   720                                  	cnop
-   721 00000159 E80B01                  	call	seg_test	; halts on error
-   722 0000015C 8CC0                    	mov	ax,es
-   723 0000015E 80C410                  	add	ah,10h		; increment to next segment
-   724                                  %if HALF_MEM
-   725                                  	cmp	ah,0x80		; are we done
-   726                                  %else
-   727 00000161 80FCA0                  	cmp	ah,0xA0		; test all of low 64K
-   728                                  %endif
-   729 00000164 72F1                    	jb	.1
-   730                                  
-   731                                  	; segment 8000:0000 is not yet enabled
-   732                                  
-   733 00000166 C1E806                  	shr	ax,6		; size in K bytes
-   734 00000169 89C3                    	mov	bx,ax		; save in BX
-   735                                  
-   736                                  ;
-   737                                  ; Set up the interrupt vectors in 0x0000:  0000h..0200h
-   738                                  ;
-   739                                  ; ES will point at location 0:0
-   740                                  ;
-   741                                  set_the_vectors:
-   742 0000016B 6A0007                  	get_loc0 ES
-   743 0000016E 31FF                    	xor	di,di
-   744                                  ; DS is set to DGROUP already
-   745 00000170 BE[0000]                	mov	si,page0vectors	; DS:SI points at word addresses
-   746 00000173 B98000                  	mov	cx,n_page0vectors
-   747 00000176 8CC8                    	mov	ax,cs		; CS=0xF000
-   748                                  .1:
-   749 00000178 A5                      	movsw			;move low word of address
-   750 00000179 AB                      	stosw			;set segment part
-   751 0000017A E2FC                    	loop	.1
-   752                                  
-   753                                  %if 0
-   754                                  	get_bda	ES
-   755                                  	xor	di,di		; set to zero the BDA
-   756                                  	mov	cx,AT_status_byte	; length
-   757                                  ;;;	mov	al,0		; AX is F000 from above
-   758                                  	rep stosb
-   759                                  %endif
+   709                                  %if 1
+   710                                  	mov	dx,0x4FF	; jrc LEDs
+   711                                  	out	dx,al
+   712                                  %endif
+   713                                  	popa
+   714                                  %endif
+   715                                  
+   716                                  
+   717 0000014A B002                    	mov	al,0010b	; show '0010' in the LITES
+   718 0000014C E84401                  	call	lites
+   719                                  
+   720                                  ;
+   721                                  ; Test memory from 1000:0000h to 7000:FFFFh
+   722                                  ;
+   723                                  test_1to8:
+   724 0000014F 31F6                    	xor	si,si
+   725 00000151 BA0040                  	mov	dx,1<<14	; 16K dwords
+   726 00000154 B80010                  	mov	ax,1000h	; 2nd 64K segment
+   727 00000157 8EC0                    .1:	mov	es,ax		; set the segment register
+   728                                  	cnop
+   729 00000159 E80B01                  	call	seg_test	; halts on error
+   730 0000015C 8CC0                    	mov	ax,es
+   731 0000015E 80C410                  	add	ah,10h		; increment to next segment
+   732                                  %if HALF_MEM
+   733                                  	cmp	ah,0x80		; are we done
+   734                                  %else
+   735 00000161 80FCA0                  	cmp	ah,0xA0		; test all of low 64K
+   736                                  %endif
+   737 00000164 72F1                    	jb	.1
+   738                                  
+   739                                  	; segment 8000:0000 is not yet enabled
+   740                                  
+   741 00000166 C1E806                  	shr	ax,6		; size in K bytes
+   742 00000169 89C3                    	mov	bx,ax		; save in BX
+   743                                  
+   744                                  ;
+   745                                  ; Set up the interrupt vectors in 0x0000:  0000h..0200h
+   746                                  ;
+   747                                  ; ES will point at location 0:0
+   748                                  ;
+   749                                  set_the_vectors:
+   750 0000016B 6A0007                  	get_loc0 ES
+   751 0000016E 31FF                    	xor	di,di
+   752                                  ; DS is set to DGROUP already
+   753 00000170 BE[0000]                	mov	si,page0vectors	; DS:SI points at word addresses
+   754 00000173 B98000                  	mov	cx,n_page0vectors
+   755 00000176 8CC8                    	mov	ax,cs		; CS=0xF000
+   756                                  .1:
+   757 00000178 A5                      	movsw			;move low word of address
+   758 00000179 AB                      	stosw			;set segment part
+   759 0000017A E2FC                    	loop	.1
    760                                  
-   761                                  ;
-   762                                  ; vectors for int's 00..7Fh are set
-   763                                  ;
-   764                                  
-   765 0000017C 6A4007                  	get_bda	ES		;get the BDA pointer
-   766 0000017F 26891E1300                es	mov	word [memory_size],bx	; conventional memory size
-   767                                  
-   768                                  ; test for presence of the FPU
+   761                                  %if 0
+   762                                  	get_bda	ES
+   763                                  	xor	di,di		; set to zero the BDA
+   764                                  	mov	cx,AT_status_byte	; length
+   765                                  ;;;	mov	al,0		; AX is F000 from above
+   766                                  	rep stosb
+   767                                  %endif
+   768                                  
    769                                  ;
-   770                                  
-   771                                  %if P3_FPU_CHECK
-   772                                  	mov     dx,P3PIN        ; get P3 port status
-   773                                          in      al,dx           ; P3.0 is co-processor presence detect
-   774                                  	test	al,01		; test for FPU present==0, absent==1
-   775                                  	jnz	skip_fpu
-   776                                  
-   777                                      es	or	word [equip_flag],BIT1	;set h/w FPU flag
+   770                                  ; vectors for int's 00..7Fh are set
+   771                                  ;
+   772                                  
+   773 0000017C 6A4007                  	get_bda	ES		;get the BDA pointer
+   774 0000017F 26891E1300                es	mov	word [memory_size],bx	; conventional memory size
+   775                                  
+   776                                  ; test for presence of the FPU
+   777                                  ;
    778                                  
-   779                                  	mov	al,0101b		; FPU error code
-   780                                  	call	lites
-   781                                  
-   782                                  	fninit				; this may hang
-   783                                  
-   784                                  skip_fpu:
-   785                                  
-   786                                  %else
-   787                                  
-   788                                  ; Intel code to check for FPU
+   779                                  %if P3_FPU_CHECK
+   780                                  	mov     dx,P3PIN        ; get P3 port status
+   781                                          in      al,dx           ; P3.0 is co-processor presence detect
+   782                                  	test	al,01		; test for FPU present==0, absent==1
+   783                                  	jnz	skip_fpu
+   784                                  
+   785                                      es	or	word [equip_flag],BIT1	;set h/w FPU flag
+   786                                  
+   787                                  	mov	al,0101b		; FPU error code
+   788                                  	call	lites
    789                                  
-   790                                  fpu_check:
-   791 00000184 B007                    	mov	al,0111b
-   792 00000186 E80A01                  	call	lites
+   790                                  	fninit				; this may hang
+   791                                  
+   792                                  skip_fpu:
    793                                  
-   794 00000189 0F20C0                  	mov	eax,cr0
-   795 0000018C 83E0F9                  	and	ax,~(CR0_EM+CR0_MP)	; make sure these are off
-   796 0000018F 0F22C0                  	mov	cr0,eax
+   794                                  %else
+   795                                  
+   796                                  ; Intel code to check for FPU
    797                                  
-   798 00000192 DBE3                    	fninit
-   799                                  
-   800 00000194 B009                    	mov	al,1001b
-   801 00000196 E8FA00                  	call	lites
-   802                                  
-   803 00000199 55                      	push	bp
-   804 0000019A B85A5A                  	mov	ax,5A5Ah	; garbage
-   805 0000019D 50                      	push	ax
-   806 0000019E 89E5                    	mov	bp,sp		; [bp] points at word
+   798                                  fpu_check:
+   799 00000184 B007                    	mov	al,0111b
+   800 00000186 E80A01                  	call	lites
+   801                                  
+   802 00000189 0F20C0                  	mov	eax,cr0
+   803 0000018C 83E0F9                  	and	ax,~(CR0_EM+CR0_MP)	; make sure these are off
+   804 0000018F 0F22C0                  	mov	cr0,eax
+   805                                  
+   806 00000192 DBE3                    	fninit
    807                                  
-   808 000001A0 DD7E00                  	fnstsw	[bp]
-   809                                  
-   810                                  %if 0
-   811                                  	mov	ax,[bp]
-   812                                  	call	wout
-   813                                  %endif
-   814 000001A3 807E0000                	cmp	byte [bp],0	; .eq. if FPU present
-   815 000001A7 751E                    	jne	.7
-   816                                  
-   817 000001A9 B00A                    	mov	al,1010b
-   818 000001AB E8E500                  	call	lites
-   819                                  
-   820 000001AE D97E00                  	fnstcw	[bp]
-   821                                  
-   822                                  %if 0
-   823                                  	mov	ax,[bp]
-   824                                  	call	wout
-   825                                  %endif
-   826 000001B1 8B4600                  	mov	ax,[bp]
-   827 000001B4 253F10                  	and	ax,103Fh
-   828 000001B7 83F83F                  	cmp	ax,3Fh
-   829 000001BA 750B                    	jne	.7
-   830                                  
-   831 000001BC B00B                    	mov	al,1011b
-   832 000001BE E8D200                  	call	lites
-   833                                  
-   834 000001C1 26830E100002                es	or	word [equip_flag],BIT1	;set h/w FPU flag
-   835                                  .7:
-   836 000001C7 5D                      	pop	bp
-   837 000001C8 5D                      	pop	bp
-   838                                  %endif
-   839                                  
-   840 000001C9 B004                    	mov	al,0100b		; FPU clear code
-   841 000001CB E8C500                  	call	lites
-   842                                  
-   843                                  
-   844                                  	extern	ext_mem_size
-   845 000001CE E8(0000)                	call	ext_mem_size
-   846                                  
-   847 000001D1 6A4007                  	get_bda	ES
-   848                                  
-   849 000001D4 48                      	dec	ax
-   850 000001D5 BAFF04                  	mov	dx,0x4FF
-   851 000001D8 EE                      	out	dx,al
-   852 000001D9 C1E00A                  	shl	ax,20-10			;convert MB count to Kbyte count
-   853                                  
-   854 000001DC 26A3DB00                   es	mov	[extended_memory],ax	; save Ext Mem count
-   855                                  
-   856                                  ; prime the DS1302
-   857                                  ;
-   858                                  	extern	ds_reset_on, ds_reset_off
-   859                                  
-   860 000001E0 E8(0000)                	call	ds_reset_on
-   861                                  ;;;	call	ds_reset_off
-   862                                  ;;;	call	ds_reset_on
-   863                                  ;;;	call	ds_reset_off
-   864                                  
+   808 00000194 B009                    	mov	al,1001b
+   809 00000196 E8FA00                  	call	lites
+   810                                  
+   811 00000199 55                      	push	bp
+   812 0000019A B85A5A                  	mov	ax,5A5Ah	; garbage
+   813 0000019D 50                      	push	ax
+   814 0000019E 89E5                    	mov	bp,sp		; [bp] points at word
+   815                                  
+   816 000001A0 DD7E00                  	fnstsw	[bp]
+   817                                  
+   818                                  %if 0
+   819                                  	mov	ax,[bp]
+   820                                  	call	wout
+   821                                  %endif
+   822 000001A3 807E0000                	cmp	byte [bp],0	; .eq. if FPU present
+   823 000001A7 751E                    	jne	.7
+   824                                  
+   825 000001A9 B00A                    	mov	al,1010b
+   826 000001AB E8E500                  	call	lites
+   827                                  
+   828 000001AE D97E00                  	fnstcw	[bp]
+   829                                  
+   830                                  %if 0
+   831                                  	mov	ax,[bp]
+   832                                  	call	wout
+   833                                  %endif
+   834 000001B1 8B4600                  	mov	ax,[bp]
+   835 000001B4 253F10                  	and	ax,103Fh
+   836 000001B7 83F83F                  	cmp	ax,3Fh
+   837 000001BA 750B                    	jne	.7
+   838                                  
+   839 000001BC B00B                    	mov	al,1011b
+   840 000001BE E8D200                  	call	lites
+   841                                  
+   842 000001C1 26830E100002                es	or	word [equip_flag],BIT1	;set h/w FPU flag
+   843                                  .7:
+   844 000001C7 5D                      	pop	bp
+   845 000001C8 5D                      	pop	bp
+   846                                  %endif
+   847                                  
+   848 000001C9 B004                    	mov	al,0100b		; FPU clear code
+   849 000001CB E8C500                  	call	lites
+   850                                  
+   851                                  
+   852                                  	extern	ext_mem_size
+   853 000001CE E8(0000)                	call	ext_mem_size
+   854                                  
+   855 000001D1 6A4007                  	get_bda	ES
+   856                                  
+   857 000001D4 48                      	dec	ax
+   858 000001D5 BAFF04                  	mov	dx,0x4FF
+   859 000001D8 EE                      	out	dx,al
+   860 000001D9 C1E00A                  	shl	ax,20-10			;convert MB count to Kbyte count
+   861                                  
+   862 000001DC 26A3DB00                   es	mov	[extended_memory],ax	; save Ext Mem count
+   863                                  
+   864                                  ; prime the DS1302
    865                                  ;
-   866                                  ; read the NVRAM into the BIOS Data Area
-   867                                  ;
-   868 000001E3 6A4007                  	get_bda	ES
-   869 000001E6 BBE100                  	mov	bx,nvram_info		; ES:BX points at BDA extension
-   870                                  
-   871 000001E9 B81F20                  	mov	ax, 0x20<<8 | 31	; burst read all NVRAM
-   872 000001EC CD1A                    	int	0x1A
-   873 000001EE 7306                    	jnc	form_crc
-   874                                  ds_err:
-   875 000001F0 B00F                    	mov	al,1111b
-   876 000001F2 E89E00                  	call	lites
-   877 000001F5 F4                      	hlt
+   866                                  	extern	ds_reset_on, ds_reset_off
+   867                                  
+   868 000001E0 E8(0000)                	call	ds_reset_on
+   869                                  ;;;	call	ds_reset_off
+   870                                  ;;;	call	ds_reset_on
+   871                                  ;;;	call	ds_reset_off
+   872                                  
+   873                                  ;
+   874                                  ; read the NVRAM into the BIOS Data Area
+   875                                  ;
+   876 000001E3 6A4007                  	get_bda	ES
+   877 000001E6 BBE100                  	mov	bx,nvram_info		; ES:BX points at BDA extension
    878                                  
-   879                                  form_crc:
-   880 000001F6 6A00                    	push	0			; assume CRC okay
-   881 000001F8 89E5                    	mov	bp,sp			; saved in [bp]
-   882                                  
-   883 000001FA B81F00                  	mov	ax,31			; actual CRC check
-   884 000001FD E80101                  	call	get_nvram_crc_
-   885                                  %if 0
-   886                                  	push	ax
-   887                                  	mov	al,1010B
-   888                                  	call	lites
-   889                                  	pop	ax
-   890                                  %endif
-   891 00000200 09C0                    	or	ax,ax
-   892 00000202 7416                    	jz	.2
-   893                                  
-   894 00000204 BE[ssss]                	mov	si,DGROUP		; make sure DS is correct
-   895 00000207 8EDE                    	mov	ds,si
-   896 00000209 BE[0102]                	mov	si,NVRAM00		;DS is already set
-   897                                  
-   898 0000020C 6A4007                  	get_bda	ES
-   899 0000020F BFE100                  	mov	di,nvram_info		; ES is *BDA
-   900 00000212 B91F00                  	mov	cx,31
-   901 00000215 F3A4                    	rep	movsb
-   902 00000217 FE4600                  	inc	byte [bp]		; flag bad
-   903                                  
-   904                                  .2:
-   905                                  	extern	get_time
-   906                                  
-   907 0000021A E8(0000)                	call	get_time
-   908 0000021D 7304                    	jnc	.3
-   909 0000021F 804E0002                	or	byte [bp],2		; flag clock stopped
-   910                                  .3:
-   911                                  	extern	ds_get_charge
-   912 00000223 E8(0000)                	call	ds_get_charge
-   913 00000226 34A0                    	xor	al,0xA0
-   914 00000228 A8F0                    	test	al,0xF0			; charge enabled flag is 1010_....
-   915 0000022A 750C                    	jnz	.7
-   916 0000022C A803                    	test	al,0x03			; charge disabled if R not in [1,2,3]
-   917 0000022E 7408                    	jz	.7
-   918 00000230 240C                    	and	al,0x0C			; charge disabled if D==0
-   919 00000232 7404                    	jz	.7
-   920 00000234 340C                    	xor	al,0x0C			; charge disabled if D==3
-   921                                  ;;;;	jz	.7
-   922 00000236 7504                    	jnz	.8
-   923                                  
-   924 00000238 804E0004                .7:	or	byte [bp],4		; charging disabled
-   925                                  .8:
-   926                                  
-   927                                  	extern	start_timer0_
-   928 0000023C E8(0000)                	call	start_timer0_		; in 1Ah_time.asm
-   929                                  
-   930 0000023F B005                    	mov	al,0101B	;calling _MAIN_
-   931 00000241 E84F00                  	call	lites
-   932                                  
-   933 00000244 B8[ssss]                	mov	ax,DGROUP
-   934 00000247 8ED8                    	mov	ds,ax
-   935 00000249 8EC0                    	mov	es,ax
-   936                                  
-   937 0000024B 8B4600                  	mov	ax,[bp]			; argument to _main_
-   938                                  
-   939                                  	extern	_main__			; C-callable
-   940 0000024E FB                      	sti			; enable interrupts
-   941 0000024F E8(0000)                	call	_main__
-   942                                  
-   943                                  	global	exit_
-   944                                  exit_:
-   945                                  %if 1
-   946 00000252 BAFF04                  	mov	dx,0x4FF	; jrc LEDs
-   947 00000255 EE                      	out	dx,al
-   948                                  %endif
-   949 00000256 E83A00                  	call	lites
+   879 000001E9 B81F20                  	mov	ax, 0x20<<8 | 31	; burst read all NVRAM
+   880 000001EC CD1A                    	int	0x1A
+   881 000001EE 7306                    	jnc	form_crc
+   882                                  ds_err:
+   883 000001F0 B00F                    	mov	al,1111b
+   884 000001F2 E89E00                  	call	lites
+   885 000001F5 F4                      	hlt
+   886                                  
+   887                                  form_crc:
+   888 000001F6 6A00                    	push	0			; assume CRC okay
+   889 000001F8 89E5                    	mov	bp,sp			; saved in [bp]
+   890                                  
+   891 000001FA B81F00                  	mov	ax,31			; actual CRC check
+   892 000001FD E80101                  	call	get_nvram_crc_
+   893                                  %if 0
+   894                                  	push	ax
+   895                                  	mov	al,1010B
+   896                                  	call	lites
+   897                                  	pop	ax
+   898                                  %endif
+   899 00000200 09C0                    	or	ax,ax
+   900 00000202 7416                    	jz	.2
+   901                                  
+   902 00000204 BE[ssss]                	mov	si,DGROUP		; make sure DS is correct
+   903 00000207 8EDE                    	mov	ds,si
+   904 00000209 BE[0102]                	mov	si,NVRAM00		;DS is already set
+   905                                  
+   906 0000020C 6A4007                  	get_bda	ES
+   907 0000020F BFE100                  	mov	di,nvram_info		; ES is *BDA
+   908 00000212 B91F00                  	mov	cx,31
+   909 00000215 F3A4                    	rep	movsb
+   910 00000217 FE4600                  	inc	byte [bp]		; flag bad
+   911                                  
+   912                                  .2:
+   913                                  	extern	get_time
+   914                                  
+   915 0000021A E8(0000)                	call	get_time
+   916 0000021D 7304                    	jnc	.3
+   917 0000021F 804E0002                	or	byte [bp],2		; flag clock stopped
+   918                                  .3:
+   919                                  	extern	ds_get_charge
+   920 00000223 E8(0000)                	call	ds_get_charge
+   921 00000226 34A0                    	xor	al,0xA0
+   922 00000228 A8F0                    	test	al,0xF0			; charge enabled flag is 1010_....
+   923 0000022A 750C                    	jnz	.7
+   924 0000022C A803                    	test	al,0x03			; charge disabled if R not in [1,2,3]
+   925 0000022E 7408                    	jz	.7
+   926 00000230 240C                    	and	al,0x0C			; charge disabled if D==0
+   927 00000232 7404                    	jz	.7
+   928 00000234 340C                    	xor	al,0x0C			; charge disabled if D==3
+   929                                  ;;;;	jz	.7
+   930 00000236 7504                    	jnz	.8
+   931                                  
+   932 00000238 804E0004                .7:	or	byte [bp],4		; charging disabled
+   933                                  .8:
+   934                                  
+   935                                  	extern	start_timer0_
+   936 0000023C E8(0000)                	call	start_timer0_		; in 1Ah_time.asm
+   937                                  
+   938 0000023F B005                    	mov	al,0101B	;calling _MAIN_
+   939 00000241 E84F00                  	call	lites
+   940                                  
+   941 00000244 B8[ssss]                	mov	ax,DGROUP
+   942 00000247 8ED8                    	mov	ds,ax
+   943 00000249 8EC0                    	mov	es,ax
+   944                                  
+   945 0000024B 8B4600                  	mov	ax,[bp]			; argument to _main_
+   946                                  
+   947                                  	extern	_main__			; C-callable
+   948 0000024E FB                      	sti			; enable interrupts
+   949 0000024F E8(0000)                	call	_main__
    950                                  
-   951 00000259 FA                      	cli
-   952                                  ; enter POWERDOWN mode
-   953 0000025A BA00F8                  	mov	dx,PWRCON
-   954 0000025D EC                      	in	al,dx
-   955 0000025E 24FC                    	and	al,~3
-   956 00000260 0C01                    	or	al,BIT0
-   957 00000262 EE                      	out	dx,al
-   958 00000263 90                      	nop
-   959 00000264 F4                      	hlt
-   960 00000265 EBFD                    	jmp	$-1
-   961                                  
-   962                                  
-   963                                  ; STOP STOP STOP STOP
-   964                                  segment CONST
-   965                                  	global _SecBuffer		; for TESTIDE.C
-   966                                  ;_SecBuffer	dw	0x0200,0x6000 ;  in high memory
-   967                                  
-   968 00000220 008000A0                _SecBuffer	dw	0x8000,0xA000	;
+   951                                  	global	exit_
+   952                                  exit_:
+   953                                  %if 1
+   954 00000252 BAFF04                  	mov	dx,0x4FF	; jrc LEDs
+   955 00000255 EE                      	out	dx,al
+   956                                  %endif
+   957 00000256 E83A00                  	call	lites
+   958                                  
+   959 00000259 FA                      	cli
+   960                                  ; enter POWERDOWN mode
+   961 0000025A BA00F8                  	mov	dx,PWRCON
+   962 0000025D EC                      	in	al,dx
+   963 0000025E 24FC                    	and	al,~3
+   964 00000260 0C01                    	or	al,BIT0
+   965 00000262 EE                      	out	dx,al
+   966 00000263 90                      	nop
+   967 00000264 F4                      	hlt
+   968 00000265 EBFD                    	jmp	$-1
    969                                  
-   970                                  segment	_TEXT
-   971                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   972                                  ; seg_test -- test a segment of memory (variable size)
-   973                                  ; seg_test_bx	ditto, but returns through BX
-   974                                  ;
-   975                                  ;    Enter with:
-   976                                  ;	ES:SI	points at area to test
-   977                                  ;	DX	count of size of area in DWORDS (16K==full segment)
-   978                                  ;
-   979                                  ;    Exit with:
-   980                                  ;	ES:SI	unchanged
-   981                                  ;	DX	unchanged
-   982                                  ;	memory area is cleared to Zeroes if successful
-   983                                  ;
-   984                                  ;    Error Condition:
-   985                                  ;	*** WILL HALT ***	so have the LITES set up
+   970                                  
+   971                                  ; STOP STOP STOP STOP
+   972                                  segment CONST
+   973                                  	global _SecBuffer		; for TESTIDE.C
+   974                                  ;_SecBuffer	dw	0x0200,0x6000 ;  in high memory
+   975                                  
+   976 00000220 008000A0                _SecBuffer	dw	0x8000,0xA000	;
+   977                                  
+   978                                  segment	_TEXT
+   979                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   980                                  ; seg_test -- test a segment of memory (variable size)
+   981                                  ; seg_test_bx	ditto, but returns through BX
+   982                                  ;
+   983                                  ;    Enter with:
+   984                                  ;	ES:SI	points at area to test
+   985                                  ;	DX	count of size of area in DWORDS (16K==full segment)
    986                                  ;
-   987                                  ;    Trashes:
-   988                                  ;	EAX
-   989                                  ;	BX	is used for the return
-   990                                  ;	CX
-   991                                  ;	DI
-   992                                  ;
-   993                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   994                                  
-   995                                  seg_test:
-   996 00000267 5B                      	pop	bx
-   997                                  seg_test_bx:
-   998                                  
-   999 00000268 66B801000000            	mov	eax,1		; EAX = 0000_0001h
-  1000                                  .4:
-  1001 0000026E 31FF                    	xor	di,di		;
-  1002 00000270 89D1                    	mov	cx,dx		; set DWORD count
-  1003 00000272 F366AB                  	rep stosd		; store all of memory
-  1004                                  
-  1005 00000275 89D1                    	mov	cx,dx		; reset the count
-  1006 00000277 31FF                    	xor	di,di		; reset start address
-  1007 00000279 F366AF                  	repe	scasd		;
-  1008 0000027C 7407                    	je	.5		; continue on no error
-  1009                                  
-  1010                                  %if 1
-  1011 0000027E BAFF04                  	mov	dx,0x4FF
-  1012 00000281 B0F5                    	mov	al,0xF5		; error code
-  1013 00000283 EE                      	out	dx,al		; Zap jrc LEDs to 0xFF
-  1014 00000284 F4                      	hlt			; with the LITES as set
-  1015                                  %endif
-  1016                                  
-  1017 00000285 66D1E0                  .5:	shl	eax,1
-  1018 00000288 73E4                    	jnc	.4
-  1019                                  ; now zero the SRAM
-  1020 0000028A 31FF                    	xor	di,di		; reset the start address
-  1021 0000028C 89D1                    	mov	cx,dx		; reset the count
-  1022 0000028E F366AB                  	rep	stosd		; zero the SRAM
-  1023                                  
-  1024 00000291 FFE3                    	jmp	bx	; return
-  1025                                  
-  1026                                  
-  1027                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1028                                  ; lites -- show a 4-bit value in the lites
-  1029                                  ; lites_ -- Watcom C callable:   "int lites(int value);"
-  1030                                  ;
-  1031                                  ;    Enter with:
-  1032                                  ;	AL	set to value to display (0h..0Fh)
-  1033                                  ;
-  1034                                  ;    Exit with:
-  1035                                  ;	All registers preserved
-  1036                                  ;
-  1037                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1038                                  	global	lites_
-  1039                                  lites_:
-  1040                                  lites:
-  1041 00000293 52509C                  	pushm	f,ax,dx
-  1042                                  
-  1043 00000296 BA62F8                  	mov	dx,P1LTC	; get the LITES latch
-  1044 00000299 F6D0                    	not	al
-  1045 0000029B C0E004                  	shl	al,4		; shift complement to position
-  1046 0000029E 88C4                    	mov	ah,al		; save in AH
-  1047 000002A0 FA                      	cli
-  1048 000002A1 EC                      	in	al,dx		; read the latch
-  1049 000002A2 240F                    	and	al,0Fh		; preserve bits
-  1050 000002A4 08E0                    	or	al,ah		; set the new bits
-  1051 000002A6 EE                      	out	dx,al		; put out the new LITES value
-  1052                                  
-  1053 000002A7 9D585A                  	popm	f,ax,dx
-  1054 000002AA C3                      	ret
-  1055                                  
-  1056                                  	global	jleds_
-  1057                                  jleds_:
-  1058 000002AB 52                      	pushm	dx
-  1059 000002AC BAFF04                  	mov	dx,0x4FF
-  1060 000002AF EE                      	out	dx,al
-  1061 000002B0 5A                      	popm	dx
-  1062 000002B1 C3                      	ret
+   987                                  ;    Exit with:
+   988                                  ;	ES:SI	unchanged
+   989                                  ;	DX	unchanged
+   990                                  ;	memory area is cleared to Zeroes if successful
+   991                                  ;
+   992                                  ;    Error Condition:
+   993                                  ;	*** WILL HALT ***	so have the LITES set up
+   994                                  ;
+   995                                  ;    Trashes:
+   996                                  ;	EAX
+   997                                  ;	BX	is used for the return
+   998                                  ;	CX
+   999                                  ;	DI
+  1000                                  ;
+  1001                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1002                                  
+  1003                                  seg_test:
+  1004 00000267 5B                      	pop	bx
+  1005                                  seg_test_bx:
+  1006                                  
+  1007 00000268 66B801000000            	mov	eax,1		; EAX = 0000_0001h
+  1008                                  .4:
+  1009 0000026E 31FF                    	xor	di,di		;
+  1010 00000270 89D1                    	mov	cx,dx		; set DWORD count
+  1011 00000272 F366AB                  	rep stosd		; store all of memory
+  1012                                  
+  1013 00000275 89D1                    	mov	cx,dx		; reset the count
+  1014 00000277 31FF                    	xor	di,di		; reset start address
+  1015 00000279 F366AF                  	repe	scasd		;
+  1016 0000027C 7407                    	je	.5		; continue on no error
+  1017                                  
+  1018                                  %if 1
+  1019 0000027E BAFF04                  	mov	dx,0x4FF
+  1020 00000281 B0F5                    	mov	al,0xF5		; error code
+  1021 00000283 EE                      	out	dx,al		; Zap jrc LEDs to 0xFF
+  1022 00000284 F4                      	hlt			; with the LITES as set
+  1023                                  %endif
+  1024                                  
+  1025 00000285 66D1E0                  .5:	shl	eax,1
+  1026 00000288 73E4                    	jnc	.4
+  1027                                  ; now zero the SRAM
+  1028 0000028A 31FF                    	xor	di,di		; reset the start address
+  1029 0000028C 89D1                    	mov	cx,dx		; reset the count
+  1030 0000028E F366AB                  	rep	stosd		; zero the SRAM
+  1031                                  
+  1032 00000291 FFE3                    	jmp	bx	; return
+  1033                                  
+  1034                                  
+  1035                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1036                                  ; lites -- show a 4-bit value in the lites
+  1037                                  ; lites_ -- Watcom C callable:   "int lites(int value);"
+  1038                                  ;
+  1039                                  ;    Enter with:
+  1040                                  ;	AL	set to value to display (0h..0Fh)
+  1041                                  ;
+  1042                                  ;    Exit with:
+  1043                                  ;	All registers preserved
+  1044                                  ;
+  1045                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1046                                  	global	lites_
+  1047                                  lites_:
+  1048                                  lites:
+  1049 00000293 52509C                  	pushm	f,ax,dx
+  1050                                  
+  1051 00000296 BA62F8                  	mov	dx,P1LTC	; get the LITES latch
+  1052 00000299 F6D0                    	not	al
+  1053 0000029B C0E004                  	shl	al,4		; shift complement to position
+  1054 0000029E 88C4                    	mov	ah,al		; save in AH
+  1055 000002A0 FA                      	cli
+  1056 000002A1 EC                      	in	al,dx		; read the latch
+  1057 000002A2 240F                    	and	al,0Fh		; preserve bits
+  1058 000002A4 08E0                    	or	al,ah		; set the new bits
+  1059 000002A6 EE                      	out	dx,al		; put out the new LITES value
+  1060                                  
+  1061 000002A7 9D585A                  	popm	f,ax,dx
+  1062 000002AA C3                      	ret
   1063                                  
-  1064                                  	global	jledsh_
-  1065                                  jledsh_:
-  1066 000002B2 52                      	pushm	dx
-  1067 000002B3 BAFF04                  	mov	dx,0x4FF
-  1068 000002B6 EE                      	out	dx,al
-  1069 000002B7 5A                      	popm	dx
-  1070 000002B8 FA                      	cli
-  1071 000002B9 F4                      	hlt
-  1072 000002BA C3                      	ret
-  1073                                  
-  1074                                  
-  1075                                  
-  1076                                  ;****** debugging stuff ******
-  1077                                  %if 1
-  1078                                  	global	eout,dout,wout,bout,nout
-  1079                                  ; Hexadecimal output:
-  1080                                  ; extdword(EAX)
-  1081                                  ; dword(DX:AX) word(AX) byte(AL) nibble(AL[3..0])   output
-  1082                                  ;
-  1083 000002BB 66C1C810                eout:   ror     eax,16          ; put out high word first
-  1084 000002BF E80C00                          call    wout
-  1085 000002C2 66C1E810                        shr     eax,16          ; put out the low word
-  1086 000002C6 EB06                            jmp     wout
-  1087 000002C8 92                      dout:   xchg    ax,dx           ; put out DX first
-  1088 000002C9 E80200                          call    wout
-  1089 000002CC 89D0                            mov     ax,dx
-  1090 000002CE 86E0                    wout:   xchg    ah,al           ; put out AH first
-  1091 000002D0 E80200                          call    bout
-  1092 000002D3 88E0                            mov     al,ah           ; put out former AL
-  1093 000002D5 50                      bout:   push    ax              ; save AL
-  1094 000002D6 C0E804                          shr     al,4            ; position High nibble
-  1095 000002D9 E80100                          call    nout            ; write high nibble
-  1096 000002DC 58                              pop     ax
-  1097 000002DD 240F                    nout:   and     al,0x0F         ; mask low nibble
-  1098 000002DF 27                              daa                     ; divide by 10, AH=quotient, AL=remainder
-  1099 000002E0 04F0                            add     al,0xF0         ; propagate quotient into the Carry flag
-  1100 000002E2 1440                            adc     al,0x40         ; form HEX digit
-  1101 000002E4 EB0F                            jmp     putc            ; 'putc' does the return
-  1102                                  
-  1103                                  
-  1104                                  
-  1105                                  ;
-  1106                                  ; output an ASCII_SP to the console
-  1107                                  ;
-  1108                                  space:
-  1109 000002E6 B020                    	mov	al,ASCII_SP
-  1110 000002E8 EB0B                    	jmp	putc
-  1111                                  ;
-  1112                                  ; output a CR/LF to the console
+  1064                                  	global	jleds_
+  1065                                  jleds_:
+  1066 000002AB 52                      	pushm	dx
+  1067 000002AC BAFF04                  	mov	dx,0x4FF
+  1068 000002AF EE                      	out	dx,al
+  1069 000002B0 5A                      	popm	dx
+  1070 000002B1 C3                      	ret
+  1071                                  
+  1072                                  	global	jledsh_
+  1073                                  jledsh_:
+  1074 000002B2 52                      	pushm	dx
+  1075 000002B3 BAFF04                  	mov	dx,0x4FF
+  1076 000002B6 EE                      	out	dx,al
+  1077 000002B7 5A                      	popm	dx
+  1078 000002B8 FA                      	cli
+  1079 000002B9 F4                      	hlt
+  1080 000002BA C3                      	ret
+  1081                                  
+  1082                                  
+  1083                                  
+  1084                                  ;****** debugging stuff ******
+  1085                                  %if 1
+  1086                                  	global	eout,dout,wout,bout,nout
+  1087                                  ; Hexadecimal output:
+  1088                                  ; extdword(EAX)
+  1089                                  ; dword(DX:AX) word(AX) byte(AL) nibble(AL[3..0])   output
+  1090                                  ;
+  1091 000002BB 66C1C810                eout:   ror     eax,16          ; put out high word first
+  1092 000002BF E80C00                          call    wout
+  1093 000002C2 66C1E810                        shr     eax,16          ; put out the low word
+  1094 000002C6 EB06                            jmp     wout
+  1095 000002C8 92                      dout:   xchg    ax,dx           ; put out DX first
+  1096 000002C9 E80200                          call    wout
+  1097 000002CC 89D0                            mov     ax,dx
+  1098 000002CE 86E0                    wout:   xchg    ah,al           ; put out AH first
+  1099 000002D0 E80200                          call    bout
+  1100 000002D3 88E0                            mov     al,ah           ; put out former AL
+  1101 000002D5 50                      bout:   push    ax              ; save AL
+  1102 000002D6 C0E804                          shr     al,4            ; position High nibble
+  1103 000002D9 E80100                          call    nout            ; write high nibble
+  1104 000002DC 58                              pop     ax
+  1105 000002DD 240F                    nout:   and     al,0x0F         ; mask low nibble
+  1106 000002DF 27                              daa                     ; divide by 10, AH=quotient, AL=remainder
+  1107 000002E0 04F0                            add     al,0xF0         ; propagate quotient into the Carry flag
+  1108 000002E2 1440                            adc     al,0x40         ; form HEX digit
+  1109 000002E4 EB0F                            jmp     putc            ; 'putc' does the return
+  1110                                  
+  1111                                  
+  1112                                  
   1113                                  ;
-  1114                                  ;;crlf:
+  1114                                  ; output an ASCII_SP to the console
   1115                                  ;
-  1116                                  ; outc -- write an ASCII 'cooked' character
-  1117                                  ;       Convert NL to CR,NL
-  1118                                  ;
-  1119                                  outc:
-  1120 000002EA 3C0A                            cmp     al,ASCII_NL     ; test for NL
-  1121 000002EC 7507                            jne     putc            ; if not, just put out the character
-  1122                                  crlf:
-  1123 000002EE B00D                            mov     al,ASCII_CR     ; get a CR
-  1124 000002F0 E80200                          call    putc            ; write it out
-  1125 000002F3 B00A                            mov     al,ASCII_NL     ; restore NL
+  1116                                  space:
+  1117 000002E6 B020                    	mov	al,ASCII_SP
+  1118 000002E8 EB0B                    	jmp	putc
+  1119                                  ;
+  1120                                  ; output a CR/LF to the console
+  1121                                  ;
+  1122                                  ;;crlf:
+  1123                                  ;
+  1124                                  ; outc -- write an ASCII 'cooked' character
+  1125                                  ;       Convert NL to CR,NL
   1126                                  ;
-  1127                                  ; putc -- put out a character in AL to the SIO0 port
-  1128                                  ;
-  1129                                  putc:
-  1130                                  %if 1
-  1131 000002F5 5052                    	pushm	dx,ax
-  1132 000002F7 B401                    	mov	ah,1		;write char
-  1133 000002F9 BA0000                  	mov	dx,0
-  1134 000002FC CD14                    	int	14h		;serial out
-  1135 000002FE 5A58                    	popm	dx,ax
-  1136 00000300 C3                      	ret
-  1137                                  %else
-  1138                                  	push	dx		; register save
-  1139                                  	push	ax		; PUSH EAX
-  1140                                  putc1:
-  1141                                          mov     dx,LSR0         ; Line Status Register
-  1142                                  
-  1143                                          in      al,dx
-  1144                                          test    al,LSR_TBE      ; Transmit Buffer Empty
-  1145                                          jz      putc1
-  1146                                  
-  1147                                          pop     ax
-  1148                                          mov     dx,TBR0         ; Transmit buffer register
-  1149                                          out     dx,al           ; send the character
+  1127                                  outc:
+  1128 000002EA 3C0A                            cmp     al,ASCII_NL     ; test for NL
+  1129 000002EC 7507                            jne     putc            ; if not, just put out the character
+  1130                                  crlf:
+  1131 000002EE B00D                            mov     al,ASCII_CR     ; get a CR
+  1132 000002F0 E80200                          call    putc            ; write it out
+  1133 000002F3 B00A                            mov     al,ASCII_NL     ; restore NL
+  1134                                  ;
+  1135                                  ; putc -- put out a character in AL to the SIO0 port
+  1136                                  ;
+  1137                                  putc:
+  1138                                  %if 1
+  1139 000002F5 5052                    	pushm	dx,ax
+  1140 000002F7 B401                    	mov	ah,1		;write char
+  1141 000002F9 BA0000                  	mov	dx,0
+  1142 000002FC CD14                    	int	14h		;serial out
+  1143 000002FE 5A58                    	popm	dx,ax
+  1144 00000300 C3                      	ret
+  1145                                  %else
+  1146                                  	push	dx		; register save
+  1147                                  	push	ax		; PUSH EAX
+  1148                                  putc1:
+  1149                                          mov     dx,LSR0         ; Line Status Register
   1150                                  
-  1151                                          pop     dx              ; register restore
-  1152                                          ret
-  1153                                  %endif
-  1154                                  %endif
-  1155                                  
-  1156                                  ;
-  1157                                  ; word get_nvram_crc(word n);
-  1158                                  ;	n = 31 (checks crc)
-  1159                                  ;	n = 29 (forms crc)
-  1160                                  ;
-  1161                                  	global	get_nvram_crc_
-  1162                                  get_nvram_crc_:
-  1163 00000301 065153                  	pushm	bx,cx,es
-  1164 00000304 50                      	push	ax		; save count for nvram bytes
-  1165                                  
-  1166 00000305 B009                    	mov	al,1001B
-  1167 00000307 E889FF                  	call	lites
-  1168                                  
-  1169 0000030A 29C0                    	sub	ax,ax		; start CRC at 0000
-  1170                                  %if 1
-  1171 0000030C BB00F0                  	mov	bx,0xF000
-  1172 0000030F 8EC3                    	mov	es,bx
-  1173 00000311 BBF0FF                  	mov	bx,0xFFF0
-  1174 00000314 B91000                  	mov	cx,16
-  1175 00000317 E8(0000)                	call	crc16
-  1176                                  %endif
-  1177 0000031A 6A4007                  	get_bda	ES
-  1178 0000031D BBE100                  	mov	bx,nvram_info
-  1179 00000320 59                      	pop	cx		; retrieve count in NVRAM
-  1180 00000321 E8(0000)                	call	crc16
-  1181 00000324 86E0                    	xchg	ah,al		; compensate for BIG Endian CRC16
-  1182                                  
-  1183 00000326 5B5907                  	popm	bx,cx,es
-  1184 00000329 C3                      	ret
-  1185                                  
-  1186                                  	global	put_nvram_info_
-  1187                                  put_nvram_info_:
-  1188 0000032A 065350                  	pushm	ax,bx,es
-  1189                                  
-  1190 0000032D B80022                     	mov	ax,0x2200		;disable write protect
-  1191 00000330 CD1A                    	int	0x1A
-  1192                                  
-  1193 00000332 BBE100                  	mov	bx,nvram_info
-  1194 00000335 6A4007                  	get_bda	ES
-  1195 00000338 B81F21                  	mov	ax,0x211F		; write 31 burst bytes
-  1196 0000033B CD1A                    	int	0x1A
+  1151                                          in      al,dx
+  1152                                          test    al,LSR_TBE      ; Transmit Buffer Empty
+  1153                                          jz      putc1
+  1154                                  
+  1155                                          pop     ax
+  1156                                          mov     dx,TBR0         ; Transmit buffer register
+  1157                                          out     dx,al           ; send the character
+  1158                                  
+  1159                                          pop     dx              ; register restore
+  1160                                          ret
+  1161                                  %endif
+  1162                                  %endif
+  1163                                  
+  1164                                  ;
+  1165                                  ; word get_nvram_crc(word n);
+  1166                                  ;	n = 31 (checks crc)
+  1167                                  ;	n = 29 (forms crc)
+  1168                                  ;
+  1169                                  	global	get_nvram_crc_
+  1170                                  get_nvram_crc_:
+  1171 00000301 065153                  	pushm	bx,cx,es
+  1172 00000304 50                      	push	ax		; save count for nvram bytes
+  1173                                  
+  1174 00000305 B009                    	mov	al,1001B
+  1175 00000307 E889FF                  	call	lites
+  1176                                  
+  1177 0000030A 29C0                    	sub	ax,ax		; start CRC at 0000
+  1178                                  %if 1
+  1179 0000030C BB00F0                  	mov	bx,0xF000
+  1180 0000030F 8EC3                    	mov	es,bx
+  1181 00000311 BBF0FF                  	mov	bx,0xFFF0
+  1182 00000314 B91000                  	mov	cx,16
+  1183 00000317 E8(0000)                	call	crc16
+  1184                                  %endif
+  1185 0000031A 6A4007                  	get_bda	ES
+  1186 0000031D BBE100                  	mov	bx,nvram_info
+  1187 00000320 59                      	pop	cx		; retrieve count in NVRAM
+  1188 00000321 E8(0000)                	call	crc16
+  1189 00000324 86E0                    	xchg	ah,al		; compensate for BIG Endian CRC16
+  1190                                  
+  1191 00000326 5B5907                  	popm	bx,cx,es
+  1192 00000329 C3                      	ret
+  1193                                  
+  1194                                  	global	put_nvram_info_
+  1195                                  put_nvram_info_:
+  1196 0000032A 065350                  	pushm	ax,bx,es
   1197                                  
-  1198 0000033D B88022                  	mov	ax,0x2280		; set write protect
-  1199 00000340 CD1A                    	int	0x1A
+  1198 0000032D B80022                     	mov	ax,0x2200		;disable write protect
+  1199 00000330 CD1A                    	int	0x1A
   1200                                  
-  1201 00000342 585B07                  	popm	ax,bx,es
-  1202 00000345 C3                      	ret
-  1203                                  
-  1204                                  
+  1201 00000332 BBE100                  	mov	bx,nvram_info
+  1202 00000335 6A4007                  	get_bda	ES
+  1203 00000338 B81F21                  	mov	ax,0x211F		; write 31 burst bytes
+  1204 0000033B CD1A                    	int	0x1A
   1205                                  
-  1206                                  
-  1207                                  ;        setloc (0x100000-(ROM<<10)-16)
-  1208 00000346 90<rep Ah>              	align	16
-  1209                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1210                                  ; The Real Mode statup jump
-  1211                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1212                                  	bits	16
-  1213 00000350 EA[0000][ssss]          	jmp	far origin
-  1214 00000355 FF<rep 9h>              	times 9 db 0FFh
-  1215 0000035E FC00                    	db	0FCh, 00h		; PC/AT
-  1216                                  
-  1217                                  segment BOOT
-  1218                                  %include "boot.asm"
-  1219                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1220                              <1> ;boot.asm
-  1221                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1222                              <1> ; The Real Mode statup jump
-  1223                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1224                              <1> 	bits	16
-  1225                              <1> 
-  1226                              <1> SEGBASE equ 0x10000-(ROM<<6)
-  1227                              <1> 
-  1228 00000003 90<rep Dh>          <1>         align   16
-  1229                              <1> bootstrap:
-  1230 00000010 EA000000F0          <1>         jmp     SEGBASE:0000	; 5 byte real-mode far call
-  1231                              <1> %include "date.inc"
-  1232 00000015 30392F31332F3236    <2> 	db	"09/13/26"
-  1232 0000001D FFFC00              <1> 	db	0xFF, 0xFC, 0x00	; PC/AT
+  1206 0000033D B88022                  	mov	ax,0x2280		; set write protect
+  1207 00000340 CD1A                    	int	0x1A
+  1208                                  
+  1209 00000342 585B07                  	popm	ax,bx,es
+  1210 00000345 C3                      	ret
+  1211                                  
+  1212                                  
+  1213                                  
+  1214                                  
+  1215                                  ;        setloc (0x100000-(ROM<<10)-16)
+  1216 00000346 90<rep Ah>              	align	16
+  1217                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1218                                  ; The Real Mode statup jump
+  1219                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1220                                  	bits	16
+  1221 00000350 EA[0000][ssss]          	jmp	far origin
+  1222 00000355 FF<rep 9h>              	times 9 db 0FFh
+  1223 0000035E FC00                    	db	0FCh, 00h		; PC/AT
+  1224                                  
+  1225                                  segment BOOT
+  1226                                  %include "boot.asm"
+  1227                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1228                              <1> ;boot.asm
+  1229                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1230                              <1> ; The Real Mode statup jump
+  1231                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1232                              <1> 	bits	16
+  1233                              <1> 
+  1234                              <1> SEGBASE equ 0x10000-(ROM<<6)
+  1235                              <1> 
+  1236 00000003 90<rep Dh>          <1>         align   16
+  1237                              <1> bootstrap:
+  1238 00000010 EA000000F0          <1>         jmp     SEGBASE:0000	; 5 byte real-mode far call
+  1239                              <1> %include "date.inc"
+  1240 00000015 30392F31332F3236    <2> 	db	"09/13/26"
+  1240 0000001D FFFC00              <1> 	db	0xFF, 0xFC, 0x00	; PC/AT

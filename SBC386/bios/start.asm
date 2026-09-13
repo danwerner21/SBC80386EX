@@ -251,8 +251,16 @@ XFER_AD equ	0x00020000
 	winit	CS0MSKL, ~(0x00FF00 <<10) & 0xF800 | BIT10+BIT0
 ;
 ; set up CS1# for the IDE I/O at 01F0..01FF	-- ZBIT0 disables it
+;
+; 7 wait states, not the 3 this carried for years.  3 was never measured;
+; 7 was, from the monitor -- C007 written into CS1ADL by hand, then a full
+; pass of IDENT, LBA and SECTEST against the card with no change in
+; behaviour except that it stopped being marginal.  It matches what CS0
+; already uses for the ECB I/O window, and the IDE path is nowhere near
+; fast enough for four extra wait states per byte to matter: the transfer
+; is 8-bit PIO through a single port either way.
 	winit	CS1ADH, (0x1F0 >> 6) & 0xFFFF
-	winit	CS1ADL, (0x1F0 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 3;w.s.
+	winit	CS1ADL, (0x1F0 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 7;w.s.
 	winit	CS1MSKH, ~(0x00FFF0 >> 6) & 0xFFFF
 	winit	CS1MSKL, ~(0x00FFF0 <<10) & 0xF800 | BIT10+ BIT0
 ;

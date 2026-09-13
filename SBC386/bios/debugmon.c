@@ -898,6 +898,111 @@ void debugmon(void)
 			continue;
 		}
 
+/*
+ * SECCMP -- rung 3 of the bring-up ladder.
+ *
+ * Read N sectors in ONE driver call, then read the same N one at a time,
+ * and compare.  Both go through IDE_READ_SECTOR, so what is under test is
+ * the driver's own multi-sector loop -- the DRQ wait per sector and the
+ * buffer advance that read_data leaves in BX -- and not the raw port
+ * sequence SEC2 checks.
+ *
+ * This is the path fn42 and fn43 take.  The CHS calls sidestep it by
+ * asking for one sector at a time, which is why a DOS that boots proves
+ * nothing about it.
+ *
+ * The multi-sector buffer is at 1000:0000, the 64K mark.  POST finished
+ * with that memory before SETUP was reachable, and the boot sector does
+ * not land until 0000:7C00 much later.
+ */
+		if( is_cmd(&cp,"SECCMP") )
+		{
+			dword	lba;
+			dword	nsec;
+			word	i, j, bad;
+			byte	*multi;
+			byte	*one = SecBuffer;
+			int	rc;
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} m;
+
+			if( !parse_val(&cp,&lba) ) {
+				printf("usage: SECCMP <lba> [<sectors>]\n"
+				       "       reads N in one command, then N"
+				       " singly, and compares\n");
+				continue;
+			}
+			nsec = 8;
+			parse_val(&cp,&nsec);
+
+			if( nsec < 2 || nsec > 32 ) {
+				printf("SECCMP: 2 to 32 sectors"
+				       " (1 would not test anything)\n");
+				continue;
+			}
+
+			m.fp.seg = 0x1000;
+			m.fp.off = 0;
+			multi = m.p;
+
+			hd_set_8bit(0);
+
+			/* The whole run in one command. */
+			rc = IDE_READ_SECTOR( 0x00, multi, lba, (byte)nsec );
+			if( rc ) {
+				printf("SECCMP: the %lu-sector read failed,"
+				       " status %02X\n", nsec, (word)rc);
+				continue;
+			}
+
+			/* The same sectors one at a time, each compared
+			   against its slice of the block above. */
+			bad = 0;
+			for( i = 0; i < (word)nsec; i++ ) {
+
+				rc = IDE_READ_SECTOR( 0x00, one, lba + i, 1 );
+				if( rc ) {
+					printf("SECCMP: single read of LBA %lu"
+					       " failed, status %02X\n",
+						lba + i, (word)rc);
+					bad = 1;
+					break;
+				}
+
+				for( j = 0; j < 512; j++ ) {
+					if( multi[(dword)i * 512 + j] == one[j] )
+						continue;
+
+					printf("SECCMP: sector %u (LBA %lu)"
+					       " differs at byte %u:"
+					       " multi %02X, single %02X\n",
+						i, lba + i, j,
+						(word)multi[(dword)i*512 + j],
+						(word)one[j]);
+					bad = 1;
+					break;
+				}
+				if( bad )	break;
+			}
+
+			if( !bad )
+				printf("SECCMP: %lu sectors from LBA %lu --"
+				       " one command and %lu singles agree"
+				       " byte for byte\n", nsec, lba, nsec);
+
+			/* A block count of zero has to come straight back.
+			   ATA reads a sector count register of 0 as 256, and
+			   before the guard in IDE_READ_SECTOR the loop ran
+			   65536 times.  If this line is the last thing you
+			   see, that guard is not doing its job. */
+			printf("SECCMP: zero-count guard ... ");
+			rc = IDE_READ_SECTOR( 0x00, one, lba, 0 );
+			printf("returned %02X (want 00)\n", (word)rc);
+			continue;
+		}
+
 		if( is_cmd(&cp,"SEC2") )
 		{
 			dword	lba;

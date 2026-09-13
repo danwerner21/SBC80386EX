@@ -1,6 +1,6 @@
 Open Watcom Linker Version 1.9
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/09/13 03:03:11
+Created on:       26/09/13 03:19:20
 Executable Image: start.exe
 creating a DOS executable
 
@@ -12,7 +12,7 @@ creating a DOS executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          0000:0000            00007fd0
+DGROUP                          0000:0000            00008340
 
 
 
@@ -23,12 +23,12 @@ DGROUP                          0000:0000            00007fd0
 Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
-_TEXT                  CODE           DGROUP         0000:0000       000059fb
-CONST                  DATA           DGROUP         05a0:0000       00002150
-CONST2                 DATA           DGROUP         07b5:0000       00000472
-_DATA                  DATA           DGROUP         07fd:0000       00000000
-_BSS                   DATA           DGROUP         07fd:0000       00000000
-BOOT                   BOOT           AUTO           07fd:0000       00000030
+_TEXT                  CODE           DGROUP         0000:0000       00005b9b
+CONST                  DATA           DGROUP         05ba:0000       00002320
+CONST2                 DATA           DGROUP         07ec:0000       00000472
+_DATA                  DATA           DGROUP         0834:0000       00000000
+_BSS                   DATA           DGROUP         0834:0000       00000000
+BOOT                   BOOT           AUTO           0834:0000       00000030
 
 
                         +----------------+
@@ -45,7 +45,7 @@ Module: start.o(start.asm)
 0000:0000*     origin
 0000:0040      initb
 0000:005a*     start
-0000:0252      exit_
+0000:0252*     exit_
 0000:0293      lites_
 0000:02ab      jleds_
 0000:02b2*     jledsh_
@@ -56,89 +56,89 @@ Module: start.o(start.asm)
 0000:02dd*     nout
 0000:0301      get_nvram_crc_
 0000:032a      put_nvram_info_
-0000:5bfd      _bda_ptr
-0000:5bfd*     bda_ptr
-0000:5c20      _SecBuffer
+0000:5d9d      _bda_ptr
+0000:5d9d*     bda_ptr
+0000:5dc0      _SecBuffer
 Module: sizer.o(sizer.asm)
 0000:0360      ext_mem_size
 0000:03c4      _pm_read
-0000:5c30*     gdt0
+0000:5dd0*     gdt0
 Module: crc16.o(crc.asm)
 0000:0440      crc16
 Module: diskide.o(diskide.asm)
 0000:0660*     IDE_READ_SECTOR
 0000:0660      IDE_READ_SECTOR_
-0000:06a4*     IDE_WRITE_SECTOR
-0000:06a4      IDE_WRITE_SECTOR_
-0000:06ed*     IDE_READ_ID
-0000:06ed      IDE_READ_ID_
-0000:0729*     IDE_INITIALIZE
-0000:0729*     IDE_INITIALIZE_
+0000:06af*     IDE_WRITE_SECTOR
+0000:06af      IDE_WRITE_SECTOR_
+0000:0703*     IDE_READ_ID
+0000:0703      IDE_READ_ID_
+0000:073f*     IDE_INITIALIZE
+0000:073f*     IDE_INITIALIZE_
 Module: errno.o(errno.asm)
-0000:08a0      __get_errno_ptr_
+0000:08b0      __get_errno_ptr_
 Module: 11h_12h.o(11h_12h.asm)
-0000:08b0      int_11h
-0000:08ba      int_12h
+0000:08c0      int_11h
+0000:08ca      int_12h
 Module: 13h_disk.o(13h_disk.asm)
-0000:08d0      int_13h
-0000:0982*     _dtab_vectors
+0000:08e0      int_13h
+0000:0992*     _dtab_vectors
 Module: 14h_sio0.o(14h_sio0.asm)
-0000:0d20      int_14h
-0000:0d5b      _sio_divisors
-0000:0e33      install_SIO0_
+0000:0d30      int_14h
+0000:0d6b      _sio_divisors
+0000:0e43      install_SIO0_
 Module: 15h_misc.o(15h_misc.asm)
-0000:0e70      int_15h
+0000:0e80      int_15h
 Module: 1Ah_time.o(1Ah_time.asm)
-0000:1080      int_1Ah
-0000:10c8      ds_read_reg_
-0000:10fa      int_irq0
-0000:1153      start_timer0_
-0000:1176      get_time
-0000:11a8*     set_time
-0000:11d9*     get_date
-0000:120f*     set_date
-0000:1252*     ds_read
-0000:12bc*     ds_write
-0000:1311      ds_get_charge
-0000:132a      ds_reset_on
-0000:133b*     ds_reset_off
-0000:137a      bcd2int_
-0000:1384      day_of_week_
-0000:139c*     dow_
+0000:1090      int_1Ah
+0000:10d8      ds_read_reg_
+0000:110a      int_irq0
+0000:1163      start_timer0_
+0000:1186      get_time
+0000:11b8*     set_time
+0000:11e9*     get_date
+0000:121f*     set_date
+0000:1262*     ds_read
+0000:12cc*     ds_write
+0000:1321      ds_get_charge
+0000:133a      ds_reset_on
+0000:134b*     ds_reset_off
+0000:138a      bcd2int_
+0000:1394      day_of_week_
+0000:13ac*     dow_
 Module: main.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/main.c)
-0000:13e0+     install_serial_console_
-0000:143e*     _serial_port_status
-0000:1457+     delay_
-0000:147f      _main__
+0000:13f0+     install_serial_console_
+0000:144e*     _serial_port_status
+0000:1467+     delay_
+0000:148f      _main__
 Module: signon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/signon.c)
-0000:160e      pr_lic_
+0000:161e      pr_lic_
 Module: getline.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/getline.c)
-0000:169c      is_print_
-0000:16ad+     putline_
-0000:16e5      getline_
+0000:16ac      is_print_
+0000:16bd+     putline_
+0000:16f5      getline_
 Module: set1302.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/set1302.c)
-0000:17ca+     option_get_
-0000:1893+     SET_CHG
-0000:1929      SET_TOP
-0000:1a04+     set_fixed_
-0000:1ae3+     set_floppy_
-0000:1af4+     SET_CLOCK
-0000:1b28+     SET_DATE
-0000:1cdf+     SET_TIME
-0000:1de1+     set_line_speed_
-0000:1e96+     set_stop_bits_
-0000:1efa+     set_char_format_
-0000:1fc3+     set_serial_
-0000:7e62+     _name
-0000:7e6e+     _value
-0000:7e71+     _top_name
-0000:7e89*     _fixed_disks
-0000:7ea1+     _clock_name
-0000:7ead+     _Day
-0000:7ec9+     _speeds
-0000:7f01+     _stop_bits
-0000:7f09+     _char_char
-0000:7f15+     _serial
+0000:17da+     option_get_
+0000:18a3+     SET_CHG
+0000:1939      SET_TOP
+0000:1a11+     set_fixed_
+0000:1af0+     set_floppy_
+0000:1b01+     SET_CLOCK
+0000:1b35+     SET_DATE
+0000:1cec+     SET_TIME
+0000:1dee+     set_line_speed_
+0000:1ea3+     set_stop_bits_
+0000:1f07+     set_char_format_
+0000:1fd0+     set_serial_
+0000:81d2+     _name
+0000:81de+     _value
+0000:81e1+     _top_name
+0000:81f9*     _fixed_disks
+0000:8211+     _clock_name
+0000:821d+     _Day
+0000:8239+     _speeds
+0000:8271+     _stop_bits
+0000:8279+     _char_char
+0000:8285+     _serial
 Module: icu.o(icu.asm)
 0000:2030*     mask_interrupt_
 0000:204e      unmask_interrupt_
@@ -161,7 +161,7 @@ Module: testmain.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/testm
 0000:24b5*     _set_tick_count
 0000:24ce*     _get_time
 0000:24e8      testmain_
-0000:7f22+     _bitrev
+0000:8292+     _bitrev
 Module: stub.o(stub.asm)
 0000:26f0      int_zero_divide
 0000:26f0      int_single_step
@@ -226,54 +226,55 @@ Module: stub.o(stub.asm)
 0000:272e*     FDC_stop_motor_
 0000:272e      FDC_stop_motor
 Module: debugmon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/debugmon.c)
-0000:7f44+     _disk_short
+0000:82b4+     _disk_short
 0000:2a69+     DumpMemory_
 0000:2bc8+     DumpBDA_
 0000:2fb8+     DumpIdentify_
 0000:3176+     DumpSector_
 0000:320e      debugmon_
 Module: monitor.o(monitor.asm)
-0000:46b0      _go_call
-0000:4732      _int15_call
+0000:4840      _go_call
+0000:48c2      _int15_call
 Module: hdinit.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/hdinit.c)
-0000:4837      id_word_
-0000:484c      id_dword_
-0000:4871      hd_reset_
-0000:489d      hd_set_8bit_
-0000:48dc+     hd_present_
-0000:493d+     hd_probe_
-0000:4ae1+     hd_identify_
-0000:4bfc      hdinit_
-0000:4cf7      hd_report_
-0000:4e61      hd_enumerate_
+0000:49c7      id_word_
+0000:49dc      id_dword_
+0000:4a01      hd_reset_
+0000:4a2d      hd_set_8bit_
+0000:4a6c+     hd_present_
+0000:4acd+     hd_probe_
+0000:4c71+     hd_identify_
+0000:4d8c      hdinit_
+0000:4e87      hd_report_
+0000:4ff1      hd_enumerate_
 Module: 19h_boot.o(19h_boot.asm)
-0000:4f30      int_19h
-0000:4faf      int_18h
+0000:50c0      int_19h
+0000:513f      int_18h
+0000:5252      reboot_
 Module: 17h_prn.o(17h_prn.asm)
-0000:50d0      int_17h
+0000:5270      int_17h
 Module: 10h_video.o(10h_video.asm)
-0000:50f0      int_10h
+0000:5290      int_10h
 Module: 16h_kbd.o(16h_kbd.asm)
-0000:53b0      kbd_init_
-0000:53e8      int_irq4
-0000:5451      int_16h
+0000:5550      kbd_init_
+0000:5588      int_irq4
+0000:55f1      int_16h
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/cprintf.c)
-0000:5540*     @nstring
-0000:5564      _cprintf
+0000:56e0*     @nstring
+0000:5704      _cprintf
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4m)
-0000:5856*     __I4M
-0000:5856      __U4M
+0000:59f6*     __I4M
+0000:59f6      __U4M
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4d)
-0000:586e*     __I4D
-0000:58b7      __U4D
+0000:5a0e*     __I4D
+0000:5a57      __U4D
 Module: /opt/openwatcom/lib286/dos/clibc.lib(outp.c)
-0000:593b      outp_
+0000:5adb      outp_
 Module: /opt/openwatcom/lib286/dos/clibc.lib(inp.c)
-0000:5945      inp_
+0000:5ae5      inp_
 Module: lib/sbc386.lib(uart_det.asm)
-0000:5950      uart_det_
+0000:5af0      uart_det_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/strlen.c)
-0000:59e8      strlen_
+0000:5b88      strlen_
 Warning! W1014: stack segment not found
 Warning! W1023: no starting address found, using 0000:0000
 
@@ -291,6 +292,6 @@ lib/sbc386.lib
                         +-----------------------+
 
 Stack size:  1000 (4096.)
-Memory size:  8000 (32768.)
+Memory size:  8370 (33648.)
 Entry point address: 0000:0000
-Link time: 00:00.13
+Link time: 00:00.17

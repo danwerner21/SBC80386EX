@@ -112,6 +112,20 @@ IDE_READ_SECTOR_:
         push 	ES
         push	DI
 
+; A count of zero has to be caught before the drive is touched.  ATA reads
+; a sector count register of 0 as a request for 256 sectors, and the LOOP
+; below would run 65536 times -- 32Mb driven through the caller's buffer
+; from a drive that is only sending 128Kb.  fn42 and fn43 can deliver one:
+; pkt_rw_validate rejects a block count of 128 and above but says nothing
+; about zero, and the EDD packet interface both allows it and defines it as
+; "transfer nothing".  The CHS path never could -- rwv_common tests its own
+; count first -- which is part of why this went unnoticed.
+        cmp     byte ARG(6),0
+        jne     .1
+        xor     ax,ax                   ; nothing asked for, nothing to do
+        jmp     .9
+.1:
+
 ; Master/slave must be taken out of AL BEFORE the wait below:
 ;  ide_wait_not_busy returns the drive status in AL, so reading
 ;  the argument afterwards always yielded 0 -- the master.  BX
@@ -129,7 +143,10 @@ IDE_READ_SECTOR_:
 		mov		dx,IDESTTS
 		out		dx,al
 
-        mov     CX,ARG(6) 				; COUNT OF SECTORS
+; Zero-extended from the same byte wr_lba was handed above.  Read as a word
+; -- which is what this was -- the loop count and the count the drive was
+; given could disagree the moment anything put rubbish in the high half.
+        movzx   CX,byte ARG(6) 			; COUNT OF SECTORS
         mov     es,ARG(0) 				; high address INTO es
         mov     bx,ARG(1)				; low address into bx
 .4:
@@ -177,6 +194,20 @@ IDE_WRITE_SECTOR_:
         push 	DS
         push	SI
 
+; A count of zero has to be caught before the drive is touched.  ATA reads
+; a sector count register of 0 as a request for 256 sectors, and the LOOP
+; below would run 65536 times -- 32Mb driven through the caller's buffer
+; from a drive that is only sending 128Kb.  fn42 and fn43 can deliver one:
+; pkt_rw_validate rejects a block count of 128 and above but says nothing
+; about zero, and the EDD packet interface both allows it and defines it as
+; "transfer nothing".  The CHS path never could -- rwv_common tests its own
+; count first -- which is part of why this went unnoticed.
+        cmp     byte ARG(6),0
+        jne     .1
+        xor     ax,ax                   ; nothing asked for, nothing to do
+        jmp     .9
+.1:
+
 ; Master/slave must be taken out of AL BEFORE the wait below:
 ;  ide_wait_not_busy returns the drive status in AL, so reading
 ;  the argument afterwards always yielded 0 -- the master.  BX
@@ -194,8 +225,8 @@ IDE_WRITE_SECTOR_:
 		mov		dx,IDESTTS
 		out		dx,al
 
-
-        mov     CX,ARG(6) 				; COUNT OF SECTORS
+; Zero-extended, for the reason given on the read side.
+        movzx   CX,byte ARG(6) 			; COUNT OF SECTORS
         mov     ds,ARG(0) 				; high address INTO ds
         mov     bx,ARG(1)				; low address into bx
 .4:
@@ -529,8 +560,12 @@ rdblk2BE:
 read_data:
     pushm   cx
 	mov		dx,IDEDTA
-    xchg    di,bx
-	mov     cx,512          ; sector size in words
+    xchg    di,bx			; STOSB works through ES:DI, so the buffer
+					;  offset goes there and comes back in BX
+					;  advanced by 512 -- which is what carries
+					;  a multi-sector transfer from one sector
+					;  to the next
+	mov     cx,512          ; sector size in BYTES: this is 8-bit PIO
 rdblk2:
 	in	al,dx
 	stosb
@@ -540,10 +575,14 @@ rdblk2:
 	ret
 
 ;------------------------------------------------------------------------------
-; Write a sector of 512 bytes from memory at ES:[BX]
+; Write a sector of 512 bytes from memory at DS:[BX]
+;
+; DS, not ES.  LODSB below reads through DS:SI, and IDE_WRITE_SECTOR loads
+; the buffer segment into DS for exactly that reason -- the read side is the
+; one that uses ES.  This comment said ES for years.
 ;
 ;  Call with:
-;       ES:BX -- pointer to the data block
+;       DS:BX -- pointer to the data block
 ;
 ;  Exit with:
 ;       AX and DX are destroyed; other registers preserved
@@ -552,8 +591,8 @@ rdblk2:
 write_data:
     pushm   cx
 	mov		dx,IDEDTA
-    xchg    si,bx
-	mov     cx,512          ; sector size in words
+    xchg    si,bx			; as in read_data, but through DS:SI
+	mov     cx,512          ; sector size in BYTES: this is 8-bit PIO
 wtblk2:
 	lodsb
 	out	dx,al

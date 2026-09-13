@@ -10,7 +10,7 @@ was found on the way, and what is left.**
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
 | Assessed | 2026-09-06, by code inspection |
-| Last updated | 2026-09-12 — Phase 4 written, **not yet built or run** |
+| Last updated | 2026-09-12 — Phase 4 written and building, **not yet run** |
 
 ---
 
@@ -18,9 +18,9 @@ was found on the way, and what is left.**
 
 **The board boots MS-DOS 6 to a `C:\>` prompt over the serial console, and the keyboard
 works.** Phases 0 through 3 are complete and verified on hardware. Phase 4 — the INT 15h
-calls DOS's standard drivers want — is now written, but it has **not been assembled or
-run**: the machine it was written on has neither NASM nor Open Watcom installed. Every
-claim about Phase 4 below is from inspection only. Section 06a says how to check it.
+calls DOS's standard drivers want — is written and **assembles clean**, but it has **never
+been run**. Not one of those four calls has executed on the board. Section 06a is the
+sequence for taking it to hardware.
 
 The original assessment held up: nothing was architecturally wrong, and the work went in
 the predicted order. What it could not predict was the hardware, and most of the time
@@ -30,7 +30,7 @@ comments and the datasheet-derived guesses said.
 
 | Metric | Then | Now | |
 |---|---:|---:|---|
-| ROM image | 12,896 B | 30,592 B | of 65,536 — 53% free |
+| ROM image | 12,896 B | 32,768 B | of 65,536 — 50% free |
 | Writable data segment | 0 B | 0 B | `_DATA` + `_BSS` still empty, as required |
 | INT vectors that work | 4 | 13 | 10h, 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h, 19h, 1Ah, 1Eh*, IRQ0, IRQ4 |
 | Blocking defects | 11 | 0 | all eleven fixed and confirmed on hardware |
@@ -150,6 +150,32 @@ because inspection had missed them:
 - **`13h_disk.asm` — the packet dispatch range test was inverted.** `cmp ah,len_packet_call_tab / jb ret_invalid_command` rejected every valid packet call and let anything above the table jump through an out-of-range index. Now `jnb`.
 - **`disktab.h` ended inside an unterminated comment.** Line 97 opened `/*IDE Command Constants...` and nothing closed it, so the file ran to EOF mid-comment. Harmless to `copt`, which does line-pattern rewriting, but no C file could ever have included it.
 
+
+## 03a · Found after the fact
+
+One more defect, found while building the rung 3 test rather than by the original read.
+It is listed separately because section 03 is a record of what inspection caught *before
+anything had run*, and this was not part of that.
+
+| # | Where | Defect | Fix |
+|---|---|---|---|
+| 12 | `diskide.asm` | A sector count of zero reached the drive as a count of zero, which ATA defines as **256 sectors**, while the `LOOP` that drains DRQ ran 65536 times — 32 MB driven through the caller's buffer from a drive sending 128 KB | `IDE_READ_SECTOR` and `IDE_WRITE_SECTOR` now return success without touching the drive when the count is zero |
+
+`fn42` and `fn43` can deliver one. `pkt_rw_validate` rejects a block count of 128 and
+above but says nothing about zero, and the EDD packet interface both permits it and
+defines it as "transfer nothing". The CHS path never could — `rwv_common` tests its own
+count before the loop — which is part of why this sat unnoticed: DOS boots entirely
+through CHS.
+
+Two smaller things went with it. `IDE_READ_SECTOR` took the loop count with `mov CX,ARG(6)`
+— a **word** load of an argument whose low byte alone had just been handed to the drive in
+`wr_lba`, so the two could disagree the moment anything put rubbish in the high half; both
+directions now zero-extend the same byte. And `write_data` was documented as taking its
+buffer in `ES:[BX]` when `LODSB` reads it through `DS:[BX]`, which is what
+`IDE_WRITE_SECTOR` has always set up. The code was right and the comment was wrong, which
+is the more dangerous way round.
+
+---
 
 ## 04 · Constraints that shape the work
 
@@ -379,8 +405,16 @@ console emulation. Effort figures assume you already know this codebase.
 > The remaining calls DOS and its standard drivers make. None are needed for a bare boot;
 > all are needed before the system feels finished.
 
-All five items are implemented. None has been assembled, let alone run — see the warning
-in the short version, and section 06a for how to take it to hardware.
+All five items are implemented and the ROM builds. None has been **run** — see section
+06a for the sequence.
+
+The build confirmed the three encodings that could only be settled by assembling:
+`lgdt [es:si+8]` came out `26 0F 01 54 08` with no `66` prefix, so it is the 16-bit
+operand form that loads a 24-bit base, which is what the descriptor-as-pseudo-descriptor
+trick depends on; both far jumps took the `EA` form with the right selector and segment
+(`EA [offset] 2000` and `EA [offset] 00F0`); and the forward `ja .bad` was promoted by
+`-O9` to the near form `0F 87 BE 00` rather than failing as an out-of-range short jump.
+`_DATA` and `_BSS` are still zero bytes.
 
 - **AH=88h** — Returns `bda.extended_memory` directly. That field is already the count of
   kilobytes above the first megabyte: `start.asm` sizes memory with `ext_mem_size`,
@@ -450,10 +484,17 @@ Each rung is independently observable on the serial console, and each one only d
 the rungs below it. Do not skip ahead — a failure at rung 9 with rungs 1–8 unverified is
 very hard to diagnose.
 
-**All ten rungs are climbed except rung 3.** The multi-sector comparison was built as the
-monitor's `SEC2` command and never run. The CHS transfer loop calls the driver one sector
-at a time and so sidesteps it, but `fn42` and `fn43` pass the block count straight through
-and do depend on it — it is the only thing below the DOS boot that remains unverified.
+**All ten rungs are climbed except rung 3.** The CHS transfer loop calls the driver one
+sector at a time and so sidesteps the multi-sector path, but `fn42` and `fn43` pass the
+block count straight through and do depend on it — it is the only thing below the DOS boot
+that remains unverified.
+
+Rung 3 now has the command the rung actually describes: **`SECCMP <lba> [<sectors>]`**
+reads N sectors in one driver call, then reads the same N one at a time, and compares them
+byte for byte. Both paths go through `IDE_READ_SECTOR`, so what is under test is the
+driver's own multi-sector loop rather than the raw port sequence `SEC2` walks. It finishes
+by calling the driver with a count of zero, which is what defect 12 above was about — if
+that line is the last thing on the console, the guard is not working.
 
 The ladder earned its keep. Rungs 7 and 8 in particular — a hand-written boot sector
 printing through INT 14h, then the same sector printing through INT 10h — were what
@@ -462,8 +503,9 @@ separated a boot-path fault from a console fault at the moment both were unprove
 1. **IDENTIFY dump** — Words 1/3/6 and 60–61 from the monitor. Proves the CF card, the
    8-bit feature negotiation, and CS1 timing.
 2. **Raw LBA 0 dump** — 512 bytes in hex, ending in `55 AA`. Proves the PIO read path.
-3. **Multi-sector read** — Read 8 sectors in one command and compare against 8
-   single-sector reads. This is the test that catches defect 08.
+3. **Multi-sector read** — `SECCMP 0 8`. Reads 8 sectors in one command and compares
+   against 8 single-sector reads. This is the test that catches defect 08, and it is how
+   defect 12 was found.
 4. **INT 13h AH=08h** — Geometry from the monitor. Proves enumeration, the disk tables,
    and the INT 41h vector.
 5. **INT 13h AH=02h** — CHS read of cylinder 0 / head 0 / sector 1, byte-identical to
@@ -498,14 +540,11 @@ about what it finds, which makes it a useful diagnostic when 6.22 fails silently
 Phase 4 was written on a machine with no NASM and no Open Watcom, so none of it has been
 assembled. Treat the first build as part of the work, not a formality.
 
-**Build first, and read the output.** The risky spellings are the two far jumps in
-`mov_ext_mem` — `jmp GDT_CODE:.pm` and `jmp 0xF000:.rm` — which follow the form
-`sizer.asm` already uses and links, and the forward `ja .bad` over roughly 200 bytes,
-which needs the `-O9` NASM already passes to size itself as a near jump. If either
-bites, it bites at assembly time and says so.
+The build is done and clean — see the note under Phase 4 for what it settled. What
+remains is execution.
 
-Then, from the monitor (SETUP entry 5), the new `INT15` command. Each case checks the
-answer against something other than the handler's own word for it.
+From the monitor (SETUP entry 5), the new `INT15` command. Each case checks the answer
+against something other than the handler's own word for it.
 
 | Rung | Command | What it proves | What failure looks like |
 |---|---|---|---|
@@ -692,10 +731,15 @@ DOS prompt.
 
 ### Functional gaps
 
-- **VT100 escape translation.** Arrow keys, Home/End and the function keys arrive as
-  `ESC [ A` and reach the ring buffer as three separate characters. DOS's command-line
-  editing uses arrows and F1/F3, so this is felt at every prompt. Needs a small state
-  machine in the IRQ4 handler. Last item of Phase 3.
+- **VT100 escape translation — deliberately not being done.** Arrow keys, Home/End and
+  the function keys arrive as `ESC [ A` and reach the ring buffer as three separate
+  characters, so DOS's command-line editing is broken at every prompt. It would need a
+  small state machine in the IRQ4 handler. **Deferred on purpose:** a real video card and
+  a real keyboard go onto this board after Phase 5, and at that point INT 16h stops
+  translating a terminal's escape sequences and starts reading scan codes from hardware
+  that emits them natively. Writing the state machine now means writing something built to
+  be deleted. The serial console keeps working for everything except in-line editing until
+  then.
 - **INT 10h function 08h cannot report screen contents.** There is no display buffer —
   a deliberate choice, since real memory-mapped video is planned for this board and a
   pretend buffer at `B800:0000` would only have to be torn out again. `08h` returns a
@@ -703,8 +747,9 @@ DOS prompt.
   rather than editing a buffer. Everything DOS leans on is honest.
 - **INT 13h `4Eh`** (set hardware configuration) still returns invalid-command. Normal.
 - **`equip_flag` floppy bits** are still never set. Video bits now are.
-- **Multi-sector transfers are unverified** — see the ladder note above.
-- **All of Phase 4 is unverified.** Written, never assembled, never run. Section 06a.
+- **Multi-sector transfers are unverified** — but `SECCMP` now exists to verify them,
+  and writing it turned up defect 12. See the ladder note above.
+- **All of Phase 4 is unverified.** It assembles; it has never run. Section 06a.
 - **No boot-device byte in NVRAM.** Phase 2 called for one; `set_fixed()` stores geometry
   overrides instead, and `19h_boot.asm` has drive 80h hardwired. Nothing needs it yet,
   but the plan said otherwise and the plan was not followed here.
@@ -715,15 +760,20 @@ DOS prompt.
 
 ### Housekeeping
 
-- **IDE wait states are still `3`** in `wtab1`. `C007` (7 wait states, matching `CS0`)
-  has been run successfully at runtime via the monitor but never made permanent.
+- ~~**IDE wait states are still `3`** in `wtab1`.~~ **Done.** `CS1ADL` now carries 7,
+  matching `CS0`. The value had already been proven at runtime from the monitor; it is
+  just permanent now.
 - **The `0rom128.HEX` copy rule is still missing** from the makefile. It was removed
   while `all:` still listed the target, which made every build fail at the last step;
   the target was dropped from `all:`, so nothing regenerates that file now. Whatever you
   burn, do not burn `0rom128.HEX` expecting it to be current.
-- **SETUP halts instead of rebooting.** After saving NVRAM, `set_top()` prints
-  "Reboot required!" and calls `exit(15)`, which lands in `exit_` and enters power-down.
-  A jump to the reset vector would be friendlier.
+- ~~**SETUP halts instead of rebooting.**~~ **Done.** `set_top()` now calls `reboot()`
+  in `19h_boot.asm`, which drains the console and jumps to `FFFF:0000` — the reset entry,
+  where `bootstrap` in `boot.asm` sits — so a warm start takes the same path a cold one
+  does. It is not a hardware reset and the peripherals keep their state, but `start.asm`
+  survives re-entry: the expanded I/O unlock opens with a read of `REMAPCFGH` precisely to
+  put that state machine back to a known point, and every port that matters is written
+  from `wtab1`/`btab1` rather than assumed.
 - **The makefile dependency block** still needs the cleanup described above — stale
   entries, and `serial.inc` in no list at all.
 
@@ -746,7 +796,7 @@ Phase 4 added no files. `15h_misc.asm`, `stub.asm`, `start.asm`, `monitor.asm`,
 ### Monitor commands
 
 `DUMP` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST` `MKBOOT`
-`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `INT15` `EXIT`
+`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `INT15` `SECCMP` `EXIT`
 
 Several were written to answer one question and kept because they answered it — `IRQFIND`
 found the SIO0 interrupt line, `SECRAW` proved a card was short a byte per sector,

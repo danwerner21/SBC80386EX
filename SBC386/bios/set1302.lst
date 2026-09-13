@@ -2,7 +2,7 @@ Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/set1302.c
 GROUP: 'DGROUP' CONST,CONST2,_DATA
 
 File contains no line numbers.
-Segment: _TEXT BYTE USE16 00000859 bytes
+Segment: _TEXT BYTE USE16 00000856 bytes
 0000                          option_get_:
 0000    56                        push        si 
 0001    57                        push        di 
@@ -212,751 +212,750 @@ Routine Size: 150 bytes,    Routine Base: _TEXT + 00C9
 01AB    85 FF                     test        di,di 
 01AD    75 BE                     jne         L$16 
 01AF    85 F6                     test        si,si 
-01B1    74 28                     je          L$25 
+01B1    74 25                     je          L$25 
 01B3    B8 1D 00                  mov         ax,0x001d 
 01B6    E8 00 00                  call        get_nvram_crc_ 
 01B9    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
 01BD    26 89 87 FE 00            mov         word ptr es:0xfe[bx],ax 
 01C2    E8 00 00                  call        put_nvram_info_ 
-01C5    1E                        push        ds 
-01C6    68 2D 02                  push        offset DGROUP:L$128 
-01C9    E8 00 00                  call        _cprintf 
-01CC    83 C4 04                  add         sp,0x0004 
-01CF    B8 1F 00                  mov         ax,0x001f 
-01D2    E8 00 00                  call        get_nvram_crc_ 
-01D5    B8 0F 00                  mov         ax,0x000f 
-01D8    E8 00 00                  call        exit_ 
-01DB                          L$25:
-01DB    5D                        pop         bp 
-01DC    E9 E5 FE                  jmp         L$9 
-01DF                          get_dec_:
-01DF    56                        push        si 
-01E0    57                        push        di 
-01E1    C8 10 00 00               enter       0x0010,0x00 
-01E5    89 CF                     mov         di,cx 
-01E7    53                        push        bx 
-01E8    52                        push        dx 
-01E9    50                        push        ax 
-01EA    1E                        push        ds 
-01EB    68 40 02                  push        offset DGROUP:L$129 
-01EE    E8 00 00                  call        _cprintf 
-01F1    BB 10 00                  mov         bx,0x0010 
-01F4    8D 46 F0                  lea         ax,-0x10[bp] 
-01F7    83 C4 0A                  add         sp,0x000a 
-01FA    8C D2                     mov         dx,ss 
-01FC    E8 00 00                  call        getline_ 
-01FF    85 C0                     test        ax,ax 
-0201    74 31                     je          L$28 
-0203    31 C0                     xor         ax,ax 
-0205    31 F6                     xor         si,si 
-0207                          L$26:
-0207    80 7A F0 00               cmp         byte ptr -0x10[bp+si],0x00 
-020B    74 21                     je          L$27 
-020D    80 7A F0 30               cmp         byte ptr -0x10[bp+si],0x30 
-0211    72 21                     jb          L$28 
-0213    80 7A F0 39               cmp         byte ptr -0x10[bp+si],0x39 
-0217    77 1B                     ja          L$28 
-0219    6B D8 0A                  imul        bx,ax,0x000a 
-021C    0F B6 52 F0               movzx       dx,byte ptr -0x10[bp+si] 
-0220    89 D0                     mov         ax,dx 
-0222    2D 30 00                  sub         ax,0x0030 
-0225    01 D8                     add         ax,bx 
-0227    39 F8                     cmp         ax,di 
-0229    7F 09                     jg          L$28 
-022B    46                        inc         si 
-022C    EB D9                     jmp         L$26 
-022E                          L$27:
-022E    85 F6                     test        si,si 
-0230    0F 85 1B FF               jne         L$14 
-0234                          L$28:
-0234    B8 FF FF                  mov         ax,0xffff 
-0237    E9 15 FF                  jmp         L$14 
+01C5    B8 1F 00                  mov         ax,0x001f 
+01C8    E8 00 00                  call        get_nvram_crc_ 
+01CB    1E                        push        ds 
+01CC    68 2D 02                  push        offset DGROUP:L$128 
+01CF    E8 00 00                  call        _cprintf 
+01D2    83 C4 04                  add         sp,0x0004 
+01D5    E8 00 00                  call        reboot_ 
+01D8                          L$25:
+01D8    5D                        pop         bp 
+01D9    E9 E8 FE                  jmp         L$9 
+01DC                          get_dec_:
+01DC    56                        push        si 
+01DD    57                        push        di 
+01DE    C8 10 00 00               enter       0x0010,0x00 
+01E2    89 CF                     mov         di,cx 
+01E4    53                        push        bx 
+01E5    52                        push        dx 
+01E6    50                        push        ax 
+01E7    1E                        push        ds 
+01E8    68 4F 02                  push        offset DGROUP:L$129 
+01EB    E8 00 00                  call        _cprintf 
+01EE    BB 10 00                  mov         bx,0x0010 
+01F1    8D 46 F0                  lea         ax,-0x10[bp] 
+01F4    83 C4 0A                  add         sp,0x000a 
+01F7    8C D2                     mov         dx,ss 
+01F9    E8 00 00                  call        getline_ 
+01FC    85 C0                     test        ax,ax 
+01FE    74 31                     je          L$28 
+0200    31 C0                     xor         ax,ax 
+0202    31 F6                     xor         si,si 
+0204                          L$26:
+0204    80 7A F0 00               cmp         byte ptr -0x10[bp+si],0x00 
+0208    74 21                     je          L$27 
+020A    80 7A F0 30               cmp         byte ptr -0x10[bp+si],0x30 
+020E    72 21                     jb          L$28 
+0210    80 7A F0 39               cmp         byte ptr -0x10[bp+si],0x39 
+0214    77 1B                     ja          L$28 
+0216    6B D8 0A                  imul        bx,ax,0x000a 
+0219    0F B6 52 F0               movzx       dx,byte ptr -0x10[bp+si] 
+021D    89 D0                     mov         ax,dx 
+021F    2D 30 00                  sub         ax,0x0030 
+0222    01 D8                     add         ax,bx 
+0224    39 F8                     cmp         ax,di 
+0226    7F 09                     jg          L$28 
+0228    46                        inc         si 
+0229    EB D9                     jmp         L$26 
+022B                          L$27:
+022B    85 F6                     test        si,si 
+022D    0F 85 1E FF               jne         L$14 
+0231                          L$28:
+0231    B8 FF FF                  mov         ax,0xffff 
+0234    E9 18 FF                  jmp         L$14 
 
-Routine Size: 219 bytes,    Routine Base: _TEXT + 015F
+Routine Size: 216 bytes,    Routine Base: _TEXT + 015F
 
-023A                          set_fixed_:
-023A    53                        push        bx 
-023B    51                        push        cx 
-023C    52                        push        dx 
-023D    56                        push        si 
-023E    57                        push        di 
-023F    C8 08 00 00               enter       0x0008,0x00 
-0243    1E                        push        ds 
-0244    68 4A 02                  push        offset DGROUP:L$130 
-0247    E8 00 00                  call        _cprintf 
-024A    83 C4 04                  add         sp,0x0004 
-024D    1E                        push        ds 
-024E    68 60 02                  push        offset DGROUP:L$131 
-0251    E8 00 00                  call        _cprintf 
-0254    83 C4 04                  add         sp,0x0004 
-0257    1E                        push        ds 
-0258    68 9A 02                  push        offset DGROUP:L$132 
-025B    E8 00 00                  call        _cprintf 
-025E    83 C4 04                  add         sp,0x0004 
-0261    31 FF                     xor         di,di 
-0263    1E                        push        ds 
-0264    31 F6                     xor         si,si 
-0266    68 D2 02                  push        offset DGROUP:L$133 
-0269    89 7E FE                  mov         word ptr -0x2[bp],di 
-026C    E8 00 00                  call        _cprintf 
-026F    83 C4 04                  add         sp,0x0004 
-0272    EB 68                     jmp         L$33 
-0274                          L$29:
-0274    B8 10 03                  mov         ax,offset DGROUP:L$135 
-0277                          L$30:
-0277    8C DB                     mov         bx,ds 
-0279    53                        push        bx 
-027A    50                        push        ax 
-027B    1E                        push        ds 
-027C    68 17 03                  push        offset DGROUP:L$136 
-027F    E8 00 00                  call        _cprintf 
-0282    B9 FF 00                  mov         cx,0x00ff 
-0285    8B 5E F8                  mov         bx,word ptr -0x8[bp] 
-0288    B8 1C 03                  mov         ax,offset DGROUP:L$137 
-028B    83 C4 08                  add         sp,0x0008 
-028E    8C DA                     mov         dx,ds 
-0290    E8 00 00                  call        get_dec_ 
-0293    89 46 FC                  mov         word ptr -0x4[bp],ax 
-0296    85 C0                     test        ax,ax 
-0298    7C 11                     jl          L$31 
-029A    8A 46 FC                  mov         al,byte ptr -0x4[bp] 
-029D    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-02A1    01 F3                     add         bx,si 
-02A3    BF 01 00                  mov         di,0x0001 
-02A6    26 88 87 ED 00            mov         byte ptr es:0xed[bx],al 
-02AB                          L$31:
-02AB    B9 3F 00                  mov         cx,0x003f 
-02AE    8B 5E FA                  mov         bx,word ptr -0x6[bp] 
-02B1    B8 26 03                  mov         ax,offset DGROUP:L$138 
-02B4    8C DA                     mov         dx,ds 
-02B6    E8 00 00                  call        get_dec_ 
-02B9    89 46 FC                  mov         word ptr -0x4[bp],ax 
-02BC    85 C0                     test        ax,ax 
-02BE    7C 11                     jl          L$32 
-02C0    8A 46 FC                  mov         al,byte ptr -0x4[bp] 
-02C3    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-02C7    01 F3                     add         bx,si 
-02C9    BF 01 00                  mov         di,0x0001 
-02CC    26 88 87 EE 00            mov         byte ptr es:0xee[bx],al 
-02D1                          L$32:
-02D1    FF 46 FE                  inc         word ptr -0x2[bp] 
-02D4    46                        inc         si 
-02D5    46                        inc         si 
-02D6    83 7E FE 02               cmp         word ptr -0x2[bp],0x0002 
-02DA    7D 26                     jge         L$34 
-02DC                          L$33:
-02DC    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-02E0    01 F3                     add         bx,si 
-02E2    26 0F B6 87 ED 00         movzx       ax,byte ptr es:0xed[bx] 
-02E8    89 46 F8                  mov         word ptr -0x8[bp],ax 
-02EB    26 0F B6 87 EE 00         movzx       ax,byte ptr es:0xee[bx] 
-02F1    89 46 FA                  mov         word ptr -0x6[bp],ax 
-02F4    83 7E FE 00               cmp         word ptr -0x2[bp],0x0000 
-02F8    0F 84 78 FF               je          L$29 
-02FC    B8 0A 03                  mov         ax,offset DGROUP:L$134 
-02FF    E9 75 FF                  jmp         L$30 
-0302                          L$34:
-0302    85 FF                     test        di,di 
-0304    74 0A                     je          L$35 
-0306    1E                        push        ds 
-0307    68 30 03                  push        offset DGROUP:L$139 
-030A    E8 00 00                  call        _cprintf 
-030D    83 C4 04                  add         sp,0x0004 
-0310                          L$35:
-0310    89 F8                     mov         ax,di 
-0312                          L$36:
-0312    C9                        leave       
-0313    5F                        pop         di 
-0314    5E                        pop         si 
-0315                          L$37:
-0315    5A                        pop         dx 
-0316    59                        pop         cx 
-0317    5B                        pop         bx 
-0318    C3                        ret         
+0237                          set_fixed_:
+0237    53                        push        bx 
+0238    51                        push        cx 
+0239    52                        push        dx 
+023A    56                        push        si 
+023B    57                        push        di 
+023C    C8 08 00 00               enter       0x0008,0x00 
+0240    1E                        push        ds 
+0241    68 59 02                  push        offset DGROUP:L$130 
+0244    E8 00 00                  call        _cprintf 
+0247    83 C4 04                  add         sp,0x0004 
+024A    1E                        push        ds 
+024B    68 6F 02                  push        offset DGROUP:L$131 
+024E    E8 00 00                  call        _cprintf 
+0251    83 C4 04                  add         sp,0x0004 
+0254    1E                        push        ds 
+0255    68 A9 02                  push        offset DGROUP:L$132 
+0258    E8 00 00                  call        _cprintf 
+025B    83 C4 04                  add         sp,0x0004 
+025E    31 FF                     xor         di,di 
+0260    1E                        push        ds 
+0261    31 F6                     xor         si,si 
+0263    68 E1 02                  push        offset DGROUP:L$133 
+0266    89 7E FE                  mov         word ptr -0x2[bp],di 
+0269    E8 00 00                  call        _cprintf 
+026C    83 C4 04                  add         sp,0x0004 
+026F    EB 68                     jmp         L$33 
+0271                          L$29:
+0271    B8 1F 03                  mov         ax,offset DGROUP:L$135 
+0274                          L$30:
+0274    8C DB                     mov         bx,ds 
+0276    53                        push        bx 
+0277    50                        push        ax 
+0278    1E                        push        ds 
+0279    68 26 03                  push        offset DGROUP:L$136 
+027C    E8 00 00                  call        _cprintf 
+027F    B9 FF 00                  mov         cx,0x00ff 
+0282    8B 5E F8                  mov         bx,word ptr -0x8[bp] 
+0285    B8 2B 03                  mov         ax,offset DGROUP:L$137 
+0288    83 C4 08                  add         sp,0x0008 
+028B    8C DA                     mov         dx,ds 
+028D    E8 00 00                  call        get_dec_ 
+0290    89 46 FC                  mov         word ptr -0x4[bp],ax 
+0293    85 C0                     test        ax,ax 
+0295    7C 11                     jl          L$31 
+0297    8A 46 FC                  mov         al,byte ptr -0x4[bp] 
+029A    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+029E    01 F3                     add         bx,si 
+02A0    BF 01 00                  mov         di,0x0001 
+02A3    26 88 87 ED 00            mov         byte ptr es:0xed[bx],al 
+02A8                          L$31:
+02A8    B9 3F 00                  mov         cx,0x003f 
+02AB    8B 5E FA                  mov         bx,word ptr -0x6[bp] 
+02AE    B8 35 03                  mov         ax,offset DGROUP:L$138 
+02B1    8C DA                     mov         dx,ds 
+02B3    E8 00 00                  call        get_dec_ 
+02B6    89 46 FC                  mov         word ptr -0x4[bp],ax 
+02B9    85 C0                     test        ax,ax 
+02BB    7C 11                     jl          L$32 
+02BD    8A 46 FC                  mov         al,byte ptr -0x4[bp] 
+02C0    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+02C4    01 F3                     add         bx,si 
+02C6    BF 01 00                  mov         di,0x0001 
+02C9    26 88 87 EE 00            mov         byte ptr es:0xee[bx],al 
+02CE                          L$32:
+02CE    FF 46 FE                  inc         word ptr -0x2[bp] 
+02D1    46                        inc         si 
+02D2    46                        inc         si 
+02D3    83 7E FE 02               cmp         word ptr -0x2[bp],0x0002 
+02D7    7D 26                     jge         L$34 
+02D9                          L$33:
+02D9    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+02DD    01 F3                     add         bx,si 
+02DF    26 0F B6 87 ED 00         movzx       ax,byte ptr es:0xed[bx] 
+02E5    89 46 F8                  mov         word ptr -0x8[bp],ax 
+02E8    26 0F B6 87 EE 00         movzx       ax,byte ptr es:0xee[bx] 
+02EE    89 46 FA                  mov         word ptr -0x6[bp],ax 
+02F1    83 7E FE 00               cmp         word ptr -0x2[bp],0x0000 
+02F5    0F 84 78 FF               je          L$29 
+02F9    B8 19 03                  mov         ax,offset DGROUP:L$134 
+02FC    E9 75 FF                  jmp         L$30 
+02FF                          L$34:
+02FF    85 FF                     test        di,di 
+0301    74 0A                     je          L$35 
+0303    1E                        push        ds 
+0304    68 3F 03                  push        offset DGROUP:L$139 
+0307    E8 00 00                  call        _cprintf 
+030A    83 C4 04                  add         sp,0x0004 
+030D                          L$35:
+030D    89 F8                     mov         ax,di 
+030F                          L$36:
+030F    C9                        leave       
+0310    5F                        pop         di 
+0311    5E                        pop         si 
+0312                          L$37:
+0312    5A                        pop         dx 
+0313    59                        pop         cx 
+0314    5B                        pop         bx 
+0315    C3                        ret         
 
-Routine Size: 223 bytes,    Routine Base: _TEXT + 023A
+Routine Size: 223 bytes,    Routine Base: _TEXT + 0237
 
-0319                          set_floppy_:
-0319    53                        push        bx 
-031A    51                        push        cx 
-031B    52                        push        dx 
-031C    1E                        push        ds 
-031D    68 6B 03                  push        offset DGROUP:L$140 
-0320    E8 00 00                  call        _cprintf 
-0323    83 C4 04                  add         sp,0x0004 
-0326    31 C0                     xor         ax,ax 
-0328    EB EB                     jmp         L$37 
+0316                          set_floppy_:
+0316    53                        push        bx 
+0317    51                        push        cx 
+0318    52                        push        dx 
+0319    1E                        push        ds 
+031A    68 7A 03                  push        offset DGROUP:L$140 
+031D    E8 00 00                  call        _cprintf 
+0320    83 C4 04                  add         sp,0x0004 
+0323    31 C0                     xor         ax,ax 
+0325    EB EB                     jmp         L$37 
 
-Routine Size: 17 bytes,    Routine Base: _TEXT + 0319
+Routine Size: 17 bytes,    Routine Base: _TEXT + 0316
 
-032A                          SET_CLOCK:
-032A    56                        push        si 
-032B                          L$38:
-032B    6A 03                     push        0x0003 
-032D    BB 00 00                  mov         bx,offset _clock_name 
-0330    B8 57 00                  mov         ax,offset DGROUP:L$79 
-0333    8C D9                     mov         cx,ds 
-0335    8C DA                     mov         dx,ds 
-0337    E8 00 00                  call        option_get_ 
-033A    89 C6                     mov         si,ax 
-033C    3D 03 00                  cmp         ax,0x0003 
-033F    74 14                     je          L$40 
-0341    3D 02 00                  cmp         ax,0x0002 
-0344    74 0A                     je          L$39 
-0346    3D 01 00                  cmp         ax,0x0001 
-0349    75 0D                     jne         L$41 
-034B    E8 00 00                  call        SET_DATE 
-034E    EB 08                     jmp         L$41 
-0350                          L$39:
-0350    E8 00 00                  call        SET_TIME 
-0353    EB 03                     jmp         L$41 
-0355                          L$40:
-0355    E8 00 00                  call        SET_CHG 
-0358                          L$41:
-0358    85 F6                     test        si,si 
-035A    75 CF                     jne         L$38 
-035C    5E                        pop         si 
-035D    C3                        ret         
+0327                          SET_CLOCK:
+0327    56                        push        si 
+0328                          L$38:
+0328    6A 03                     push        0x0003 
+032A    BB 00 00                  mov         bx,offset _clock_name 
+032D    B8 57 00                  mov         ax,offset DGROUP:L$79 
+0330    8C D9                     mov         cx,ds 
+0332    8C DA                     mov         dx,ds 
+0334    E8 00 00                  call        option_get_ 
+0337    89 C6                     mov         si,ax 
+0339    3D 03 00                  cmp         ax,0x0003 
+033C    74 14                     je          L$40 
+033E    3D 02 00                  cmp         ax,0x0002 
+0341    74 0A                     je          L$39 
+0343    3D 01 00                  cmp         ax,0x0001 
+0346    75 0D                     jne         L$41 
+0348    E8 00 00                  call        SET_DATE 
+034B    EB 08                     jmp         L$41 
+034D                          L$39:
+034D    E8 00 00                  call        SET_TIME 
+0350    EB 03                     jmp         L$41 
+0352                          L$40:
+0352    E8 00 00                  call        SET_CHG 
+0355                          L$41:
+0355    85 F6                     test        si,si 
+0357    75 CF                     jne         L$38 
+0359    5E                        pop         si 
+035A    C3                        ret         
 
-Routine Size: 52 bytes,    Routine Base: _TEXT + 032A
+Routine Size: 52 bytes,    Routine Base: _TEXT + 0327
 
-035E                          SET_DATE:
-035E    56                        push        si 
-035F    57                        push        di 
-0360    C8 3A 00 00               enter       0x003a,0x00 
-0364    B4 04                     mov         ah,0x04 
-0366    CD 1A                     int         0x1a 
-0368    88 AE F4 FF               mov         byte ptr -0xc[bp],ch 
-036C    88 8E FA FF               mov         byte ptr -0x6[bp],cl 
-0370    88 B6 F6 FF               mov         byte ptr -0xa[bp],dh 
-0374    88 96 F8 FF               mov         byte ptr -0x8[bp],dl 
-0378    FE C8                     dec         al 
-037A    88 86 FC FF               mov         byte ptr -0x4[bp],al 
-037E    E8 00 00                  call        day_of_week_ 
-0381    88 86 FE FF               mov         byte ptr -0x2[bp],al 
-0385    0F B6 5E FE               movzx       bx,byte ptr -0x2[bp] 
-0389    C1 E3 02                  shl         bx,0x02 
-038C    66 FF B7 00 00            push        dword ptr _Day[bx] 
-0391    1E                        push        ds 
-0392    68 92 03                  push        offset DGROUP:L$141 
-0395    E8 00 00                  call        _cprintf 
-0398    83 C4 08                  add         sp,0x0008 
-039B    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
-039F    50                        push        ax 
-03A0    0F B6 46 FE               movzx       ax,byte ptr -0x2[bp] 
-03A4    50                        push        ax 
-03A5    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
-03A9    50                        push        ax 
-03AA    0F B6 46 F4               movzx       ax,byte ptr -0xc[bp] 
-03AE    50                        push        ax 
-03AF    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
-03B3    50                        push        ax 
-03B4    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
-03B8    50                        push        ax 
-03B9    1E                        push        ds 
-03BA    68 A2 03                  push        offset DGROUP:L$142 
-03BD    E8 00 00                  call        _cprintf 
-03C0    83 C4 10                  add         sp,0x0010 
-03C3                          L$42:
-03C3    1E                        push        ds 
-03C4    68 C9 03                  push        offset DGROUP:L$143 
-03C7    C6 46 FE 63               mov         byte ptr -0x2[bp],0x63 
-03CB    E8 00 00                  call        _cprintf 
-03CE    BB 28 00                  mov         bx,0x0028 
-03D1    8D 46 C6                  lea         ax,-0x3a[bp] 
-03D4    83 C4 04                  add         sp,0x0004 
-03D7    8C D2                     mov         dx,ss 
-03D9    E8 00 00                  call        getline_ 
-03DC    85 C0                     test        ax,ax 
-03DE    0F 84 6D FD               je          L$14 
-03E2    8D 56 C6                  lea         dx,-0x3a[bp] 
-03E5    8D 5E EE                  lea         bx,-0x12[bp] 
-03E8    8D 46 C6                  lea         ax,-0x3a[bp] 
-03EB    8C D1                     mov         cx,ss 
-03ED    89 56 EE                  mov         word ptr -0x12[bp],dx 
-03F0    8C D2                     mov         dx,ss 
-03F2    8C 56 F0                  mov         word ptr -0x10[bp],ss 
-03F5    E8 00 00                  call        strtobcd_ 
-03F8    89 46 F2                  mov         word ptr -0xe[bp],ax 
-03FB    85 C0                     test        ax,ax 
-03FD    0F 84 09 01               je          L$47 
-0401    3D 13 00                  cmp         ax,0x0013 
-0404    0F 8D 02 01               jge         L$47 
-0408    8A 46 F2                  mov         al,byte ptr -0xe[bp] 
-040B    88 46 F6                  mov         byte ptr -0xa[bp],al 
-040E    FF 46 EE                  inc         word ptr -0x12[bp] 
-0411    8D 5E EE                  lea         bx,-0x12[bp] 
-0414    8B 56 F0                  mov         dx,word ptr -0x10[bp] 
-0417    8C D1                     mov         cx,ss 
-0419    8B 46 EE                  mov         ax,word ptr -0x12[bp] 
-041C    E8 00 00                  call        strtobcd_ 
-041F    89 46 F2                  mov         word ptr -0xe[bp],ax 
-0422    85 C0                     test        ax,ax 
-0424    0F 84 E2 00               je          L$47 
-0428    3D 32 00                  cmp         ax,0x0032 
-042B    0F 8D DB 00               jge         L$47 
-042F    8A 46 F2                  mov         al,byte ptr -0xe[bp] 
-0432    88 46 F8                  mov         byte ptr -0x8[bp],al 
-0435    FF 46 EE                  inc         word ptr -0x12[bp] 
-0438    8D 5E EE                  lea         bx,-0x12[bp] 
-043B    8B 56 F0                  mov         dx,word ptr -0x10[bp] 
-043E    8C D1                     mov         cx,ss 
-0440    8B 46 EE                  mov         ax,word ptr -0x12[bp] 
-0443    E8 00 00                  call        strtobcd_ 
-0446    89 46 F2                  mov         word ptr -0xe[bp],ax 
-0449    85 C0                     test        ax,ax 
-044B    0F 84 BB 00               je          L$47 
-044F    3D 70 19                  cmp         ax,0x1970 
-0452    0F 8C B4 00               jl          L$47 
-0456    3D 70 20                  cmp         ax,0x2070 
-0459    0F 8D AD 00               jge         L$47 
-045D    8A 56 F2                  mov         dl,byte ptr -0xe[bp] 
-0460    88 56 FA                  mov         byte ptr -0x6[bp],dl 
-0463    C1 F8 08                  sar         ax,0x08 
-0466    88 46 F4                  mov         byte ptr -0xc[bp],al 
-0469    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
-046D    E8 00 00                  call        bcd2int_ 
-0470    89 C3                     mov         bx,ax 
-0472    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
-0476    E8 00 00                  call        bcd2int_ 
-0479    89 C2                     mov         dx,ax 
-047B    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
-047F    E8 00 00                  call        bcd2int_ 
-0482    89 D8                     mov         ax,bx 
-0484    C1 F8 0F                  sar         ax,0x0f 
-0487    31 C3                     xor         bx,ax 
-0489    29 C3                     sub         bx,ax 
-048B    83 E3 03                  and         bx,0x0003 
-048E    31 C3                     xor         bx,ax 
-0490    C7 46 F2 28 00            mov         word ptr -0xe[bp],0x0028 
-0495    29 C3                     sub         bx,ax 
-0497    75 05                     jne         L$43 
-0499    C7 46 F2 29 00            mov         word ptr -0xe[bp],0x0029 
-049E                          L$43:
-049E    83 FA 02                  cmp         dx,0x0002 
-04A1    75 09                     jne         L$44 
-04A3    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
-04A7    3B 46 F2                  cmp         ax,word ptr -0xe[bp] 
-04AA    7F 5E                     jg          L$47 
-04AC                          L$44:
-04AC    83 EA 03                  sub         dx,0x0003 
-04AF    C7 46 F2 31 00            mov         word ptr -0xe[bp],0x0031 
-04B4    85 D2                     test        dx,dx 
-04B6    7D 03                     jge         L$45 
-04B8    83 C2 0C                  add         dx,0x000c 
-04BB                          L$45:
-04BB    89 D0                     mov         ax,dx 
-04BD    BB 05 00                  mov         bx,0x0005 
-04C0    99                        cwd         
-04C1    F7 FB                     idiv        bx 
-04C3    F6 C2 01                  test        dl,0x01 
-04C6    74 03                     je          L$46 
-04C8    FF 4E F2                  dec         word ptr -0xe[bp] 
-04CB                          L$46:
-04CB    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
-04CF    3B 46 F2                  cmp         ax,word ptr -0xe[bp] 
-04D2    7F 36                     jg          L$47 
-04D4    C6 46 FE 01               mov         byte ptr -0x2[bp],0x01 
-04D8    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
-04DC    50                        push        ax 
-04DD    0F B6 46 F4               movzx       ax,byte ptr -0xc[bp] 
-04E1    50                        push        ax 
-04E2    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
-04E6    50                        push        ax 
-04E7    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
-04EB    50                        push        ax 
-04EC    1E                        push        ds 
-04ED    68 DF 03                  push        offset DGROUP:L$144 
-04F0    E8 00 00                  call        _cprintf 
-04F3    83 C4 0C                  add         sp,0x000c 
-04F6    B4 05                     mov         ah,0x05 
-04F8    8A AE F4 FF               mov         ch,byte ptr -0xc[bp] 
-04FC    8A 8E FA FF               mov         cl,byte ptr -0x6[bp] 
-0500    8A B6 F6 FF               mov         dh,byte ptr -0xa[bp] 
-0504    8A 96 F8 FF               mov         dl,byte ptr -0x8[bp] 
-0508    CD 1A                     int         0x1a 
-050A                          L$47:
-050A    80 7E FE 07               cmp         byte ptr -0x2[bp],0x07 
-050E    0F 83 B1 FE               jae         L$42 
-0512    E9 3A FC                  jmp         L$14 
+035B                          SET_DATE:
+035B    56                        push        si 
+035C    57                        push        di 
+035D    C8 3A 00 00               enter       0x003a,0x00 
+0361    B4 04                     mov         ah,0x04 
+0363    CD 1A                     int         0x1a 
+0365    88 AE F4 FF               mov         byte ptr -0xc[bp],ch 
+0369    88 8E FA FF               mov         byte ptr -0x6[bp],cl 
+036D    88 B6 F6 FF               mov         byte ptr -0xa[bp],dh 
+0371    88 96 F8 FF               mov         byte ptr -0x8[bp],dl 
+0375    FE C8                     dec         al 
+0377    88 86 FC FF               mov         byte ptr -0x4[bp],al 
+037B    E8 00 00                  call        day_of_week_ 
+037E    88 86 FE FF               mov         byte ptr -0x2[bp],al 
+0382    0F B6 5E FE               movzx       bx,byte ptr -0x2[bp] 
+0386    C1 E3 02                  shl         bx,0x02 
+0389    66 FF B7 00 00            push        dword ptr _Day[bx] 
+038E    1E                        push        ds 
+038F    68 A1 03                  push        offset DGROUP:L$141 
+0392    E8 00 00                  call        _cprintf 
+0395    83 C4 08                  add         sp,0x0008 
+0398    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
+039C    50                        push        ax 
+039D    0F B6 46 FE               movzx       ax,byte ptr -0x2[bp] 
+03A1    50                        push        ax 
+03A2    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
+03A6    50                        push        ax 
+03A7    0F B6 46 F4               movzx       ax,byte ptr -0xc[bp] 
+03AB    50                        push        ax 
+03AC    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
+03B0    50                        push        ax 
+03B1    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
+03B5    50                        push        ax 
+03B6    1E                        push        ds 
+03B7    68 B1 03                  push        offset DGROUP:L$142 
+03BA    E8 00 00                  call        _cprintf 
+03BD    83 C4 10                  add         sp,0x0010 
+03C0                          L$42:
+03C0    1E                        push        ds 
+03C1    68 D8 03                  push        offset DGROUP:L$143 
+03C4    C6 46 FE 63               mov         byte ptr -0x2[bp],0x63 
+03C8    E8 00 00                  call        _cprintf 
+03CB    BB 28 00                  mov         bx,0x0028 
+03CE    8D 46 C6                  lea         ax,-0x3a[bp] 
+03D1    83 C4 04                  add         sp,0x0004 
+03D4    8C D2                     mov         dx,ss 
+03D6    E8 00 00                  call        getline_ 
+03D9    85 C0                     test        ax,ax 
+03DB    0F 84 70 FD               je          L$14 
+03DF    8D 56 C6                  lea         dx,-0x3a[bp] 
+03E2    8D 5E EE                  lea         bx,-0x12[bp] 
+03E5    8D 46 C6                  lea         ax,-0x3a[bp] 
+03E8    8C D1                     mov         cx,ss 
+03EA    89 56 EE                  mov         word ptr -0x12[bp],dx 
+03ED    8C D2                     mov         dx,ss 
+03EF    8C 56 F0                  mov         word ptr -0x10[bp],ss 
+03F2    E8 00 00                  call        strtobcd_ 
+03F5    89 46 F2                  mov         word ptr -0xe[bp],ax 
+03F8    85 C0                     test        ax,ax 
+03FA    0F 84 09 01               je          L$47 
+03FE    3D 13 00                  cmp         ax,0x0013 
+0401    0F 8D 02 01               jge         L$47 
+0405    8A 46 F2                  mov         al,byte ptr -0xe[bp] 
+0408    88 46 F6                  mov         byte ptr -0xa[bp],al 
+040B    FF 46 EE                  inc         word ptr -0x12[bp] 
+040E    8D 5E EE                  lea         bx,-0x12[bp] 
+0411    8B 56 F0                  mov         dx,word ptr -0x10[bp] 
+0414    8C D1                     mov         cx,ss 
+0416    8B 46 EE                  mov         ax,word ptr -0x12[bp] 
+0419    E8 00 00                  call        strtobcd_ 
+041C    89 46 F2                  mov         word ptr -0xe[bp],ax 
+041F    85 C0                     test        ax,ax 
+0421    0F 84 E2 00               je          L$47 
+0425    3D 32 00                  cmp         ax,0x0032 
+0428    0F 8D DB 00               jge         L$47 
+042C    8A 46 F2                  mov         al,byte ptr -0xe[bp] 
+042F    88 46 F8                  mov         byte ptr -0x8[bp],al 
+0432    FF 46 EE                  inc         word ptr -0x12[bp] 
+0435    8D 5E EE                  lea         bx,-0x12[bp] 
+0438    8B 56 F0                  mov         dx,word ptr -0x10[bp] 
+043B    8C D1                     mov         cx,ss 
+043D    8B 46 EE                  mov         ax,word ptr -0x12[bp] 
+0440    E8 00 00                  call        strtobcd_ 
+0443    89 46 F2                  mov         word ptr -0xe[bp],ax 
+0446    85 C0                     test        ax,ax 
+0448    0F 84 BB 00               je          L$47 
+044C    3D 70 19                  cmp         ax,0x1970 
+044F    0F 8C B4 00               jl          L$47 
+0453    3D 70 20                  cmp         ax,0x2070 
+0456    0F 8D AD 00               jge         L$47 
+045A    8A 56 F2                  mov         dl,byte ptr -0xe[bp] 
+045D    88 56 FA                  mov         byte ptr -0x6[bp],dl 
+0460    C1 F8 08                  sar         ax,0x08 
+0463    88 46 F4                  mov         byte ptr -0xc[bp],al 
+0466    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
+046A    E8 00 00                  call        bcd2int_ 
+046D    89 C3                     mov         bx,ax 
+046F    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
+0473    E8 00 00                  call        bcd2int_ 
+0476    89 C2                     mov         dx,ax 
+0478    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
+047C    E8 00 00                  call        bcd2int_ 
+047F    89 D8                     mov         ax,bx 
+0481    C1 F8 0F                  sar         ax,0x0f 
+0484    31 C3                     xor         bx,ax 
+0486    29 C3                     sub         bx,ax 
+0488    83 E3 03                  and         bx,0x0003 
+048B    31 C3                     xor         bx,ax 
+048D    C7 46 F2 28 00            mov         word ptr -0xe[bp],0x0028 
+0492    29 C3                     sub         bx,ax 
+0494    75 05                     jne         L$43 
+0496    C7 46 F2 29 00            mov         word ptr -0xe[bp],0x0029 
+049B                          L$43:
+049B    83 FA 02                  cmp         dx,0x0002 
+049E    75 09                     jne         L$44 
+04A0    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
+04A4    3B 46 F2                  cmp         ax,word ptr -0xe[bp] 
+04A7    7F 5E                     jg          L$47 
+04A9                          L$44:
+04A9    83 EA 03                  sub         dx,0x0003 
+04AC    C7 46 F2 31 00            mov         word ptr -0xe[bp],0x0031 
+04B1    85 D2                     test        dx,dx 
+04B3    7D 03                     jge         L$45 
+04B5    83 C2 0C                  add         dx,0x000c 
+04B8                          L$45:
+04B8    89 D0                     mov         ax,dx 
+04BA    BB 05 00                  mov         bx,0x0005 
+04BD    99                        cwd         
+04BE    F7 FB                     idiv        bx 
+04C0    F6 C2 01                  test        dl,0x01 
+04C3    74 03                     je          L$46 
+04C5    FF 4E F2                  dec         word ptr -0xe[bp] 
+04C8                          L$46:
+04C8    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
+04CC    3B 46 F2                  cmp         ax,word ptr -0xe[bp] 
+04CF    7F 36                     jg          L$47 
+04D1    C6 46 FE 01               mov         byte ptr -0x2[bp],0x01 
+04D5    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
+04D9    50                        push        ax 
+04DA    0F B6 46 F4               movzx       ax,byte ptr -0xc[bp] 
+04DE    50                        push        ax 
+04DF    0F B6 46 F8               movzx       ax,byte ptr -0x8[bp] 
+04E3    50                        push        ax 
+04E4    0F B6 46 F6               movzx       ax,byte ptr -0xa[bp] 
+04E8    50                        push        ax 
+04E9    1E                        push        ds 
+04EA    68 EE 03                  push        offset DGROUP:L$144 
+04ED    E8 00 00                  call        _cprintf 
+04F0    83 C4 0C                  add         sp,0x000c 
+04F3    B4 05                     mov         ah,0x05 
+04F5    8A AE F4 FF               mov         ch,byte ptr -0xc[bp] 
+04F9    8A 8E FA FF               mov         cl,byte ptr -0x6[bp] 
+04FD    8A B6 F6 FF               mov         dh,byte ptr -0xa[bp] 
+0501    8A 96 F8 FF               mov         dl,byte ptr -0x8[bp] 
+0505    CD 1A                     int         0x1a 
+0507                          L$47:
+0507    80 7E FE 07               cmp         byte ptr -0x2[bp],0x07 
+050B    0F 83 B1 FE               jae         L$42 
+050F    E9 3D FC                  jmp         L$14 
 
-Routine Size: 439 bytes,    Routine Base: _TEXT + 035E
+Routine Size: 439 bytes,    Routine Base: _TEXT + 035B
 
-0515                          SET_TIME:
-0515    56                        push        si 
-0516    57                        push        di 
-0517    C8 36 00 00               enter       0x0036,0x00 
-051B    B4 02                     mov         ah,0x02 
-051D    CD 1A                     int         0x1a 
-051F    88 AE FA FF               mov         byte ptr -0x6[bp],ch 
-0523    88 8E FC FF               mov         byte ptr -0x4[bp],cl 
-0527    88 B6 FE FF               mov         byte ptr -0x2[bp],dh 
-052B    9F                        lahf        
-052C    80 E4 01                  and         ah,0x01 
-052F    88 A6 F8 FF               mov         byte ptr -0x8[bp],ah 
-0533    0F B6 46 FE               movzx       ax,byte ptr -0x2[bp] 
-0537    50                        push        ax 
-0538    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
-053C    50                        push        ax 
-053D    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
-0541    50                        push        ax 
-0542    1E                        push        ds 
-0543    68 F4 03                  push        offset DGROUP:L$145 
-0546    E8 00 00                  call        _cprintf 
-0549    83 C4 0A                  add         sp,0x000a 
-054C    80 7E F8 00               cmp         byte ptr -0x8[bp],0x00 
-0550    74 06                     je          L$48 
-0552    1E                        push        ds 
-0553    68 22 04                  push        offset DGROUP:L$146 
-0556    EB 04                     jmp         L$49 
-0558                          L$48:
-0558    1E                        push        ds 
-0559    68 2B 04                  push        offset DGROUP:L$147 
-055C                          L$49:
-055C    E8 00 00                  call        _cprintf 
-055F    83 C4 04                  add         sp,0x0004 
-0562                          L$50:
-0562    1E                        push        ds 
-0563    68 34 04                  push        offset DGROUP:L$148 
-0566    E8 00 00                  call        _cprintf 
-0569    BB 28 00                  mov         bx,0x0028 
-056C    8D 46 CA                  lea         ax,-0x36[bp] 
-056F    83 C4 04                  add         sp,0x0004 
-0572    8C D2                     mov         dx,ss 
-0574    E8 00 00                  call        getline_ 
-0577    85 C0                     test        ax,ax 
-0579    0F 84 D2 FB               je          L$14 
-057D    8D 5E CA                  lea         bx,-0x36[bp] 
-0580    8D 46 CA                  lea         ax,-0x36[bp] 
-0583    8C D1                     mov         cx,ss 
-0585    8C D2                     mov         dx,ss 
-0587    89 5E F2                  mov         word ptr -0xe[bp],bx 
-058A    8D 5E F2                  lea         bx,-0xe[bp] 
-058D    8C 56 F4                  mov         word ptr -0xc[bp],ss 
-0590    E8 00 00                  call        strtobcd_ 
-0593    89 46 F6                  mov         word ptr -0xa[bp],ax 
-0596    3D 24 00                  cmp         ax,0x0024 
-0599    7D 71                     jge         L$53 
-059B    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
-059E    88 46 FA                  mov         byte ptr -0x6[bp],al 
-05A1    C4 5E F2                  les         bx,dword ptr -0xe[bp] 
-05A4    26 80 3F 3A               cmp         byte ptr es:[bx],0x3a 
-05A8    75 62                     jne         L$53 
-05AA    FF 46 F2                  inc         word ptr -0xe[bp] 
-05AD    8D 5E F2                  lea         bx,-0xe[bp] 
-05B0    8C D1                     mov         cx,ss 
-05B2    8C C2                     mov         dx,es 
-05B4    8B 46 F2                  mov         ax,word ptr -0xe[bp] 
-05B7    E8 00 00                  call        strtobcd_ 
-05BA    89 46 F6                  mov         word ptr -0xa[bp],ax 
-05BD    3D 60 00                  cmp         ax,0x0060 
-05C0    7D 4A                     jge         L$53 
-05C2    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
-05C5    88 46 FC                  mov         byte ptr -0x4[bp],al 
-05C8    C4 5E F2                  les         bx,dword ptr -0xe[bp] 
-05CB    26 80 3F 3A               cmp         byte ptr es:[bx],0x3a 
-05CF    74 07                     je          L$51 
-05D1    C7 46 F6 00 00            mov         word ptr -0xa[bp],0x0000 
-05D6    EB 18                     jmp         L$52 
-05D8                          L$51:
-05D8    FF 46 F2                  inc         word ptr -0xe[bp] 
-05DB    8D 5E F2                  lea         bx,-0xe[bp] 
-05DE    8C D1                     mov         cx,ss 
-05E0    8C C2                     mov         dx,es 
-05E2    8B 46 F2                  mov         ax,word ptr -0xe[bp] 
-05E5    E8 00 00                  call        strtobcd_ 
-05E8    89 46 F6                  mov         word ptr -0xa[bp],ax 
-05EB    3D 60 00                  cmp         ax,0x0060 
-05EE    7D 1C                     jge         L$53 
-05F0                          L$52:
-05F0    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
-05F3    88 46 FE                  mov         byte ptr -0x2[bp],al 
-05F6    B4 03                     mov         ah,0x03 
-05F8    8A AE FA FF               mov         ch,byte ptr -0x6[bp] 
-05FC    8A 8E FC FF               mov         cl,byte ptr -0x4[bp] 
-0600    8A B6 FE FF               mov         dh,byte ptr -0x2[bp] 
-0604    B2 00                     mov         dl,0x00 
-0606    CD 1A                     int         0x1a 
-0608    C6 46 F8 02               mov         byte ptr -0x8[bp],0x02 
-060C                          L$53:
-060C    80 7E F8 02               cmp         byte ptr -0x8[bp],0x02 
-0610    0F 82 4E FF               jb          L$50 
-0614    E9 38 FB                  jmp         L$14 
+0512                          SET_TIME:
+0512    56                        push        si 
+0513    57                        push        di 
+0514    C8 36 00 00               enter       0x0036,0x00 
+0518    B4 02                     mov         ah,0x02 
+051A    CD 1A                     int         0x1a 
+051C    88 AE FA FF               mov         byte ptr -0x6[bp],ch 
+0520    88 8E FC FF               mov         byte ptr -0x4[bp],cl 
+0524    88 B6 FE FF               mov         byte ptr -0x2[bp],dh 
+0528    9F                        lahf        
+0529    80 E4 01                  and         ah,0x01 
+052C    88 A6 F8 FF               mov         byte ptr -0x8[bp],ah 
+0530    0F B6 46 FE               movzx       ax,byte ptr -0x2[bp] 
+0534    50                        push        ax 
+0535    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
+0539    50                        push        ax 
+053A    0F B6 46 FA               movzx       ax,byte ptr -0x6[bp] 
+053E    50                        push        ax 
+053F    1E                        push        ds 
+0540    68 03 04                  push        offset DGROUP:L$145 
+0543    E8 00 00                  call        _cprintf 
+0546    83 C4 0A                  add         sp,0x000a 
+0549    80 7E F8 00               cmp         byte ptr -0x8[bp],0x00 
+054D    74 06                     je          L$48 
+054F    1E                        push        ds 
+0550    68 31 04                  push        offset DGROUP:L$146 
+0553    EB 04                     jmp         L$49 
+0555                          L$48:
+0555    1E                        push        ds 
+0556    68 3A 04                  push        offset DGROUP:L$147 
+0559                          L$49:
+0559    E8 00 00                  call        _cprintf 
+055C    83 C4 04                  add         sp,0x0004 
+055F                          L$50:
+055F    1E                        push        ds 
+0560    68 43 04                  push        offset DGROUP:L$148 
+0563    E8 00 00                  call        _cprintf 
+0566    BB 28 00                  mov         bx,0x0028 
+0569    8D 46 CA                  lea         ax,-0x36[bp] 
+056C    83 C4 04                  add         sp,0x0004 
+056F    8C D2                     mov         dx,ss 
+0571    E8 00 00                  call        getline_ 
+0574    85 C0                     test        ax,ax 
+0576    0F 84 D5 FB               je          L$14 
+057A    8D 5E CA                  lea         bx,-0x36[bp] 
+057D    8D 46 CA                  lea         ax,-0x36[bp] 
+0580    8C D1                     mov         cx,ss 
+0582    8C D2                     mov         dx,ss 
+0584    89 5E F2                  mov         word ptr -0xe[bp],bx 
+0587    8D 5E F2                  lea         bx,-0xe[bp] 
+058A    8C 56 F4                  mov         word ptr -0xc[bp],ss 
+058D    E8 00 00                  call        strtobcd_ 
+0590    89 46 F6                  mov         word ptr -0xa[bp],ax 
+0593    3D 24 00                  cmp         ax,0x0024 
+0596    7D 71                     jge         L$53 
+0598    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
+059B    88 46 FA                  mov         byte ptr -0x6[bp],al 
+059E    C4 5E F2                  les         bx,dword ptr -0xe[bp] 
+05A1    26 80 3F 3A               cmp         byte ptr es:[bx],0x3a 
+05A5    75 62                     jne         L$53 
+05A7    FF 46 F2                  inc         word ptr -0xe[bp] 
+05AA    8D 5E F2                  lea         bx,-0xe[bp] 
+05AD    8C D1                     mov         cx,ss 
+05AF    8C C2                     mov         dx,es 
+05B1    8B 46 F2                  mov         ax,word ptr -0xe[bp] 
+05B4    E8 00 00                  call        strtobcd_ 
+05B7    89 46 F6                  mov         word ptr -0xa[bp],ax 
+05BA    3D 60 00                  cmp         ax,0x0060 
+05BD    7D 4A                     jge         L$53 
+05BF    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
+05C2    88 46 FC                  mov         byte ptr -0x4[bp],al 
+05C5    C4 5E F2                  les         bx,dword ptr -0xe[bp] 
+05C8    26 80 3F 3A               cmp         byte ptr es:[bx],0x3a 
+05CC    74 07                     je          L$51 
+05CE    C7 46 F6 00 00            mov         word ptr -0xa[bp],0x0000 
+05D3    EB 18                     jmp         L$52 
+05D5                          L$51:
+05D5    FF 46 F2                  inc         word ptr -0xe[bp] 
+05D8    8D 5E F2                  lea         bx,-0xe[bp] 
+05DB    8C D1                     mov         cx,ss 
+05DD    8C C2                     mov         dx,es 
+05DF    8B 46 F2                  mov         ax,word ptr -0xe[bp] 
+05E2    E8 00 00                  call        strtobcd_ 
+05E5    89 46 F6                  mov         word ptr -0xa[bp],ax 
+05E8    3D 60 00                  cmp         ax,0x0060 
+05EB    7D 1C                     jge         L$53 
+05ED                          L$52:
+05ED    8A 46 F6                  mov         al,byte ptr -0xa[bp] 
+05F0    88 46 FE                  mov         byte ptr -0x2[bp],al 
+05F3    B4 03                     mov         ah,0x03 
+05F5    8A AE FA FF               mov         ch,byte ptr -0x6[bp] 
+05F9    8A 8E FC FF               mov         cl,byte ptr -0x4[bp] 
+05FD    8A B6 FE FF               mov         dh,byte ptr -0x2[bp] 
+0601    B2 00                     mov         dl,0x00 
+0603    CD 1A                     int         0x1a 
+0605    C6 46 F8 02               mov         byte ptr -0x8[bp],0x02 
+0609                          L$53:
+0609    80 7E F8 02               cmp         byte ptr -0x8[bp],0x02 
+060D    0F 82 4E FF               jb          L$50 
+0611    E9 3B FB                  jmp         L$14 
 
-Routine Size: 258 bytes,    Routine Base: _TEXT + 0515
+Routine Size: 258 bytes,    Routine Base: _TEXT + 0512
 
-0617                          set_line_speed_:
-0617    53                        push        bx 
-0618    51                        push        cx 
-0619    56                        push        si 
-061A    57                        push        di 
-061B    C8 04 00 00               enter       0x0004,0x00 
-061F    89 C6                     mov         si,ax 
-0621    89 56 FE                  mov         word ptr -0x2[bp],dx 
-0624    C7 46 FC 0E 00            mov         word ptr -0x4[bp],0x000e 
-0629    8E C2                     mov         es,dx 
-062B    31 FF                     xor         di,di 
-062D    26 F6 44 01 20            test        byte ptr es:0x1[si],0x20 
-0632    75 05                     jne         L$54 
-0634    C7 46 FC 0C 00            mov         word ptr -0x4[bp],0x000c 
-0639                          L$54:
-0639    8E 46 FE                  mov         es,word ptr -0x2[bp] 
-063C    26 8B 1C                  mov         bx,word ptr es:[si] 
-063F    B8 00 00                  mov         ax,seg _sio_divisors 
-0642    C1 EB 05                  shr         bx,0x05 
-0645    BA 07 00                  mov         dx,0x0007 
-0648    30 FF                     xor         bh,bh 
-064A    31 C9                     xor         cx,cx 
-064C    80 E3 1F                  and         bl,0x1f 
-064F    8E C0                     mov         es,ax 
-0651    01 DB                     add         bx,bx 
-0653    B8 00 08                  mov         ax,0x0800 
-0656    26 8B 9F 00 00            mov         bx,word ptr es:_sio_divisors[bx] 
-065B    E8 00 00                  call        __U4D 
-065E    52                        push        dx 
-065F    50                        push        ax 
-0660    1E                        push        ds 
-0661    68 4A 04                  push        offset DGROUP:L$149 
-0664    E8 00 00                  call        _cprintf 
-0667    BB 00 00                  mov         bx,offset _speeds 
-066A    B8 61 04                  mov         ax,offset DGROUP:L$150 
-066D    83 C4 08                  add         sp,0x0008 
-0670    8C D9                     mov         cx,ds 
-0672    FF 76 FC                  push        word ptr -0x4[bp] 
-0675    8C DA                     mov         dx,ds 
-0677    E8 00 00                  call        option_get_ 
-067A    89 C2                     mov         dx,ax 
-067C    3D 01 00                  cmp         ax,0x0001 
-067F    7C 43                     jl          L$55 
-0681    3B 46 FC                  cmp         ax,word ptr -0x4[bp] 
-0684    7F 3E                     jg          L$55 
-0686    8E 46 FE                  mov         es,word ptr -0x2[bp] 
-0689    4A                        dec         dx 
-068A    89 C3                     mov         bx,ax 
-068C    31 C9                     xor         cx,cx 
-068E    30 F6                     xor         dh,dh 
-0690    01 C3                     add         bx,ax 
-0692    80 E2 1F                  and         dl,0x1f 
-0695    26 81 24 1F FC            and         word ptr es:[si],0xfc1f 
-069A    C1 E2 05                  shl         dx,0x05 
-069D    B8 00 00                  mov         ax,seg _sio_divisors 
-06A0    26 09 14                  or          word ptr es:[si],dx 
-06A3    BA 07 00                  mov         dx,0x0007 
-06A6    8E C0                     mov         es,ax 
-06A8    B8 00 08                  mov         ax,0x0800 
-06AB    26 8B 9F FE FF            mov         bx,word ptr es:_sio_divisors-0x2[bx] 
-06B0    E8 00 00                  call        __U4D 
-06B3    52                        push        dx 
-06B4    50                        push        ax 
-06B5    1E                        push        ds 
-06B6    68 79 04                  push        offset DGROUP:L$151 
-06B9    BF 01 00                  mov         di,0x0001 
-06BC    E8 00 00                  call        _cprintf 
-06BF    83 C4 08                  add         sp,0x0008 
-06C2    EB 5E                     jmp         L$58 
-06C4                          L$55:
-06C4    85 D2                     test        dx,dx 
-06C6    0F 85 6F FF               jne         L$54 
-06CA    EB 56                     jmp         L$58 
+0614                          set_line_speed_:
+0614    53                        push        bx 
+0615    51                        push        cx 
+0616    56                        push        si 
+0617    57                        push        di 
+0618    C8 04 00 00               enter       0x0004,0x00 
+061C    89 C6                     mov         si,ax 
+061E    89 56 FE                  mov         word ptr -0x2[bp],dx 
+0621    C7 46 FC 0E 00            mov         word ptr -0x4[bp],0x000e 
+0626    8E C2                     mov         es,dx 
+0628    31 FF                     xor         di,di 
+062A    26 F6 44 01 20            test        byte ptr es:0x1[si],0x20 
+062F    75 05                     jne         L$54 
+0631    C7 46 FC 0C 00            mov         word ptr -0x4[bp],0x000c 
+0636                          L$54:
+0636    8E 46 FE                  mov         es,word ptr -0x2[bp] 
+0639    26 8B 1C                  mov         bx,word ptr es:[si] 
+063C    B8 00 00                  mov         ax,seg _sio_divisors 
+063F    C1 EB 05                  shr         bx,0x05 
+0642    BA 07 00                  mov         dx,0x0007 
+0645    30 FF                     xor         bh,bh 
+0647    31 C9                     xor         cx,cx 
+0649    80 E3 1F                  and         bl,0x1f 
+064C    8E C0                     mov         es,ax 
+064E    01 DB                     add         bx,bx 
+0650    B8 00 08                  mov         ax,0x0800 
+0653    26 8B 9F 00 00            mov         bx,word ptr es:_sio_divisors[bx] 
+0658    E8 00 00                  call        __U4D 
+065B    52                        push        dx 
+065C    50                        push        ax 
+065D    1E                        push        ds 
+065E    68 59 04                  push        offset DGROUP:L$149 
+0661    E8 00 00                  call        _cprintf 
+0664    BB 00 00                  mov         bx,offset _speeds 
+0667    B8 70 04                  mov         ax,offset DGROUP:L$150 
+066A    83 C4 08                  add         sp,0x0008 
+066D    8C D9                     mov         cx,ds 
+066F    FF 76 FC                  push        word ptr -0x4[bp] 
+0672    8C DA                     mov         dx,ds 
+0674    E8 00 00                  call        option_get_ 
+0677    89 C2                     mov         dx,ax 
+0679    3D 01 00                  cmp         ax,0x0001 
+067C    7C 43                     jl          L$55 
+067E    3B 46 FC                  cmp         ax,word ptr -0x4[bp] 
+0681    7F 3E                     jg          L$55 
+0683    8E 46 FE                  mov         es,word ptr -0x2[bp] 
+0686    4A                        dec         dx 
+0687    89 C3                     mov         bx,ax 
+0689    31 C9                     xor         cx,cx 
+068B    30 F6                     xor         dh,dh 
+068D    01 C3                     add         bx,ax 
+068F    80 E2 1F                  and         dl,0x1f 
+0692    26 81 24 1F FC            and         word ptr es:[si],0xfc1f 
+0697    C1 E2 05                  shl         dx,0x05 
+069A    B8 00 00                  mov         ax,seg _sio_divisors 
+069D    26 09 14                  or          word ptr es:[si],dx 
+06A0    BA 07 00                  mov         dx,0x0007 
+06A3    8E C0                     mov         es,ax 
+06A5    B8 00 08                  mov         ax,0x0800 
+06A8    26 8B 9F FE FF            mov         bx,word ptr es:_sio_divisors-0x2[bx] 
+06AD    E8 00 00                  call        __U4D 
+06B0    52                        push        dx 
+06B1    50                        push        ax 
+06B2    1E                        push        ds 
+06B3    68 88 04                  push        offset DGROUP:L$151 
+06B6    BF 01 00                  mov         di,0x0001 
+06B9    E8 00 00                  call        _cprintf 
+06BC    83 C4 08                  add         sp,0x0008 
+06BF    EB 5E                     jmp         L$58 
+06C1                          L$55:
+06C1    85 D2                     test        dx,dx 
+06C3    0F 85 6F FF               jne         L$54 
+06C7    EB 56                     jmp         L$58 
 
-Routine Size: 181 bytes,    Routine Base: _TEXT + 0617
+Routine Size: 181 bytes,    Routine Base: _TEXT + 0614
 
-06CC                          set_stop_bits_:
-06CC    53                        push        bx 
-06CD    51                        push        cx 
-06CE    56                        push        si 
-06CF    57                        push        di 
-06D0    C8 02 00 00               enter       0x0002,0x00 
-06D4    89 C6                     mov         si,ax 
-06D6    89 56 FE                  mov         word ptr -0x2[bp],dx 
-06D9    31 FF                     xor         di,di 
-06DB                          L$56:
-06DB    8E 46 FE                  mov         es,word ptr -0x2[bp] 
-06DE    26 8B 04                  mov         ax,word ptr es:[si] 
-06E1    C1 E8 02                  shr         ax,0x02 
-06E4    25 01 00                  and         ax,0x0001 
-06E7    40                        inc         ax 
-06E8    50                        push        ax 
-06E9    1E                        push        ds 
-06EA    68 8C 04                  push        offset DGROUP:L$152 
-06ED    E8 00 00                  call        _cprintf 
-06F0    BB 00 00                  mov         bx,offset _stop_bits 
-06F3    B8 A4 04                  mov         ax,offset DGROUP:L$153 
-06F6    83 C4 06                  add         sp,0x0006 
-06F9    8C D9                     mov         cx,ds 
-06FB    6A 02                     push        0x0002 
-06FD    8C DA                     mov         dx,ds 
-06FF    E8 00 00                  call        option_get_ 
-0702    89 C2                     mov         dx,ax 
-0704    85 C0                     test        ax,ax 
-0706    7E 22                     jle         L$59 
-0708    3D 02 00                  cmp         ax,0x0002 
-070B    7F 1D                     jg          L$59 
-070D    48                        dec         ax 
-070E    30 E4                     xor         ah,ah 
-0710    8E 46 FE                  mov         es,word ptr -0x2[bp] 
-0713    24 01                     and         al,0x01 
-0715    26 80 24 FB               and         byte ptr es:[si],0xfb 
-0719    C1 E0 02                  shl         ax,0x02 
-071C    BF 01 00                  mov         di,0x0001 
-071F                          L$57:
-071F    26 09 04                  or          word ptr es:[si],ax 
-0722                          L$58:
-0722    89 F8                     mov         ax,di 
-0724    C9                        leave       
-0725    5F                        pop         di 
-0726    5E                        pop         si 
-0727    59                        pop         cx 
-0728    5B                        pop         bx 
-0729    C3                        ret         
-072A                          L$59:
-072A    85 D2                     test        dx,dx 
-072C    75 AD                     jne         L$56 
-072E    EB F2                     jmp         L$58 
+06C9                          set_stop_bits_:
+06C9    53                        push        bx 
+06CA    51                        push        cx 
+06CB    56                        push        si 
+06CC    57                        push        di 
+06CD    C8 02 00 00               enter       0x0002,0x00 
+06D1    89 C6                     mov         si,ax 
+06D3    89 56 FE                  mov         word ptr -0x2[bp],dx 
+06D6    31 FF                     xor         di,di 
+06D8                          L$56:
+06D8    8E 46 FE                  mov         es,word ptr -0x2[bp] 
+06DB    26 8B 04                  mov         ax,word ptr es:[si] 
+06DE    C1 E8 02                  shr         ax,0x02 
+06E1    25 01 00                  and         ax,0x0001 
+06E4    40                        inc         ax 
+06E5    50                        push        ax 
+06E6    1E                        push        ds 
+06E7    68 9B 04                  push        offset DGROUP:L$152 
+06EA    E8 00 00                  call        _cprintf 
+06ED    BB 00 00                  mov         bx,offset _stop_bits 
+06F0    B8 B3 04                  mov         ax,offset DGROUP:L$153 
+06F3    83 C4 06                  add         sp,0x0006 
+06F6    8C D9                     mov         cx,ds 
+06F8    6A 02                     push        0x0002 
+06FA    8C DA                     mov         dx,ds 
+06FC    E8 00 00                  call        option_get_ 
+06FF    89 C2                     mov         dx,ax 
+0701    85 C0                     test        ax,ax 
+0703    7E 22                     jle         L$59 
+0705    3D 02 00                  cmp         ax,0x0002 
+0708    7F 1D                     jg          L$59 
+070A    48                        dec         ax 
+070B    30 E4                     xor         ah,ah 
+070D    8E 46 FE                  mov         es,word ptr -0x2[bp] 
+0710    24 01                     and         al,0x01 
+0712    26 80 24 FB               and         byte ptr es:[si],0xfb 
+0716    C1 E0 02                  shl         ax,0x02 
+0719    BF 01 00                  mov         di,0x0001 
+071C                          L$57:
+071C    26 09 04                  or          word ptr es:[si],ax 
+071F                          L$58:
+071F    89 F8                     mov         ax,di 
+0721    C9                        leave       
+0722    5F                        pop         di 
+0723    5E                        pop         si 
+0724    59                        pop         cx 
+0725    5B                        pop         bx 
+0726    C3                        ret         
+0727                          L$59:
+0727    85 D2                     test        dx,dx 
+0729    75 AD                     jne         L$56 
+072B    EB F2                     jmp         L$58 
 
-Routine Size: 100 bytes,    Routine Base: _TEXT + 06CC
+Routine Size: 100 bytes,    Routine Base: _TEXT + 06C9
 
-0730                          set_char_format_:
-0730    53                        push        bx 
-0731    51                        push        cx 
-0732    56                        push        si 
-0733    57                        push        di 
-0734    C8 06 00 00               enter       0x0006,0x00 
-0738    89 C6                     mov         si,ax 
-073A    89 56 FC                  mov         word ptr -0x4[bp],dx 
-073D    8E C2                     mov         es,dx 
-073F    26 8B 04                  mov         ax,word ptr es:[si] 
-0742    89 C2                     mov         dx,ax 
-0744    31 FF                     xor         di,di 
-0746    30 E6                     xor         dh,ah 
-0748    C1 E8 03                  shr         ax,0x03 
-074B    80 E2 03                  and         dl,0x03 
-074E    30 E4                     xor         ah,ah 
-0750    83 C2 05                  add         dx,0x0005 
-0753    24 03                     and         al,0x03 
-0755    89 56 FA                  mov         word ptr -0x6[bp],dx 
-0758    89 46 FE                  mov         word ptr -0x2[bp],ax 
-075B                          L$60:
-075B    8B 46 FE                  mov         ax,word ptr -0x2[bp] 
-075E    85 C0                     test        ax,ax 
-0760    75 05                     jne         L$61 
-0762    BA B8 04                  mov         dx,offset DGROUP:L$154 
-0765    EB 0D                     jmp         L$63 
-0767                          L$61:
-0767    3D 01 00                  cmp         ax,0x0001 
-076A    75 05                     jne         L$62 
-076C    BA BB 04                  mov         dx,offset DGROUP:L$155 
-076F    EB 03                     jmp         L$63 
-0771                          L$62:
-0771    BA BF 04                  mov         dx,offset DGROUP:L$156 
-0774                          L$63:
-0774    8C D8                     mov         ax,ds 
-0776    50                        push        ax 
-0777    52                        push        dx 
-0778    FF 76 FA                  push        word ptr -0x6[bp] 
-077B    1E                        push        ds 
-077C    68 C4 04                  push        offset DGROUP:L$157 
-077F    E8 00 00                  call        _cprintf 
-0782    BB 00 00                  mov         bx,offset _char_char 
-0785    B8 E3 04                  mov         ax,offset DGROUP:L$158 
-0788    83 C4 0A                  add         sp,0x000a 
-078B    8C D9                     mov         cx,ds 
-078D    6A 03                     push        0x0003 
-078F    8C DA                     mov         dx,ds 
-0791    E8 00 00                  call        option_get_ 
-0794    89 C2                     mov         dx,ax 
-0796    3D 03 00                  cmp         ax,0x0003 
-0799    74 25                     je          L$65 
-079B    3D 02 00                  cmp         ax,0x0002 
-079E    74 13                     je          L$64 
-07A0    3D 01 00                  cmp         ax,0x0001 
-07A3    75 28                     jne         L$66 
-07A5    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
-07AA    C7 46 FA 03 00            mov         word ptr -0x6[bp],0x0003 
-07AF    89 C7                     mov         di,ax 
-07B1    EB 1A                     jmp         L$66 
-07B3                          L$64:
-07B3    C7 46 FE 03 00            mov         word ptr -0x2[bp],0x0003 
-07B8    BF 01 00                  mov         di,0x0001 
-07BB    89 46 FA                  mov         word ptr -0x6[bp],ax 
-07BE    EB 0D                     jmp         L$66 
-07C0                          L$65:
-07C0    C7 46 FE 01 00            mov         word ptr -0x2[bp],0x0001 
-07C5    C7 46 FA 02 00            mov         word ptr -0x6[bp],0x0002 
-07CA    BF 01 00                  mov         di,0x0001 
-07CD                          L$66:
-07CD    85 D2                     test        dx,dx 
-07CF    74 04                     je          L$67 
-07D1    85 FF                     test        di,di 
-07D3    74 86                     je          L$60 
-07D5                          L$67:
-07D5    85 FF                     test        di,di 
-07D7    0F 84 47 FF               je          L$58 
-07DB    C4 46 FA                  les         ax,dword ptr -0x6[bp] 
-07DE    30 E4                     xor         ah,ah 
-07E0    26 80 24 FC               and         byte ptr es:[si],0xfc 
-07E4    24 03                     and         al,0x03 
-07E6    26 09 04                  or          word ptr es:[si],ax 
-07E9    8B 46 FE                  mov         ax,word ptr -0x2[bp] 
-07EC    25 03 00                  and         ax,0x0003 
-07EF    26 80 24 E7               and         byte ptr es:[si],0xe7 
-07F3    C1 E0 03                  shl         ax,0x03 
-07F6    E9 26 FF                  jmp         L$57 
+072D                          set_char_format_:
+072D    53                        push        bx 
+072E    51                        push        cx 
+072F    56                        push        si 
+0730    57                        push        di 
+0731    C8 06 00 00               enter       0x0006,0x00 
+0735    89 C6                     mov         si,ax 
+0737    89 56 FC                  mov         word ptr -0x4[bp],dx 
+073A    8E C2                     mov         es,dx 
+073C    26 8B 04                  mov         ax,word ptr es:[si] 
+073F    89 C2                     mov         dx,ax 
+0741    31 FF                     xor         di,di 
+0743    30 E6                     xor         dh,ah 
+0745    C1 E8 03                  shr         ax,0x03 
+0748    80 E2 03                  and         dl,0x03 
+074B    30 E4                     xor         ah,ah 
+074D    83 C2 05                  add         dx,0x0005 
+0750    24 03                     and         al,0x03 
+0752    89 56 FA                  mov         word ptr -0x6[bp],dx 
+0755    89 46 FE                  mov         word ptr -0x2[bp],ax 
+0758                          L$60:
+0758    8B 46 FE                  mov         ax,word ptr -0x2[bp] 
+075B    85 C0                     test        ax,ax 
+075D    75 05                     jne         L$61 
+075F    BA C7 04                  mov         dx,offset DGROUP:L$154 
+0762    EB 0D                     jmp         L$63 
+0764                          L$61:
+0764    3D 01 00                  cmp         ax,0x0001 
+0767    75 05                     jne         L$62 
+0769    BA CA 04                  mov         dx,offset DGROUP:L$155 
+076C    EB 03                     jmp         L$63 
+076E                          L$62:
+076E    BA CE 04                  mov         dx,offset DGROUP:L$156 
+0771                          L$63:
+0771    8C D8                     mov         ax,ds 
+0773    50                        push        ax 
+0774    52                        push        dx 
+0775    FF 76 FA                  push        word ptr -0x6[bp] 
+0778    1E                        push        ds 
+0779    68 D3 04                  push        offset DGROUP:L$157 
+077C    E8 00 00                  call        _cprintf 
+077F    BB 00 00                  mov         bx,offset _char_char 
+0782    B8 F2 04                  mov         ax,offset DGROUP:L$158 
+0785    83 C4 0A                  add         sp,0x000a 
+0788    8C D9                     mov         cx,ds 
+078A    6A 03                     push        0x0003 
+078C    8C DA                     mov         dx,ds 
+078E    E8 00 00                  call        option_get_ 
+0791    89 C2                     mov         dx,ax 
+0793    3D 03 00                  cmp         ax,0x0003 
+0796    74 25                     je          L$65 
+0798    3D 02 00                  cmp         ax,0x0002 
+079B    74 13                     je          L$64 
+079D    3D 01 00                  cmp         ax,0x0001 
+07A0    75 28                     jne         L$66 
+07A2    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
+07A7    C7 46 FA 03 00            mov         word ptr -0x6[bp],0x0003 
+07AC    89 C7                     mov         di,ax 
+07AE    EB 1A                     jmp         L$66 
+07B0                          L$64:
+07B0    C7 46 FE 03 00            mov         word ptr -0x2[bp],0x0003 
+07B5    BF 01 00                  mov         di,0x0001 
+07B8    89 46 FA                  mov         word ptr -0x6[bp],ax 
+07BB    EB 0D                     jmp         L$66 
+07BD                          L$65:
+07BD    C7 46 FE 01 00            mov         word ptr -0x2[bp],0x0001 
+07C2    C7 46 FA 02 00            mov         word ptr -0x6[bp],0x0002 
+07C7    BF 01 00                  mov         di,0x0001 
+07CA                          L$66:
+07CA    85 D2                     test        dx,dx 
+07CC    74 04                     je          L$67 
+07CE    85 FF                     test        di,di 
+07D0    74 86                     je          L$60 
+07D2                          L$67:
+07D2    85 FF                     test        di,di 
+07D4    0F 84 47 FF               je          L$58 
+07D8    C4 46 FA                  les         ax,dword ptr -0x6[bp] 
+07DB    30 E4                     xor         ah,ah 
+07DD    26 80 24 FC               and         byte ptr es:[si],0xfc 
+07E1    24 03                     and         al,0x03 
+07E3    26 09 04                  or          word ptr es:[si],ax 
+07E6    8B 46 FE                  mov         ax,word ptr -0x2[bp] 
+07E9    25 03 00                  and         ax,0x0003 
+07EC    26 80 24 E7               and         byte ptr es:[si],0xe7 
+07F0    C1 E0 03                  shl         ax,0x03 
+07F3    E9 26 FF                  jmp         L$57 
 
-Routine Size: 201 bytes,    Routine Base: _TEXT + 0730
+Routine Size: 201 bytes,    Routine Base: _TEXT + 072D
 
-07F9                          set_serial_:
-07F9    53                        push        bx 
-07FA    51                        push        cx 
-07FB    52                        push        dx 
-07FC    56                        push        si 
-07FD    57                        push        di 
-07FE    C8 02 00 00               enter       0x0002,0x00 
-0802    8B 3E 00 00               mov         di,word ptr _bda_ptr 
-0806    A1 02 00                  mov         ax,word ptr _bda_ptr+0x2 
-0809    31 F6                     xor         si,si 
-080B    89 46 FE                  mov         word ptr -0x2[bp],ax 
-080E    81 C7 E1 00               add         di,0x00e1 
-0812                          L$68:
-0812    6A 03                     push        0x0003 
-0814    BB 00 00                  mov         bx,offset _serial 
-0817    B8 F4 04                  mov         ax,offset DGROUP:L$159 
-081A    8C D9                     mov         cx,ds 
-081C    8C DA                     mov         dx,ds 
-081E    E8 00 00                  call        option_get_ 
-0821    89 C3                     mov         bx,ax 
-0823    3D 03 00                  cmp         ax,0x0003 
-0826    74 1E                     je          L$70 
-0828    3D 02 00                  cmp         ax,0x0002 
-082B    74 0F                     je          L$69 
-082D    3D 01 00                  cmp         ax,0x0001 
-0830    75 1E                     jne         L$72 
-0832    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
-0835    89 F8                     mov         ax,di 
-0837    E8 00 00                  call        set_line_speed_ 
-083A    EB 12                     jmp         L$71 
-083C                          L$69:
-083C    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
-083F    89 F8                     mov         ax,di 
-0841    E8 00 00                  call        set_stop_bits_ 
-0844    EB 08                     jmp         L$71 
-0846                          L$70:
-0846    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
-0849    89 F8                     mov         ax,di 
-084B    E8 00 00                  call        set_char_format_ 
-084E                          L$71:
-084E    09 C6                     or          si,ax 
-0850                          L$72:
-0850    85 DB                     test        bx,bx 
-0852    75 BE                     jne         L$68 
-0854    89 F0                     mov         ax,si 
-0856    E9 B9 FA                  jmp         L$36 
+07F6                          set_serial_:
+07F6    53                        push        bx 
+07F7    51                        push        cx 
+07F8    52                        push        dx 
+07F9    56                        push        si 
+07FA    57                        push        di 
+07FB    C8 02 00 00               enter       0x0002,0x00 
+07FF    8B 3E 00 00               mov         di,word ptr _bda_ptr 
+0803    A1 02 00                  mov         ax,word ptr _bda_ptr+0x2 
+0806    31 F6                     xor         si,si 
+0808    89 46 FE                  mov         word ptr -0x2[bp],ax 
+080B    81 C7 E1 00               add         di,0x00e1 
+080F                          L$68:
+080F    6A 03                     push        0x0003 
+0811    BB 00 00                  mov         bx,offset _serial 
+0814    B8 03 05                  mov         ax,offset DGROUP:L$159 
+0817    8C D9                     mov         cx,ds 
+0819    8C DA                     mov         dx,ds 
+081B    E8 00 00                  call        option_get_ 
+081E    89 C3                     mov         bx,ax 
+0820    3D 03 00                  cmp         ax,0x0003 
+0823    74 1E                     je          L$70 
+0825    3D 02 00                  cmp         ax,0x0002 
+0828    74 0F                     je          L$69 
+082A    3D 01 00                  cmp         ax,0x0001 
+082D    75 1E                     jne         L$72 
+082F    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
+0832    89 F8                     mov         ax,di 
+0834    E8 00 00                  call        set_line_speed_ 
+0837    EB 12                     jmp         L$71 
+0839                          L$69:
+0839    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
+083C    89 F8                     mov         ax,di 
+083E    E8 00 00                  call        set_stop_bits_ 
+0841    EB 08                     jmp         L$71 
+0843                          L$70:
+0843    8B 56 FE                  mov         dx,word ptr -0x2[bp] 
+0846    89 F8                     mov         ax,di 
+0848    E8 00 00                  call        set_char_format_ 
+084B                          L$71:
+084B    09 C6                     or          si,ax 
+084D                          L$72:
+084D    85 DB                     test        bx,bx 
+084F    75 BE                     jne         L$68 
+0851    89 F0                     mov         ax,si 
+0853    E9 B9 FA                  jmp         L$36 
 
-Routine Size: 96 bytes,    Routine Base: _TEXT + 07F9
+Routine Size: 96 bytes,    Routine Base: _TEXT + 07F6
 
 No disassembly errors
 
-Segment: CONST WORD USE16 00000501 bytes
+Segment: CONST WORD USE16 00000510 bytes
 0000                          L$73:
 0000    4E 6F 6E 2D 72 65 63 68 61 72 67 65 61 62 6C 65 Non-rechargeable
 0010    00                                              .
@@ -1077,99 +1076,100 @@ Segment: CONST WORD USE16 00000501 bytes
 0216    53 42 43 2D 33 38 36 45 58 20 73 79 73 74 65 6D SBC-386EX system
 0226    20 73 65 74 75 70 00                             setup.
 022D                          L$128:
-022D    0A 52 65 62 6F 6F 74 20 72 65 71 75 69 72 65 64 .Reboot required
-023D    21 0A 00                                        !..
-0240                          L$129:
-0240    25 73 20 5B 25 64 5D 3A 20 00                   %s [%d]: .
-024A                          L$130:
-024A    0A 46 69 78 65 64 20 64 69 73 6B 20 67 65 6F 6D .Fixed disk geom
-025A    65 74 72 79 0A 00                               etry..
-0260                          L$131:
-0260    0A 54 68 65 73 65 20 6D 75 73 74 20 6D 61 74 63 .These must matc
-0270    68 20 74 68 65 20 6D 61 63 68 69 6E 65 20 74 68 h the machine th
-0280    61 74 20 70 61 72 74 69 74 69 6F 6E 65 64 20 74 at partitioned t
-0290    68 65 20 63 61 72 64 2C 0A 00                   he card,..
-029A                          L$132:
-029A    6E 6F 74 20 6E 65 63 65 73 73 61 72 69 6C 79 20 not necessarily 
-02AA    77 68 61 74 20 74 68 65 20 63 61 72 64 20 72 65 what the card re
-02BA    70 6F 72 74 73 2E 20 20 5A 65 72 6F 20 3D 20 75 ports.  Zero = u
-02CA    73 65 20 74 68 65 0A 00                         se the..
-02D2                          L$133:
-02D2    63 61 72 64 27 73 20 6F 77 6E 20 67 65 6F 6D 65 card's own geome
-02E2    74 72 79 2E 20 20 45 6D 70 74 79 20 6C 69 6E 65 try.  Empty line
-02F2    20 6C 65 61 76 65 73 20 61 20 76 61 6C 75 65 20  leaves a value 
-0302    61 6C 6F 6E 65 2E 0A 00                         alone...
-030A                          L$134:
-030A    53 6C 61 76 65 00                               Slave.
-0310                          L$135:
-0310    4D 61 73 74 65 72 00                            Master.
-0317                          L$136:
-0317    0A 25 73 0A 00                                  .%s..
-031C                          L$137:
-031C    20 20 68 65 61 64 73 20 20 00                     heads  .
-0326                          L$138:
-0326    20 20 73 65 63 74 6F 72 73 00                     sectors.
-0330                          L$139:
-0330    0A 53 74 6F 72 65 64 2E 20 20 54 68 65 20 6E 65 .Stored.  The ne
-0340    77 20 67 65 6F 6D 65 74 72 79 20 74 61 6B 65 73 w geometry takes
-0350    20 65 66 66 65 63 74 20 61 74 20 74 68 65 20 6E  effect at the n
-0360    65 78 74 20 62 6F 6F 74 2E 0A 00                ext boot...
-036B                          L$140:
-036B    0A 46 6C 6F 70 70 79 20 64 69 73 6B 20 73 65 74 .Floppy disk set
-037B    75 70 20 69 73 20 6E 6F 74 20 69 6D 70 6C 65 6D up is not implem
-038B    65 6E 74 65 64 0A 00                            ented..
-0392                          L$141:
-0392    0A 43 75 72 72 65 6E 74 6C 79 3A 20 20 25 73 00 .Currently:  %s.
-03A2                          L$142:
-03A2    20 25 30 32 78 2F 25 30 32 78 2F 25 30 32 78 25  %02x/%02x/%02x%
-03B2    30 32 78 20 44 4F 57 3D 25 64 20 20 63 6C 6B 44 02x DOW=%d  clkD
-03C2    4F 57 3D 25 64 0A 00                            OW=%d..
-03C9                          L$143:
-03C9    55 70 64 61 74 65 20 5B 6D 6D 2F 64 64 2F 79 79 Update [mm/dd/yy
-03D9    79 79 5D 3A 20 00                               yy]: .
-03DF                          L$144:
-03DF    20 25 30 32 78 2F 25 30 32 78 2F 25 30 32 78 25  %02x/%02x/%02x%
-03EF    30 32 78 0A 00                                  02x..
-03F4                          L$145:
-03F4    0A 43 75 72 72 65 6E 74 20 74 69 6D 65 3A 20 20 .Current time:  
-0404    25 78 3A 25 30 32 78 3A 25 30 32 78 20 20 20 20 %x:%02x:%02x    
-0414    54 68 65 20 63 6C 6F 63 6B 20 69 73 20 00       The clock is .
-0422                          L$146:
-0422    73 74 6F 70 70 65 64 0A 00                      stopped..
-042B                          L$147:
-042B    72 75 6E 6E 69 6E 67 0A 00                      running..
-0434                          L$148:
-0434    55 70 64 61 74 65 20 5B 68 68 3A 6D 6D 5B 3A 73 Update [hh:mm[:s
-0444    73 5D 5D 3A 20 00                               s]]: .
-044A                          L$149:
-044A    0A 43 75 72 72 65 6E 74 20 73 70 65 65 64 20 25 .Current speed %
-045A    6C 75 20 62 70 73 00                            lu bps.
-0461                          L$150:
-0461    53 65 72 69 61 6C 20 4C 69 6E 65 20 62 69 74 73 Serial Line bits
-0471    2F 73 65 63 6F 6E 64 00                         /second.
-0479                          L$151:
-0479    53 65 74 20 73 70 65 65 64 20 25 6C 75 20 62 70 Set speed %lu bp
-0489    73 0A 00                                        s..
-048C                          L$152:
-048C    0A 43 75 72 72 65 6E 74 20 73 74 6F 70 20 62 69 .Current stop bi
-049C    74 73 20 3D 20 25 64 00                         ts = %d.
-04A4                          L$153:
-04A4    4E 75 6D 62 65 72 20 6F 66 20 53 74 6F 70 20 42 Number of Stop B
-04B4    69 74 73 00                                     its.
-04B8                          L$154:
-04B8    6E 6F 00                                        no.
-04BB                          L$155:
-04BB    6F 64 64 00                                     odd.
-04BF                          L$156:
-04BF    65 76 65 6E 00                                  even.
-04C4                          L$157:
-04C4    0A 43 75 72 72 65 6E 74 6C 79 3A 20 25 75 20 62 .Currently: %u b
-04D4    69 74 73 2C 20 25 73 20 70 61 72 69 74 79 00    its, %s parity.
-04E3                          L$158:
-04E3    43 68 61 72 61 63 74 65 72 20 4D 61 6B 65 75 70 Character Makeup
-04F3    00                                              .
-04F4                          L$159:
-04F4    53 65 72 69 61 6C 20 53 65 74 75 70 00          Serial Setup.
+022D    0A 53 65 74 74 69 6E 67 73 20 73 74 6F 72 65 64 .Settings stored
+023D    2E 20 20 52 65 62 6F 6F 74 69 6E 67 20 2E 2E 2E .  Rebooting ...
+024D    0A 00                                           ..
+024F                          L$129:
+024F    25 73 20 5B 25 64 5D 3A 20 00                   %s [%d]: .
+0259                          L$130:
+0259    0A 46 69 78 65 64 20 64 69 73 6B 20 67 65 6F 6D .Fixed disk geom
+0269    65 74 72 79 0A 00                               etry..
+026F                          L$131:
+026F    0A 54 68 65 73 65 20 6D 75 73 74 20 6D 61 74 63 .These must matc
+027F    68 20 74 68 65 20 6D 61 63 68 69 6E 65 20 74 68 h the machine th
+028F    61 74 20 70 61 72 74 69 74 69 6F 6E 65 64 20 74 at partitioned t
+029F    68 65 20 63 61 72 64 2C 0A 00                   he card,..
+02A9                          L$132:
+02A9    6E 6F 74 20 6E 65 63 65 73 73 61 72 69 6C 79 20 not necessarily 
+02B9    77 68 61 74 20 74 68 65 20 63 61 72 64 20 72 65 what the card re
+02C9    70 6F 72 74 73 2E 20 20 5A 65 72 6F 20 3D 20 75 ports.  Zero = u
+02D9    73 65 20 74 68 65 0A 00                         se the..
+02E1                          L$133:
+02E1    63 61 72 64 27 73 20 6F 77 6E 20 67 65 6F 6D 65 card's own geome
+02F1    74 72 79 2E 20 20 45 6D 70 74 79 20 6C 69 6E 65 try.  Empty line
+0301    20 6C 65 61 76 65 73 20 61 20 76 61 6C 75 65 20  leaves a value 
+0311    61 6C 6F 6E 65 2E 0A 00                         alone...
+0319                          L$134:
+0319    53 6C 61 76 65 00                               Slave.
+031F                          L$135:
+031F    4D 61 73 74 65 72 00                            Master.
+0326                          L$136:
+0326    0A 25 73 0A 00                                  .%s..
+032B                          L$137:
+032B    20 20 68 65 61 64 73 20 20 00                     heads  .
+0335                          L$138:
+0335    20 20 73 65 63 74 6F 72 73 00                     sectors.
+033F                          L$139:
+033F    0A 53 74 6F 72 65 64 2E 20 20 54 68 65 20 6E 65 .Stored.  The ne
+034F    77 20 67 65 6F 6D 65 74 72 79 20 74 61 6B 65 73 w geometry takes
+035F    20 65 66 66 65 63 74 20 61 74 20 74 68 65 20 6E  effect at the n
+036F    65 78 74 20 62 6F 6F 74 2E 0A 00                ext boot...
+037A                          L$140:
+037A    0A 46 6C 6F 70 70 79 20 64 69 73 6B 20 73 65 74 .Floppy disk set
+038A    75 70 20 69 73 20 6E 6F 74 20 69 6D 70 6C 65 6D up is not implem
+039A    65 6E 74 65 64 0A 00                            ented..
+03A1                          L$141:
+03A1    0A 43 75 72 72 65 6E 74 6C 79 3A 20 20 25 73 00 .Currently:  %s.
+03B1                          L$142:
+03B1    20 25 30 32 78 2F 25 30 32 78 2F 25 30 32 78 25  %02x/%02x/%02x%
+03C1    30 32 78 20 44 4F 57 3D 25 64 20 20 63 6C 6B 44 02x DOW=%d  clkD
+03D1    4F 57 3D 25 64 0A 00                            OW=%d..
+03D8                          L$143:
+03D8    55 70 64 61 74 65 20 5B 6D 6D 2F 64 64 2F 79 79 Update [mm/dd/yy
+03E8    79 79 5D 3A 20 00                               yy]: .
+03EE                          L$144:
+03EE    20 25 30 32 78 2F 25 30 32 78 2F 25 30 32 78 25  %02x/%02x/%02x%
+03FE    30 32 78 0A 00                                  02x..
+0403                          L$145:
+0403    0A 43 75 72 72 65 6E 74 20 74 69 6D 65 3A 20 20 .Current time:  
+0413    25 78 3A 25 30 32 78 3A 25 30 32 78 20 20 20 20 %x:%02x:%02x    
+0423    54 68 65 20 63 6C 6F 63 6B 20 69 73 20 00       The clock is .
+0431                          L$146:
+0431    73 74 6F 70 70 65 64 0A 00                      stopped..
+043A                          L$147:
+043A    72 75 6E 6E 69 6E 67 0A 00                      running..
+0443                          L$148:
+0443    55 70 64 61 74 65 20 5B 68 68 3A 6D 6D 5B 3A 73 Update [hh:mm[:s
+0453    73 5D 5D 3A 20 00                               s]]: .
+0459                          L$149:
+0459    0A 43 75 72 72 65 6E 74 20 73 70 65 65 64 20 25 .Current speed %
+0469    6C 75 20 62 70 73 00                            lu bps.
+0470                          L$150:
+0470    53 65 72 69 61 6C 20 4C 69 6E 65 20 62 69 74 73 Serial Line bits
+0480    2F 73 65 63 6F 6E 64 00                         /second.
+0488                          L$151:
+0488    53 65 74 20 73 70 65 65 64 20 25 6C 75 20 62 70 Set speed %lu bp
+0498    73 0A 00                                        s..
+049B                          L$152:
+049B    0A 43 75 72 72 65 6E 74 20 73 74 6F 70 20 62 69 .Current stop bi
+04AB    74 73 20 3D 20 25 64 00                         ts = %d.
+04B3                          L$153:
+04B3    4E 75 6D 62 65 72 20 6F 66 20 53 74 6F 70 20 42 Number of Stop B
+04C3    69 74 73 00                                     its.
+04C7                          L$154:
+04C7    6E 6F 00                                        no.
+04CA                          L$155:
+04CA    6F 64 64 00                                     odd.
+04CE                          L$156:
+04CE    65 76 65 6E 00                                  even.
+04D3                          L$157:
+04D3    0A 43 75 72 72 65 6E 74 6C 79 3A 20 25 75 20 62 .Currently: %u b
+04E3    69 74 73 2C 20 25 73 20 70 61 72 69 74 79 00    its, %s parity.
+04F2                          L$158:
+04F2    43 68 61 72 61 63 74 65 72 20 4D 61 6B 65 75 70 Character Makeup
+0502    00                                              .
+0503                          L$159:
+0503    53 65 72 69 61 6C 20 53 65 74 75 70 00          Serial Setup.
 
 Segment: CONST2 WORD USE16 000000BF bytes
 0000                          _name:

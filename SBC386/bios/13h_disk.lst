@@ -1564,296 +1564,300 @@
    617 00000286 837EFA00                	cmp	word lcl_count,0
    618 0000028A 7431                    	je	.done
    619                                  
-   620                                  ; One sector per call.  The DRQ wait in diskide.asm sits outside its own
-   621                                  ; sector loop, so a multi-sector request there runs ahead of the drive.
-   622 0000028C 6A01                    	push	word 1
-   623 0000028E 66FF76FC                	push	dword lcl_lba
-   624 00000292 8B5EF4                  	mov	bx,lcl_off
-   625 00000295 8B4EF2                  	mov	cx,lcl_seg
-   626 00000298 8B46F6                  	mov	ax,lcl_unit		; AL = 00h or 10h
-   627 0000029B FF56F8                  	call	word lcl_drv		; the driver pops its own arguments
-   628                                  
-   629 0000029E 09C0                    	or	ax,ax
-   630 000002A0 7524                    	jnz	.failed
-   631                                  
-   632 000002A2 66FF46FC                	inc	dword lcl_lba
-   633 000002A6 FF4EFA                  	dec	word lcl_count
-   634                                  
-   635 000002A9 807E0F04                	cmp	byte [bp+offset_ax+1],4
-   636 000002AD 74D7                    	je	.loop			; verify keeps reusing the one buffer
-   637                                  
-   638 000002AF 8146F40002              	add	word lcl_off,512
-   639 000002B4 73D0                    	jnc	.loop
-   640 000002B6 8146F20010              	add	word lcl_seg,0x1000	; the offset wrapped 64K
-   641 000002BB EBC9                    	jmp	.loop
-   642                                  
-   643                                  .done:
-   644 000002BD 8B46F0                  	mov	ax,lcl_want
-   645 000002C0 88460E                  	mov	[bp+offset_ax],al	; all of them transferred
-   646 000002C3 E9BAFD                  	jmp	good_return
-   647                                  
-   648                                  .failed:
-   649                                  ; Report how many sectors did make it before reporting the error.
-   650 000002C6 89C3                    	mov	bx,ax			; the driver left a real status code
-   651 000002C8 8B46F0                  	mov	ax,lcl_want
-   652 000002CB 2B46FA                  	sub	ax,lcl_count
-   653 000002CE 88460E                  	mov	[bp+offset_ax],al	; sectors that did transfer
-   654 000002D1 88DC                    	mov	ah,bl			; carry the code up, do not invent one
-   655 000002D3 E9A4FD                  	jmp	error_return
-   656                                  
-   657                                  
-   658                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   659                                  ; fn08 -- Get Drive Parameters
-   660                                  ;
-   661                                  ;  Enter with:
-   662                                  ;	AH = 8
-   663                                  ;	DL = drive code
+   620                                  ; One sector per call.  This used to say that the DRQ wait in diskide.asm
+   621                                  ; sat outside its own sector loop so a multi-sector request ran ahead of
+   622                                  ; the drive -- defect 08, fixed there since.  The loop stays one sector at
+   623                                  ; a time anyway, and now for a better reason: the buffer advance below
+   624                                  ; carries across a 64K segment boundary, which a single multi-sector
+   625                                  ; command handed to the drive cannot do.
+   626 0000028C 6A01                    	push	word 1
+   627 0000028E 66FF76FC                	push	dword lcl_lba
+   628 00000292 8B5EF4                  	mov	bx,lcl_off
+   629 00000295 8B4EF2                  	mov	cx,lcl_seg
+   630 00000298 8B46F6                  	mov	ax,lcl_unit		; AL = 00h or 10h
+   631 0000029B FF56F8                  	call	word lcl_drv		; the driver pops its own arguments
+   632                                  
+   633 0000029E 09C0                    	or	ax,ax
+   634 000002A0 7524                    	jnz	.failed
+   635                                  
+   636 000002A2 66FF46FC                	inc	dword lcl_lba
+   637 000002A6 FF4EFA                  	dec	word lcl_count
+   638                                  
+   639 000002A9 807E0F04                	cmp	byte [bp+offset_ax+1],4
+   640 000002AD 74D7                    	je	.loop			; verify keeps reusing the one buffer
+   641                                  
+   642 000002AF 8146F40002              	add	word lcl_off,512
+   643 000002B4 73D0                    	jnc	.loop
+   644 000002B6 8146F20010              	add	word lcl_seg,0x1000	; the offset wrapped 64K
+   645 000002BB EBC9                    	jmp	.loop
+   646                                  
+   647                                  .done:
+   648 000002BD 8B46F0                  	mov	ax,lcl_want
+   649 000002C0 88460E                  	mov	[bp+offset_ax],al	; all of them transferred
+   650 000002C3 E9BAFD                  	jmp	good_return
+   651                                  
+   652                                  .failed:
+   653                                  ; Report how many sectors did make it before reporting the error.
+   654 000002C6 89C3                    	mov	bx,ax			; the driver left a real status code
+   655 000002C8 8B46F0                  	mov	ax,lcl_want
+   656 000002CB 2B46FA                  	sub	ax,lcl_count
+   657 000002CE 88460E                  	mov	[bp+offset_ax],al	; sectors that did transfer
+   658 000002D1 88DC                    	mov	ah,bl			; carry the code up, do not invent one
+   659 000002D3 E9A4FD                  	jmp	error_return
+   660                                  
+   661                                  
+   662                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   663                                  ; fn08 -- Get Drive Parameters
    664                                  ;
-   665                                  ;  Exit with:
-   666                                  ;	CH	low 8 bits of the maximum cylinder number
-   667                                  ;	CL	bits 7:6 cylinder high, bits 5:0 sectors per track
-   668                                  ;	DH	maximum head number
-   669                                  ;	DL	number of fixed disks in the system
-   670                                  ;	AH	0, Carry clear
-   671                                  ;
-   672                                  ;  The geometry returned is the TRANSLATED one, which is what makes the
-   673                                  ;  numbers safe to feed back into AH=02h.
-   674                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   675                                  fn08_get_drive_parameters:
-   676 000002D6 C6460A00                	mov	byte [bp+offset_dx],0	; no drives, until proven otherwise
-   677 000002DA E8E9FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB
-   678                                  
-   679 000002DD 268B05                      es	mov	ax,[di+ncylinders]
-   680 000002E0 09C0                    	or	ax,ax
-   681 000002E2 0F8492FD                	jz	ret_invalid_command	; no usable geometry to report
-   682 000002E6 48                      	dec	ax			; maximum cylinder number
-   683 000002E7 88C5                    	mov	ch,al			; low 8 bits
-   684 000002E9 88E1                    	mov	cl,ah
-   685 000002EB C0E106                  	shl	cl,6			; high 2 bits into 7:6
-   686 000002EE 260A4D0E                    es	or	cl,[di+nsectors]	; sectors per track into 5:0
-   687 000002F2 894E0C                  	mov	[bp+offset_cx],cx
-   688                                  
-   689 000002F5 268A7502                    es	mov	dh,[di+n__heads]
-   690 000002F9 FECE                    	dec	dh			; maximum head number
-   691 000002FB 6A4007                  	get_bda	ES
-   692 000002FE 268A167500                  es	mov	dl,[hd_number]
-   693 00000303 89560A                  	mov	[bp+offset_dx],dx
-   694                                  
-   695 00000306 E977FD                  	jmp	good_return
-   696                                  
-   697                                  
-   698                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   699                                  ; fn15 -- Get Disk Type
-   700                                  ;
-   701                                  ;  Enter with:
-   702                                  ;	AH = 15h
-   703                                  ;	DL = drive code
+   665                                  ;  Enter with:
+   666                                  ;	AH = 8
+   667                                  ;	DL = drive code
+   668                                  ;
+   669                                  ;  Exit with:
+   670                                  ;	CH	low 8 bits of the maximum cylinder number
+   671                                  ;	CL	bits 7:6 cylinder high, bits 5:0 sectors per track
+   672                                  ;	DH	maximum head number
+   673                                  ;	DL	number of fixed disks in the system
+   674                                  ;	AH	0, Carry clear
+   675                                  ;
+   676                                  ;  The geometry returned is the TRANSLATED one, which is what makes the
+   677                                  ;  numbers safe to feed back into AH=02h.
+   678                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   679                                  fn08_get_drive_parameters:
+   680 000002D6 C6460A00                	mov	byte [bp+offset_dx],0	; no drives, until proven otherwise
+   681 000002DA E8E9FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB
+   682                                  
+   683 000002DD 268B05                      es	mov	ax,[di+ncylinders]
+   684 000002E0 09C0                    	or	ax,ax
+   685 000002E2 0F8492FD                	jz	ret_invalid_command	; no usable geometry to report
+   686 000002E6 48                      	dec	ax			; maximum cylinder number
+   687 000002E7 88C5                    	mov	ch,al			; low 8 bits
+   688 000002E9 88E1                    	mov	cl,ah
+   689 000002EB C0E106                  	shl	cl,6			; high 2 bits into 7:6
+   690 000002EE 260A4D0E                    es	or	cl,[di+nsectors]	; sectors per track into 5:0
+   691 000002F2 894E0C                  	mov	[bp+offset_cx],cx
+   692                                  
+   693 000002F5 268A7502                    es	mov	dh,[di+n__heads]
+   694 000002F9 FECE                    	dec	dh			; maximum head number
+   695 000002FB 6A4007                  	get_bda	ES
+   696 000002FE 268A167500                  es	mov	dl,[hd_number]
+   697 00000303 89560A                  	mov	[bp+offset_dx],dx
+   698                                  
+   699 00000306 E977FD                  	jmp	good_return
+   700                                  
+   701                                  
+   702                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   703                                  ; fn15 -- Get Disk Type
    704                                  ;
-   705                                  ;  Exit with:
-   706                                  ;	AH	3, meaning a fixed disk
-   707                                  ;	CX:DX	number of 512-byte sectors on the drive
-   708                                  ;	Carry clear
-   709                                  ;
-   710                                  ;  The count is max_lba, the drive's real capacity, rather than the
-   711                                  ;  product of the translated geometry -- translation rounds the cylinder
-   712                                  ;  count down and would under-report the disk.
-   713                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   714                                  fn15_get_disk_type:
-   715 00000309 E8BAFD                  	call	get_disk_table		; ES:DI -> T_DISKTAB
-   716                                  
-   717 0000030C 26668B450A                  es	mov	eax,[di+max_lba]
-   718 00000311 89460A                  	mov	[bp+offset_dx],ax	; low order word
-   719 00000314 66C1E810                	shr	eax,16
-   720 00000318 89460C                  	mov	[bp+offset_cx],ax	; high order word
-   721                                  
-   722 0000031B B403                    	mov	ah,3			; code for a fixed disk
-   723 0000031D E962FD                  	jmp	good_return_AH
-   724                                  
+   705                                  ;  Enter with:
+   706                                  ;	AH = 15h
+   707                                  ;	DL = drive code
+   708                                  ;
+   709                                  ;  Exit with:
+   710                                  ;	AH	3, meaning a fixed disk
+   711                                  ;	CX:DX	number of 512-byte sectors on the drive
+   712                                  ;	Carry clear
+   713                                  ;
+   714                                  ;  The count is max_lba, the drive's real capacity, rather than the
+   715                                  ;  product of the translated geometry -- translation rounds the cylinder
+   716                                  ;  count down and would under-report the disk.
+   717                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   718                                  fn15_get_disk_type:
+   719 00000309 E8BAFD                  	call	get_disk_table		; ES:DI -> T_DISKTAB
+   720                                  
+   721 0000030C 26668B450A                  es	mov	eax,[di+max_lba]
+   722 00000311 89460A                  	mov	[bp+offset_dx],ax	; low order word
+   723 00000314 66C1E810                	shr	eax,16
+   724 00000318 89460C                  	mov	[bp+offset_cx],ax	; high order word
    725                                  
-   726                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   727                                  ; fn43 -- Extended Write (packet call)
-   728                                  ;
-   729                                  ;  Enter with:
-   730                                  ;	AH = 43h
-   731                                  ;	AL bit 0 selects write-with-verify, which this driver cannot do
-   732                                  ;	   any more cheaply than a plain write, so it is ignored
-   733                                  ;	DL = drive code
-   734                                  ;	DS:SI = the 16-byte disk packet
-   735                                  ;
-   736                                  ;  The mirror of fn42, against write_tab.
-   737                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   738                                  fn43_write_sector:
-   739 00000320 E8A3FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
-   740 00000323 260FB64507              	movzx	ax,byte [es:di+unit_number]
-   741 00000328 C1E004                  	shl	ax,4			; 0 -> 00h master, 1 -> 10h slave
-   742                                  
-   743 0000032B E8E2FD                  	call	pkt_rw_validate
-   744 0000032E 01DB                    	add	bx,bx
-   745 00000330 2E8BBF[C000]               cs	mov	di,[write_tab + bx]	;routine to call
-   746 00000335 09FF                    	or	di,di
-   747 00000337 0F843DFD                	jz	ret_invalid_command	; no write driver for this device
-   748                                  
-   749 0000033B 8B4C02                  	mov	cx,[si + pkt_blocks]
-   750 0000033E 83E17F                  	and	cx,127
-   751                                  
-   752 00000341 51                      	push	cx		; number of sectors
-   753 00000342 66FF7408                	push	dword [si + pkt_disk_LBA]
-   754 00000346 C45C04                  	les	bx,[si + pkt_address]
-   755 00000349 8CC1                    	mov	cx,es		; CX:BX is the source address
-   756                                  	; AX is Slave/master
-   757                                  
-   758 0000034B FFD7                    	call	di
-   759                                  ; the driver removes the arguments from the stack
-   760                                  
-   761 0000034D 3C00                    	cmp	al,NO_ERROR
-   762 0000034F 0F842DFD                	je	good_return
-   763                                  
-   764 00000353 C1E008                  	shl	ax,8
-   765 00000356 884402                  	mov	byte [si + pkt_blocks],al
-   766 00000359 88460E                  	mov	byte [bp + offset_ax],al
-   767 0000035C E91BFD                  	jmp	error_return
-   768                                  
-   769                                  
-   770                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   771                                  ; fn44 -- Extended Verify (packet call)
-   772                                  ;
-   773                                  ;  Enter with:
-   774                                  ;	AH = 44h
-   775                                  ;	DL = drive code
-   776                                  ;	DS:SI = the 16-byte disk packet
-   777                                  ;
-   778                                  ;  pkt_address is not used: verify reads the sectors and throws the data
-   779                                  ;  away, one at a time into the BIOS sector buffer.  On failure
-   780                                  ;  pkt_blocks is set to the number that did verify.
-   781                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   782                                  fn44_verify_sector:
-   783 0000035F E864FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
-   784 00000362 260FB64507              	movzx	ax,byte [es:di+unit_number]
-   785 00000367 C1E004                  	shl	ax,4
-   786                                  
-   787 0000036A E8A3FD                  	call	pkt_rw_validate
-   788 0000036D 01DB                    	add	bx,bx
-   789 0000036F 2E8BBF[BA00]               cs	mov	di,[read_tab + bx]
-   790 00000374 09FF                    	or	di,di
-   791 00000376 0F84FEFC                	jz	ret_invalid_command
-   792                                  
-   793 0000037A 83EC10                  	sub	sp,LCL_SIZE
-   794 0000037D 897EF8                  	mov	lcl_drv,di
-   795 00000380 8946F6                  	mov	lcl_unit,ax
+   726 0000031B B403                    	mov	ah,3			; code for a fixed disk
+   727 0000031D E962FD                  	jmp	good_return_AH
+   728                                  
+   729                                  
+   730                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   731                                  ; fn43 -- Extended Write (packet call)
+   732                                  ;
+   733                                  ;  Enter with:
+   734                                  ;	AH = 43h
+   735                                  ;	AL bit 0 selects write-with-verify, which this driver cannot do
+   736                                  ;	   any more cheaply than a plain write, so it is ignored
+   737                                  ;	DL = drive code
+   738                                  ;	DS:SI = the 16-byte disk packet
+   739                                  ;
+   740                                  ;  The mirror of fn42, against write_tab.
+   741                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   742                                  fn43_write_sector:
+   743 00000320 E8A3FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
+   744 00000323 260FB64507              	movzx	ax,byte [es:di+unit_number]
+   745 00000328 C1E004                  	shl	ax,4			; 0 -> 00h master, 1 -> 10h slave
+   746                                  
+   747 0000032B E8E2FD                  	call	pkt_rw_validate
+   748 0000032E 01DB                    	add	bx,bx
+   749 00000330 2E8BBF[C000]               cs	mov	di,[write_tab + bx]	;routine to call
+   750 00000335 09FF                    	or	di,di
+   751 00000337 0F843DFD                	jz	ret_invalid_command	; no write driver for this device
+   752                                  
+   753 0000033B 8B4C02                  	mov	cx,[si + pkt_blocks]
+   754 0000033E 83E17F                  	and	cx,127
+   755                                  
+   756 00000341 51                      	push	cx		; number of sectors
+   757 00000342 66FF7408                	push	dword [si + pkt_disk_LBA]
+   758 00000346 C45C04                  	les	bx,[si + pkt_address]
+   759 00000349 8CC1                    	mov	cx,es		; CX:BX is the source address
+   760                                  	; AX is Slave/master
+   761                                  
+   762 0000034B FFD7                    	call	di
+   763                                  ; the driver removes the arguments from the stack
+   764                                  
+   765 0000034D 3C00                    	cmp	al,NO_ERROR
+   766 0000034F 0F842DFD                	je	good_return
+   767                                  
+   768 00000353 C1E008                  	shl	ax,8
+   769 00000356 884402                  	mov	byte [si + pkt_blocks],al
+   770 00000359 88460E                  	mov	byte [bp + offset_ax],al
+   771 0000035C E91BFD                  	jmp	error_return
+   772                                  
+   773                                  
+   774                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   775                                  ; fn44 -- Extended Verify (packet call)
+   776                                  ;
+   777                                  ;  Enter with:
+   778                                  ;	AH = 44h
+   779                                  ;	DL = drive code
+   780                                  ;	DS:SI = the 16-byte disk packet
+   781                                  ;
+   782                                  ;  pkt_address is not used: verify reads the sectors and throws the data
+   783                                  ;  away, one at a time into the BIOS sector buffer.  On failure
+   784                                  ;  pkt_blocks is set to the number that did verify.
+   785                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   786                                  fn44_verify_sector:
+   787 0000035F E864FD                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
+   788 00000362 260FB64507              	movzx	ax,byte [es:di+unit_number]
+   789 00000367 C1E004                  	shl	ax,4
+   790                                  
+   791 0000036A E8A3FD                  	call	pkt_rw_validate
+   792 0000036D 01DB                    	add	bx,bx
+   793 0000036F 2E8BBF[BA00]               cs	mov	di,[read_tab + bx]
+   794 00000374 09FF                    	or	di,di
+   795 00000376 0F84FEFC                	jz	ret_invalid_command
    796                                  
-   797 00000383 8B4402                  	mov	ax,[si + pkt_blocks]
-   798 00000386 83E07F                  	and	ax,127
-   799 00000389 8946FA                  	mov	lcl_count,ax
-   800 0000038C 8946F0                  	mov	lcl_want,ax
-   801                                  
-   802 0000038F 668B4408                	mov	eax,[si + pkt_disk_LBA]
-   803 00000393 668946FC                	mov	dword lcl_lba,eax
-   804                                  
-   805 00000397 2EA1[0000]                 cs	mov	ax,[_SecBuffer]
-   806 0000039B 8946F4                  	mov	lcl_off,ax
-   807 0000039E 2EA1[0200]                 cs	mov	ax,[_SecBuffer+2]
-   808 000003A2 8946F2                  	mov	lcl_seg,ax
-   809                                  
-   810                                  .loop:
-   811 000003A5 837EFA00                	cmp	word lcl_count,0
-   812 000003A9 741F                    	je	.done
+   797 0000037A 83EC10                  	sub	sp,LCL_SIZE
+   798 0000037D 897EF8                  	mov	lcl_drv,di
+   799 00000380 8946F6                  	mov	lcl_unit,ax
+   800                                  
+   801 00000383 8B4402                  	mov	ax,[si + pkt_blocks]
+   802 00000386 83E07F                  	and	ax,127
+   803 00000389 8946FA                  	mov	lcl_count,ax
+   804 0000038C 8946F0                  	mov	lcl_want,ax
+   805                                  
+   806 0000038F 668B4408                	mov	eax,[si + pkt_disk_LBA]
+   807 00000393 668946FC                	mov	dword lcl_lba,eax
+   808                                  
+   809 00000397 2EA1[0000]                 cs	mov	ax,[_SecBuffer]
+   810 0000039B 8946F4                  	mov	lcl_off,ax
+   811 0000039E 2EA1[0200]                 cs	mov	ax,[_SecBuffer+2]
+   812 000003A2 8946F2                  	mov	lcl_seg,ax
    813                                  
-   814 000003AB 6A01                    	push	word 1
-   815 000003AD 66FF76FC                	push	dword lcl_lba
-   816 000003B1 8B5EF4                  	mov	bx,lcl_off
-   817 000003B4 8B4EF2                  	mov	cx,lcl_seg
-   818 000003B7 8B46F6                  	mov	ax,lcl_unit
-   819 000003BA FF56F8                  	call	word lcl_drv
-   820                                  
-   821 000003BD 09C0                    	or	ax,ax
-   822 000003BF 750C                    	jnz	.failed
-   823                                  
-   824 000003C1 66FF46FC                	inc	dword lcl_lba
-   825 000003C5 FF4EFA                  	dec	word lcl_count
-   826 000003C8 EBDB                    	jmp	.loop
+   814                                  .loop:
+   815 000003A5 837EFA00                	cmp	word lcl_count,0
+   816 000003A9 741F                    	je	.done
+   817                                  
+   818 000003AB 6A01                    	push	word 1
+   819 000003AD 66FF76FC                	push	dword lcl_lba
+   820 000003B1 8B5EF4                  	mov	bx,lcl_off
+   821 000003B4 8B4EF2                  	mov	cx,lcl_seg
+   822 000003B7 8B46F6                  	mov	ax,lcl_unit
+   823 000003BA FF56F8                  	call	word lcl_drv
+   824                                  
+   825 000003BD 09C0                    	or	ax,ax
+   826 000003BF 750C                    	jnz	.failed
    827                                  
-   828                                  .done:
-   829 000003CA E9B3FC                  	jmp	good_return
-   830                                  
-   831                                  .failed:
-   832 000003CD 89C3                    	mov	bx,ax			; the driver left a real status code
-   833 000003CF 8B46F0                  	mov	ax,lcl_want
-   834 000003D2 2B46FA                  	sub	ax,lcl_count
-   835 000003D5 894402                  	mov	[si + pkt_blocks],ax	; how many did verify
-   836 000003D8 88DC                    	mov	ah,bl
-   837 000003DA E99DFC                  	jmp	error_return
-   838                                  
-   839                                  
-   840                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   841                                  ; fn47 -- Extended Seek (packet call)
-   842                                  ;
-   843                                  ;  Enter with:
-   844                                  ;	AH = 47h
-   845                                  ;	DL = drive code
-   846                                  ;	DS:SI = the 16-byte disk packet
-   847                                  ;
-   848                                  ;  There is no seek command in the 8-bit PIO path -- the drive seeks as
-   849                                  ;  part of the next transfer -- so the useful work here is checking that
-   850                                  ;  the caller is asking for somewhere that exists.  Unlike fn42/43/44,
-   851                                  ;  which leave the drive to reject a bad address, this one has nothing
-   852                                  ;  else to do, so it range-checks against max_lba.
-   853                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   854                                  fn47_extended_seek:
-   855 000003DD E8E6FC                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
-   856 000003E0 E82DFD                  	call	pkt_rw_validate
-   857                                  
-   858 000003E3 668B4408                	mov	eax,[si + pkt_disk_LBA]
-   859 000003E7 26663B450A                  es	cmp	eax,[di+max_lba]
-   860 000003EC 0F83AFFD                	jnb	ret_sector_not_found
+   828 000003C1 66FF46FC                	inc	dword lcl_lba
+   829 000003C5 FF4EFA                  	dec	word lcl_count
+   830 000003C8 EBDB                    	jmp	.loop
+   831                                  
+   832                                  .done:
+   833 000003CA E9B3FC                  	jmp	good_return
+   834                                  
+   835                                  .failed:
+   836 000003CD 89C3                    	mov	bx,ax			; the driver left a real status code
+   837 000003CF 8B46F0                  	mov	ax,lcl_want
+   838 000003D2 2B46FA                  	sub	ax,lcl_count
+   839 000003D5 894402                  	mov	[si + pkt_blocks],ax	; how many did verify
+   840 000003D8 88DC                    	mov	ah,bl
+   841 000003DA E99DFC                  	jmp	error_return
+   842                                  
+   843                                  
+   844                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   845                                  ; fn47 -- Extended Seek (packet call)
+   846                                  ;
+   847                                  ;  Enter with:
+   848                                  ;	AH = 47h
+   849                                  ;	DL = drive code
+   850                                  ;	DS:SI = the 16-byte disk packet
+   851                                  ;
+   852                                  ;  There is no seek command in the 8-bit PIO path -- the drive seeks as
+   853                                  ;  part of the next transfer -- so the useful work here is checking that
+   854                                  ;  the caller is asking for somewhere that exists.  Unlike fn42/43/44,
+   855                                  ;  which leave the drive to reject a bad address, this one has nothing
+   856                                  ;  else to do, so it range-checks against max_lba.
+   857                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   858                                  fn47_extended_seek:
+   859 000003DD E8E6FC                  	call	get_disk_table		; ES:DI -> T_DISKTAB, BX = driver
+   860 000003E0 E82DFD                  	call	pkt_rw_validate
    861                                  
-   862 000003F0 E98DFC                  	jmp	good_return
-   863                                  
-   864                                  
-   865                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   866                                  ; fn48 -- Get Drive Parameters (packet call)
-   867                                  ;
-   868                                  ;  Enter with:
-   869                                  ;	AH = 48h
-   870                                  ;	DL = drive code
-   871                                  ;	DS:SI = the result buffer, with pkt_param_size already set
-   872                                  ;
-   873                                  ;  Exit with:
-   874                                  ;	the buffer filled in, pkt_param_size set to what was written
-   875                                  ;	AH = 0, Carry clear
+   862 000003E3 668B4408                	mov	eax,[si + pkt_disk_LBA]
+   863 000003E7 26663B450A                  es	cmp	eax,[di+max_lba]
+   864 000003EC 0F83AFFD                	jnb	ret_sector_not_found
+   865                                  
+   866 000003F0 E98DFC                  	jmp	good_return
+   867                                  
+   868                                  
+   869                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   870                                  ; fn48 -- Get Drive Parameters (packet call)
+   871                                  ;
+   872                                  ;  Enter with:
+   873                                  ;	AH = 48h
+   874                                  ;	DL = drive code
+   875                                  ;	DS:SI = the result buffer, with pkt_param_size already set
    876                                  ;
-   877                                  ;  The C:H:S reported is the TRANSLATED geometry, the same one AH=08h
-   878                                  ;  gives, so the two calls cannot disagree.  pkt_total_sectors is
-   879                                  ;  max_lba, the real capacity, which is generally larger -- that is
-   880                                  ;  expected, and is the whole reason the packet calls exist.
-   881                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   882                                  fn48_get_drive_parameters:
-   883 000003F3 E8D0FC                  	call	get_disk_table		; ES:DI -> T_DISKTAB
-   884                                  
-   885 000003F6 833C1A                  	cmp	word [si + pkt_param_size],26
-   886 000003F9 0F827BFC                	jb	ret_invalid_command	; buffer too small to fill in
-   887                                  
-   888 000003FD 26660FB705              	movzx	eax,word [es:di+ncylinders]
-   889 00000402 66894404                	mov	[si + pkt_phys_cylinders],eax
-   890 00000406 26660FB64502            	movzx	eax,byte [es:di+n__heads]
-   891 0000040C 66894408                	mov	[si + pkt_phys_heads],eax
-   892 00000410 26660FB6450E            	movzx	eax,byte [es:di+nsectors]
-   893 00000416 6689440C                	mov	[si + pkt_phys_sectors],eax
-   894                                  
-   895 0000041A 26668B450A                  es	mov	eax,[di+max_lba]
-   896 0000041F 66894410                	mov	[si + pkt_total_sectors],eax
-   897 00000423 66C7441400000000        	mov	dword [si + pkt_total_sectors+4],0
+   877                                  ;  Exit with:
+   878                                  ;	the buffer filled in, pkt_param_size set to what was written
+   879                                  ;	AH = 0, Carry clear
+   880                                  ;
+   881                                  ;  The C:H:S reported is the TRANSLATED geometry, the same one AH=08h
+   882                                  ;  gives, so the two calls cannot disagree.  pkt_total_sectors is
+   883                                  ;  max_lba, the real capacity, which is generally larger -- that is
+   884                                  ;  expected, and is the whole reason the packet calls exist.
+   885                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   886                                  fn48_get_drive_parameters:
+   887 000003F3 E8D0FC                  	call	get_disk_table		; ES:DI -> T_DISKTAB
+   888                                  
+   889 000003F6 833C1A                  	cmp	word [si + pkt_param_size],26
+   890 000003F9 0F827BFC                	jb	ret_invalid_command	; buffer too small to fill in
+   891                                  
+   892 000003FD 26660FB705              	movzx	eax,word [es:di+ncylinders]
+   893 00000402 66894404                	mov	[si + pkt_phys_cylinders],eax
+   894 00000406 26660FB64502            	movzx	eax,byte [es:di+n__heads]
+   895 0000040C 66894408                	mov	[si + pkt_phys_heads],eax
+   896 00000410 26660FB6450E            	movzx	eax,byte [es:di+nsectors]
+   897 00000416 6689440C                	mov	[si + pkt_phys_sectors],eax
    898                                  
-   899 0000042B C744180002              	mov	word [si + pkt_bytes],512
-   900 00000430 C744020200              	mov	word [si + ppt_info],0x0002	; bit 1: geometry is valid
-   901                                  
-   902 00000435 833C1E                  	cmp	word [si + pkt_param_size],30
-   903 00000438 720F                    	jb	.short_form
-   904                                  
-   905                                  ; room for the EDD pointer, which this BIOS does not publish
-   906 0000043A 66C7441AFFFFFFFF        	mov	dword [si + pkt_EDD_param_ptr],0xFFFFFFFF
-   907 00000442 C7041E00                	mov	word [si + pkt_param_size],30
-   908 00000446 E937FC                  	jmp	good_return
-   909                                  
-   910                                  .short_form:
-   911 00000449 C7041A00                	mov	word [si + pkt_param_size],26
-   912 0000044D E930FC                  	jmp	good_return
+   899 0000041A 26668B450A                  es	mov	eax,[di+max_lba]
+   900 0000041F 66894410                	mov	[si + pkt_total_sectors],eax
+   901 00000423 66C7441400000000        	mov	dword [si + pkt_total_sectors+4],0
+   902                                  
+   903 0000042B C744180002              	mov	word [si + pkt_bytes],512
+   904 00000430 C744020200              	mov	word [si + ppt_info],0x0002	; bit 1: geometry is valid
+   905                                  
+   906 00000435 833C1E                  	cmp	word [si + pkt_param_size],30
+   907 00000438 720F                    	jb	.short_form
+   908                                  
+   909                                  ; room for the EDD pointer, which this BIOS does not publish
+   910 0000043A 66C7441AFFFFFFFF        	mov	dword [si + pkt_EDD_param_ptr],0xFFFFFFFF
+   911 00000442 C7041E00                	mov	word [si + pkt_param_size],30
+   912 00000446 E937FC                  	jmp	good_return
+   913                                  
+   914                                  .short_form:
+   915 00000449 C7041A00                	mov	word [si + pkt_param_size],26
+   916 0000044D E930FC                  	jmp	good_return

@@ -29,6 +29,7 @@
 %include "seg_def.inc"
 %include "i386EX.inc"
 %include "macro.inc"
+%include "bda.inc"		; serial_dev, for the console drain in reboot_
 ; ASCII_CR and ASCII_LF come from i386EX.inc -- "ascii.h" is a C
 ; header and NASM cannot read it
 
@@ -225,3 +226,56 @@ msg_nodisk:
 	db	ASCII_CR,ASCII_LF,0
 msg_retry:
 	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; reboot -- restart the board through the ROM's own reset entry
+;
+;	void reboot(void);
+;
+; Does not return.
+;
+; FFFF:0000 is where the processor begins after a reset and where
+; 'bootstrap' in boot.asm sits: a five-byte far jump to F000:0000.  Going
+; through it rather than straight to F000:0000 means a warm start takes
+; exactly the path a cold one does, including anything that ever gets added
+; to that stub.
+;
+; This is not a hardware reset -- the peripherals keep whatever state they
+; are in -- but start.asm is written to survive being re-entered.  The
+; expanded I/O unlock opens with a read of REMAPCFGH precisely to put that
+; state machine back to a known state from wherever it was, and every port
+; the BIOS depends on is written from wtab1/btab1 rather than assumed.  What
+; it does not do is reset the IDE drive, so the first thing POST does to the
+; card is the soft reset in hd_reset(), which is what that is for.
+;
+; SETUP is the caller: it used to print "Reboot required!" and then call
+; exit(15), which lands in exit_ and powers the board down.  Telling someone
+; a reboot is required and then making the machine unresponsive is the
+; wrong pair of actions, and it is the reason this exists.
+;
+; The console is drained first.  The last line of output is still sitting
+; in the UART when the chip selects are reprogrammed, and without the wait
+; the user sees a truncated message and reads it as a crash.  The port comes
+; from bda.serial_dev[0] rather than a constant, since the console may be
+; the on-chip SIO0 at 3F8h or the MF/PIC at 448h.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	global	reboot_
+reboot_:
+	cli
+
+	get_bda	DS
+	mov	dx,[serial_dev]		; console base, 0 if none was installed
+	or	dx,dx
+	jz	.2
+
+	add	dx,LSR0-TBR0		; the line status register
+	mov	cx,0			; 65536 reads is far longer than a
+					;  character takes at any rate we use
+.1:
+	in	al,dx
+	test	al,LSR_TE		; transmitter completely empty?
+	jnz	.2
+	loop	.1
+.2:
+	jmp	0xFFFF:0x0000		; the reset entry, into boot.asm

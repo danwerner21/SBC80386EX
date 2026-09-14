@@ -33,6 +33,7 @@
 #include "strtoint.h"
 #include "getline.h"
 #include "nvram.h"		/* ASM keyword, T_STR, and the bda macro */
+#include "i386ex.h"		/* the watchdog and power-control registers */
 #include "debugmon.h"
 #include "hdinit.h"
 
@@ -918,39 +919,63 @@ void debugmon(void)
 		if( is_cmd(&cp,"SECCMP") )
 		{
 			dword	lba;
-			dword	nsec;
+			dword	nsec, v;
 			word	i, j, bad;
 			byte	*multi;
 			byte	*one = SecBuffer;
-			int	rc;
+			int	rc, drive = 0;
+			byte	unit;
 			union {
 				byte	*p;
 				struct { word off; word seg; } fp;
 			} m;
 
 			if( !parse_val(&cp,&lba) ) {
-				printf("usage: SECCMP <lba> [<sectors>]\n"
+				printf("usage: SECCMP <lba> [<sectors>]"
+				       " [<drive>]\n"
 				       "       reads N in one command, then N"
-				       " singly, and compares\n");
+				       " singly, and compares\n"
+				       "       drive 0 = master (default),"
+				       " 1 = slave\n"
+				       "       every argument is HEX, like"
+				       " everywhere else here\n");
 				continue;
 			}
 			nsec = 8;
 			parse_val(&cp,&nsec);
 
-			if( nsec < 2 || nsec > 32 ) {
-				printf("SECCMP: 2 to 32 sectors"
-				       " (1 would not test anything)\n");
+			if( nsec < 2 || nsec > 0x20 ) {
+				printf("SECCMP: 2 to 20 sectors, and that"
+				       " is hex -- 1 would not test"
+				       " anything\n");
 				continue;
 			}
+
+			if( parse_val(&cp,&v) ) {
+				if( v > 1UL ) {
+					printf("SECCMP: drive 0 = master,"
+					       " 1 = slave\n");
+					continue;
+				}
+				drive = (int)v;
+			}
+			unit = (byte)(drive ? 0x10 : 0x00);
+
+			/* Name the drive on the way in, always.  This command
+			   used to take no drive argument and silently read the
+			   master, which is an easy thing to run against a
+			   freshly installed slave and believe. */
+			printf("SECCMP: %s, %lu sectors from LBA %lu\n",
+				drive ? "slave" : "master", nsec, lba);
 
 			m.fp.seg = 0x1000;
 			m.fp.off = 0;
 			multi = m.p;
 
-			hd_set_8bit(0);
+			hd_set_8bit(drive);
 
 			/* The whole run in one command. */
-			rc = IDE_READ_SECTOR( 0x00, multi, lba, (byte)nsec );
+			rc = IDE_READ_SECTOR( unit, multi, lba, (byte)nsec );
 			if( rc ) {
 				printf("SECCMP: the %lu-sector read failed,"
 				       " status %02X\n", nsec, (word)rc);
@@ -962,7 +987,7 @@ void debugmon(void)
 			bad = 0;
 			for( i = 0; i < (word)nsec; i++ ) {
 
-				rc = IDE_READ_SECTOR( 0x00, one, lba + i, 1 );
+				rc = IDE_READ_SECTOR( unit, one, lba + i, 1 );
 				if( rc ) {
 					printf("SECCMP: single read of LBA %lu"
 					       " failed, status %02X\n",
@@ -988,9 +1013,9 @@ void debugmon(void)
 			}
 
 			if( !bad )
-				printf("SECCMP: %lu sectors from LBA %lu --"
-				       " one command and %lu singles agree"
-				       " byte for byte\n", nsec, lba, nsec);
+				printf("SECCMP: %s -- one command and %lu"
+				       " singles agree byte for byte\n",
+					drive ? "slave" : "master", nsec);
 
 			/* A block count of zero has to come straight back.
 			   ATA reads a sector count register of 0 as 256, and
@@ -998,7 +1023,7 @@ void debugmon(void)
 			   65536 times.  If this line is the last thing you
 			   see, that guard is not doing its job. */
 			printf("SECCMP: zero-count guard ... ");
-			rc = IDE_READ_SECTOR( 0x00, one, lba, 0 );
+			rc = IDE_READ_SECTOR( unit, one, lba, 0 );
 			printf("returned %02X (want 00)\n", (word)rc);
 			continue;
 		}
@@ -1577,7 +1602,8 @@ void debugmon(void)
 			T_REGS	regs;
 			word	fn, cur_ds;
 			dword	usec, src, dst, nwords;
-			word	t0, t1;
+			dword	asked, measured;
+			word	t0, t1, reps;
 			byte	*tp;
 			byte	gdt[6*8];
 			byte	chk[16];
@@ -1617,20 +1643,61 @@ void debugmon(void)
 			case 0x86:
 				usec = 100000UL;
 				parse_val(&cp,&usec);
-				regs.ax = 0x8600;
-				regs.cx = (word)(usec >> 16);
-				regs.dx = (word)(usec & 0xFFFFUL);
+				if( usec == 0 ) {
+					printf("86h: give a microsecond"
+					       " count\n");
+					continue;
+				}
+				printf("86h: %s path\n",
+					(usec < 262144UL)
+					  ? "1mhz counter (the Phase 4 work)"
+					  : "18.2hz tick (the old path)");
+
+				/* The tick this is measured against is 54.9ms
+				   wide, so one 100ms call is +/-55% -- enough
+				   to show the counter is moving, nowhere near
+				   enough to show it is moving at 1mhz.  Repeat
+				   until at least a second has been asked for,
+				   and the same +/-1 tick falls on the whole
+				   run instead of on one call.
+
+				   The monitor's own per-call overhead is in
+				   the measured figure too.  At 100ms a call it
+				   is noise; at 1ms a call it is not, which is
+				   what the repetition count is capped for. */
+				reps = 1;
+				if( usec < 1000000UL )
+					reps = (word)(1000000UL / usec) + 1;
+				if( reps > 1000 )	reps = 1000;
 
 				t0 = bda.timer_count_low;
-				int15_call(&regs);
+				for( i = 0; i < (int)reps; i++ ) {
+					regs.ax = 0x8600;
+					regs.cx = (word)(usec >> 16);
+					regs.dx = (word)(usec & 0xFFFFUL);
+					int15_call(&regs);
+					if( regs.flags & 1 )	break;
+				}
 				t1 = bda.timer_count_low;
 
-				printf("86h: asked %lu usec;"
-				       " %u tick(s) = %lu usec +/-1 tick  %s\n",
-					usec, (word)(t1 - t0),
-					(dword)(word)(t1 - t0) * 54925UL,
-					(regs.flags & 1) ? "CY -- refused"
-							 : "NC");
+				if( regs.flags & 1 ) {
+					printf("86h: CY -- refused after"
+					       " %d call(s)\n", i);
+					break;
+				}
+
+				asked    = usec * (dword)reps;
+				measured = (dword)(word)(t1 - t0) * 54925UL;
+
+				printf("86h: %u x %lu usec = %lu usec asked\n",
+					reps, usec, asked);
+				printf("     %u ticks = %lu usec measured,"
+				       " +/-54925 on the run\n",
+					(word)(t1 - t0), measured);
+				printf("     %lu%% of what was asked --"
+				       " want about 100\n",
+					asked ? (measured / (asked / 100UL))
+					      : 0UL);
 				break;
 
 /*
@@ -1657,7 +1724,8 @@ void debugmon(void)
 				parse_val(&cp,&nwords);
 
 				if( nwords == 0 || nwords > 0x8000UL ) {
-					printf("87h: 1 to 8000 words\n");
+					printf("87h: 1 to 8000 words,"
+					       " and that count is hex\n");
 					continue;
 				}
 
@@ -1760,6 +1828,427 @@ void debugmon(void)
 				printf("INT15: 86, 87, 88 and C0 only\n");
 				break;
 			}
+			continue;
+		}
+
+/*
+ * WDT -- what the watchdog is actually set to.
+ *
+ * Phase 5 asks whether the bus-monitor watchdog can trip during long DOS
+ * I/O.  That question cannot be answered by watching the board: in this
+ * configuration a trip does not reset anything.  start.asm sets BUSMON in
+ * WDTSTATUS and WDTRDY in PWRCON, which means the watchdog's job is to
+ * supply READY to a bus cycle that has not finished in time -- so the
+ * symptom of a trip is a cycle terminated early with whatever was on the
+ * bus, not a reboot.  Silent bad data, in other words.
+ *
+ * What decides it is the timeout against the slowest legitimate access,
+ * and this BIOS never writes WDTRLDH/WDTRLDL at all -- the reload value is
+ * whatever reset left there.  So read it rather than assume it.
+ *
+ * The count is sampled repeatedly because in bus-monitor mode it reloads
+ * on every bus cycle: pinned near the reload value means it is being fed
+ * normally, and a low or moving value would be the interesting case.
+ * The two halves are read separately and can tear; for this purpose that
+ * does not matter.
+ */
+		if( is_cmd(&cp,"WDT") )
+		{
+			word	sts, pwr, i;
+			word	hi[4], lo[4];
+			dword	reload;
+			word	mhz;
+
+			sts = io_read(WDTSTATUS,0);
+			pwr = io_read(PWRCON,0);
+
+			reload  = (dword)io_read(WDTRLDH,1) << 16;
+			reload |= (dword)io_read(WDTRLDL,1);
+
+			for( i = 0; i < 4; i++ ) {
+				hi[i] = io_read(WDTCNTH,1);
+				lo[i] = io_read(WDTCNTL,1);
+			}
+
+			printf("WDT: WDTSTATUS %02X -- bus monitor %s\n",
+				sts, (sts & 0x02) ? "ON" : "off");
+			printf("     PWRCON    %02X -- WDTRDY %s,"
+			       " HSREADY %s\n",
+				pwr,
+				(pwr & 0x08) ? "on" : "OFF",
+				(pwr & 0x04) ? "on" : "off");
+			printf("     reload %04X%04X = %lu counts"
+			       "   (never written by this BIOS)\n",
+				(word)(reload >> 16), (word)reload, reload);
+
+			printf("     count ");
+			for( i = 0; i < 4; i++ )
+				printf(" %04X%04X", hi[i], lo[i]);
+			printf("\n");
+
+			/* Assumes the watchdog counts at the CPU clock.  If
+			   the datasheet says it is prescaled, scale this by
+			   hand -- the raw reload above is the fact, this line
+			   is the convenience. */
+			mhz = bda.CPU_freq / 1000u;
+			if( mhz )
+				printf("     at %u mhz that is about %lu usec"
+				       " before READY is forced\n",
+					mhz, reload / (dword)mhz);
+			printf("     compare against the slowest real access:"
+			       " CS0 and CS1 run 7 wait states\n");
+			continue;
+		}
+
+/*
+ * IOTIME -- how long a read of a given I/O port actually takes.
+ *
+ * The question this exists to answer: what happens to a bus cycle that no
+ * chip select claims?  Only CS0 (0400-04FF), CS1 (01F0-01FF) and the 386EX
+ * internal peripherals decode anything here.  If an unclaimed cycle runs to
+ * the bus-monitor watchdog and is terminated by WDTRDY, it costs 209ms --
+ * and any operating system that probes for absent hardware pays that per
+ * probe.  That matters for a Unix far more than it does for DOS, which
+ * probes almost nothing.
+ *
+ * The 18.2hz tick is the clock, deliberately: timer 1 wraps every 65.5ms
+ * and could not measure a 209ms access without aliasing.  Coarse is fine --
+ * the two possible answers are "under a millisecond" and "a fifth of a
+ * second", and no amount of resolution is needed to tell those apart.
+ *
+ * Reads only.  Writing to an address at random is a different kind of
+ * experiment.
+ */
+		if( is_cmd(&cp,"IOTIME") )
+		{
+			word	port, reps, i, t0, t1, ticks;
+			dword	us_each;
+
+			if( !parse_word(&cp,&port) ) {
+				printf("usage: IOTIME <port> [<reads>]\n"
+				       "       hex, as everywhere here;"
+				       " default 8 reads\n"
+				       "       try a decoded port (1F7, F834)"
+				       " against an undecoded one (64, 300)\n");
+				continue;
+			}
+			reps = 8;
+			parse_word(&cp,&reps);
+			if( reps == 0 )		reps = 8;
+
+			printf("IOTIME: %u read(s) of port %04X ...\n",
+				reps, port);
+
+			t0 = bda.timer_count_low;
+			for( i = 0; i < reps; i++ )
+				(void)io_read(port,0);
+			t1 = bda.timer_count_low;
+
+			ticks = (word)(t1 - t0);
+
+			if( ticks == 0 ) {
+				printf("IOTIME: under one tick for all %u --"
+				       " faster than %lu usec each.\n",
+					reps, 54925UL / (dword)reps);
+				printf("        That port answers. The"
+				       " watchdog is not involved.\n");
+				continue;
+			}
+
+			us_each = ((dword)ticks * 54925UL) / (dword)reps;
+			printf("IOTIME: %u tick(s) for %u reads"
+			       " = about %lu usec each\n",
+				ticks, reps, us_each);
+
+			if( us_each > 100000UL )
+				printf("        That is the watchdog: nothing"
+				       " claims this cycle, and WDTRDY ends it"
+				       " at ~209ms.\n");
+			else
+				printf("        Slow, but not the watchdog.\n");
+			continue;
+		}
+
+/*
+ * INT13 -- the BIOS disk interface, as opposed to the driver under it.
+ *
+ * SECCMP proves the driver.  This proves the layer above it: get_disk_table
+ * finding the right T_DISKTAB for the drive code, cv_lba turning CHS into
+ * an LBA, and the dispatch through bda.disk_tab[] reaching the right unit.
+ * For the master all of that is exercised every time DOS boots.  For the
+ * slave nothing exercises it at all, and nothing will until there is a
+ * filesystem on that card.
+ *
+ * The read is deliberately NOT at cylinder 0, head 0, sector 1.  That is
+ * LBA 0 whatever cv_lba does with it, so it would pass with the conversion
+ * completely broken.  A cylinder, head and sector are picked away from the
+ * origin instead, the LBA computed here from the geometry AH=08h reported,
+ * and the two reads compared.  Agreeing means the BIOS and this command
+ * worked out the same address by different routes.
+ */
+		if( is_cmd(&cp,"INT13") )
+		{
+			T_REGS	regs;
+			dword	v, lba;
+			int	drive = 0, rc;
+			byte	unit;
+			word	cur_ds, i, bad;
+			word	maxcyl, maxhead, spt, ndrv;
+			word	cyl, head, sec;
+			byte	*b13;
+			byte	*bdrv = SecBuffer;
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} m;
+
+			if( parse_val(&cp,&v) ) {
+				if( v > 1UL ) {
+					printf("usage: INT13 [drive]"
+					       "   0 = master, 1 = slave\n");
+					continue;
+				}
+				drive = (int)v;
+			}
+			unit = (byte)(drive ? 0x10 : 0x00);
+
+			m.fp.seg = 0x1000;	/* scratch, as SECCMP uses */
+			m.fp.off = 0;
+			b13 = m.p;
+
+			ASM {
+				mov	ax,ds
+				mov	[cur_ds],ax
+			}
+
+			hd_set_8bit(drive);
+
+/* ---- AH=08h, get drive parameters ---------------------------------- */
+			regs.ax = 0x0800;
+			regs.bx = regs.cx = 0;
+			regs.dx = (word)(0x0080 | drive);
+			regs.si = regs.di = 0;
+			regs.ds = regs.es = cur_ds;
+			regs.flags = 0;
+
+			int13_call(&regs);
+
+			if( regs.flags & 1 ) {
+				printf("INT13: drive %02X AH=08h failed,"
+				       " AH=%02X\n",
+					0x80 | drive, (word)(regs.ax >> 8));
+				continue;
+			}
+
+			/* CH is the low 8 bits of the maximum cylinder, CL
+			   carries the top two in bits 7:6 and the sectors per
+			   track in bits 5:0. */
+			maxcyl  = (word)(((regs.cx & 0x00C0) << 2)
+					| ((regs.cx >> 8) & 0x00FF));
+			spt     = (word)(regs.cx & 0x003F);
+			maxhead = (word)((regs.dx >> 8) & 0x00FF);
+			ndrv    = (word)(regs.dx & 0x00FF);
+
+			printf("INT13: drive %02X -- %u cyl, %u head,"
+			       " %u sec/trk;  %u drive(s) present\n",
+				0x80 | drive, maxcyl + 1, maxhead + 1,
+				spt, ndrv);
+
+			if( spt == 0 ) {
+				printf("INT13: zero sectors per track --"
+				       " that geometry is unusable\n");
+				continue;
+			}
+
+/* ---- AH=02h at a CHS away from the origin --------------------------- */
+			cyl  = 1;
+			head = (word)(maxhead >= 2 ? 2 : 0);
+			sec  = (word)(spt >= 3 ? 3 : 1);
+
+			lba = ((dword)cyl * (dword)(maxhead + 1)
+					+ (dword)head) * (dword)spt
+				+ (dword)(sec - 1);
+
+			printf("       reading C%u H%u S%u, which is LBA %lu\n",
+				cyl, head, sec, lba);
+
+			regs.ax = 0x0201;		/* read one sector */
+			regs.cx = (word)(((cyl & 0x00FF) << 8)
+					| ((cyl >> 2) & 0x00C0)
+					| (sec & 0x003F));
+			regs.dx = (word)((head << 8) | (0x0080 | drive));
+			regs.bx = m.fp.off;
+			regs.es = m.fp.seg;
+			regs.ds = cur_ds;
+			regs.si = regs.di = 0;
+			regs.flags = 0;
+
+			int13_call(&regs);
+
+			if( regs.flags & 1 ) {
+				printf("INT13: AH=02h failed, AH=%02X\n",
+					(word)(regs.ax >> 8));
+				continue;
+			}
+
+/* ---- the same sector, straight from the driver ---------------------- */
+			rc = IDE_READ_SECTOR( unit, bdrv, lba, 1 );
+			if( rc ) {
+				printf("INT13: the driver could not read LBA"
+				       " %lu, status %02X\n", lba, (word)rc);
+				continue;
+			}
+
+			bad = 0;
+			for( i = 0; i < 512; i++ ) {
+				if( b13[i] == bdrv[i] )		continue;
+				printf("INT13: differs at byte %u --"
+				       " INT 13h %02X, driver %02X\n",
+					i, (word)b13[i], (word)bdrv[i]);
+				bad = 1;
+				break;
+			}
+
+			if( !bad )
+				printf("INT13: %s -- INT 13h C%u H%u S%u and"
+				       " the driver at LBA %lu agree\n",
+					drive ? "slave" : "master",
+					cyl, head, sec, lba);
+			continue;
+		}
+
+/*
+ * FDC -- is the floppy controller there, is it out of reset, does it answer?
+ *
+ * The ECB Disk I/O V3 carries an SMC FDC9266, uPD765/8272-compatible, with
+ * an integrated data separator and no DMA.  Z80 I/O port N reaches the
+ * 386EX at 0x400 + N (see 0README.TXT), so a card jumpered to 30h-3Fh is at
+ * 0x430-0x43F here.
+ *
+ * The main status register is the tell.  An idle 765 reads 80h -- RQM set,
+ * DIO clear, not busy.  A bus with nothing driving it floats to FF.  A part
+ * held in reset reads 00.  Three states, none of them confusable, which is
+ * what makes this worth doing before any driver exists.  All four aliases
+ * are read because the board decodes 30h/32h/34h/36h to the same register
+ * and only the jumpering says which is meant.
+ *
+ * Expect 00 on a cold machine.  The latch at 38h is a 74LS273, which clears
+ * to zero at power-on, and bit 7 of it is ~FDC_RST -- so out of reset the
+ * board holds the controller in reset until software says otherwise.  This
+ * writes 80h there: reset released, motor off, TC low, P0/P1/P2 clear,
+ * MINI clear and DENSEL clear.
+ *
+ * MINI, bit 2, is the data rate: FDC_CLK is a fixed 8mhz oscillator and the
+ * MINI pin is what halves it, so this is the 500 kbps setting.  Nothing is
+ * transferred here, so it does not matter yet.  DENSEL is not a rate
+ * control -- it goes out to the drive's density pin through JP6.
+ *
+ * That latch is WRITE ONLY.  Reading 38h returns the digital input
+ * register, not what was last written, so every write has to supply all
+ * eight bits at once.  A driver will need a shadow byte to do that;
+ * bda.motor_status is the place for it, being the BDA byte a PC uses for
+ * the same job.
+ *
+ * After a reset a 765 raises an interrupt and answers SENSE INTERRUPT
+ * STATUS with ST0 bits 7:6 set -- C0h, "abnormal termination, reset" --
+ * rather than the 80h "invalid command" it gives when nothing is pending.
+ * Seeing C0h is proof that the reset took and the part is listening.
+ */
+		if( is_cmd(&cp,"FDC") )
+		{
+			word	base, msr, dir, i, live, present;
+			word	st0, pcn = 0;
+			static const word alias[4] = { 0x430, 0x432,
+						       0x434, 0x436 };
+
+			printf("FDC: main status register --");
+			live = 0;
+			present = 0;
+			for( i = 0; i < 4; i++ ) {
+				msr = io_read(alias[i],0);
+				printf("  %03X=%02X", alias[i], msr);
+				if( msr != 0xFF ) {
+					present = 1;
+					live = alias[i];
+				}
+			}
+			printf("\n");
+
+			dir = io_read(0x438,0);
+			printf("     digital input 438=%02X   (bit 0 is ~DC,"
+			       " disk change)\n", dir);
+
+			if( !present ) {
+				printf("FDC: nothing answering.  FF is a"
+				       " floating bus -- no card, or not"
+				       " jumpered to 30h-3Fh.\n");
+				continue;
+			}
+
+			msr = io_read(live,0);
+
+			if( msr != 0x80 ) {
+				printf("FDC: MSR %02X at %03X --%s releasing"
+				       " reset (latch 438 <- 80)\n",
+					msr, live,
+					(msr == 0x00)
+					  ? " held in reset, as expected after"
+					    " power-on;"
+					  : " not idle;");
+
+				io_write(0x438,0x80,0);
+
+				for( i = 0; i < 2000; i++ ) {
+					msr = io_read(live,0);
+					if( msr == 0x80 )	break;
+				}
+			}
+
+			printf("FDC: MSR %02X --%s%s%s%s\n", msr,
+				(msr & 0x80) ? " RQM"    : " (no RQM)",
+				(msr & 0x40) ? " DIO=in" : " DIO=out",
+				(msr & 0x20) ? " EXEC"   : "",
+				(msr & 0x10) ? " BUSY"   : " idle");
+
+			if( (msr & 0xC0) != 0x80 ) {
+				printf("     still not ready for a command"
+				       " (want RQM set, DIO clear).\n");
+				continue;
+			}
+
+			/* SENSE INTERRUPT STATUS: one byte out, two back. */
+			base = (word)(live + 1);		/* data reg */
+			io_write(base,0x08,0);
+
+			for( i = 0; i < 2000; i++ ) {
+				msr = io_read(live,0);
+				if( (msr & 0xC0) == 0xC0 )	break;
+			}
+			if( (msr & 0xC0) != 0xC0 ) {
+				printf("     command taken but no result"
+				       " phase, MSR %02X\n", msr);
+				continue;
+			}
+			st0 = io_read(base,0);
+
+			for( i = 0; i < 2000; i++ ) {
+				msr = io_read(live,0);
+				if( (msr & 0xC0) != 0xC0 )	break;
+				pcn = io_read(base,0);
+			}
+
+			printf("     SENSE INTERRUPT STATUS -> ST0 %02X", st0);
+			if( (st0 & 0xC0) == 0xC0 )
+				printf(", PCN %02X  (reset seen -- the part is"
+				       " alive)\n", pcn);
+			else if( st0 == 0x80 )
+				printf("  (invalid command -- nothing was"
+				       " pending)\n");
+			else
+				printf(", PCN %02X\n", pcn);
+
+			printf("FDC: controller answering at %03X, data"
+			       " register at %03X.\n", live, base);
 			continue;
 		}
 

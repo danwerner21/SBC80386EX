@@ -74,10 +74,24 @@ CP=cp
 
 H2INC = -c@ -b9
 
-INCLUDES = seg_def.inc i386EX.inc macro.inc bda.inc disktab.inc timer.inc \
-	stack.inc zero.inc date.inc error.inc
-CINCL = mytypes.h cprintf.h bda.h getline.h ascii.h sbc188.h serial.h nvram.h \
-	strtobcd.h strtoint.h zero.h disk.h disktab.h debugmon.h hdinit.h
+# Every .inc reached by an %include in this tree, directly or otherwise.
+#  + serial.inc was in no list at all, so editing it rebuilt nothing --
+#    14h_sio0.asm includes it.
+#  - zero.inc went: nothing includes it any more.
+#  * i386ex.inc is spelled the way git spells it.  Eight modules said
+#    i386EX.inc, which resolves only on a case-insensitive filesystem and
+#    would not have survived a build on a case-sensitive one.
+# crc16tab.inc is deliberately absent: crc16.o names it in its own rule.
+INCLUDES = seg_def.inc i386ex.inc macro.inc bda.inc disktab.inc timer.inc \
+	stack.inc serial.inc date.inc error.inc
+
+# Every .h reached by an #include from a .c in this tree, including the
+# ones only pulled in through another header.
+#  + i386ex.h was missing, and main.c includes it.
+#  - sbc188.h and zero.h went: nothing includes either.
+CINCL = mytypes.h cprintf.h bda.h getline.h ascii.h serial.h nvram.h \
+	strtobcd.h strtoint.h disk.h disktab.h debugmon.h hdinit.h \
+	i386ex.h
 
 OBJECTS = start.o sizer.o crc16.o diskide.o errno.o \
 	11h_12h.o 13h_disk.o 14h_sio0.o 15h_misc.o 1Ah_time.o \
@@ -245,14 +259,18 @@ spotless: clean
 	$(RM) goo*.*
 
 # Dependencies
-foo.o:	foo.c
+#
+# The .o files below already have build rules of their own further up; these
+# lines only add prerequisites.  Entries for foo.c, muldiv.asm, libc.c,
+# microSD.c, testide.c and test.c were removed -- none of those sources is in
+# this directory, and make was being asked to reason about files that have
+# not existed here for years.
 11h_12h.o:	11h_12h.asm	$(INCLUDES)
 13h_disk.o:	13h_disk.asm	$(INCLUDES)
 14h_sio0.o:	14h_sio0.asm	$(INCLUDES)
 15h_misc.o:	15h_misc.asm	$(INCLUDES)
 errno.o:	errno.asm	$(INCLUDES)
 icu.o:	icu.asm		$(INCLUDES)
-muldiv.o:	muldiv.asm	$(INCLUDES)
 stub.o:	stub.asm	$(INCLUDES)
 monitor.o:	monitor.asm	$(INCLUDES)
 sizer.o:	sizer.asm	$(INCLUDES)
@@ -260,8 +278,6 @@ diskide.o:	diskide.asm	$(INCLUDES)
 
 signon.o:	signon.c $(CINCL)
 set1302.o:	set1302.c $(CINCL)
-libc.o:	libc.c libc.h
-microSD.o:	microSD.c disk.h $(CINCL)
 main.o:	main.c $(CINCL)
 getline.o:	getline.c $(CINCL)
 strtobcd.o:	strtobcd.c $(CINCL)
@@ -269,6 +285,3 @@ strtoint.o:	strtoint.c $(CINCL)
 debugmon.o:	debugmon.c $(CINCL)
 hdinit.o:	hdinit.c $(CINCL)
 testmain.o:	testmain.c $(CINCL)
-testide.o:	testide.c $(CINCL)
-
-test.o:	test.c $(CINCL)

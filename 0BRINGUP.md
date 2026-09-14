@@ -10,7 +10,7 @@ was found on the way, and what is left.**
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
 | Assessed | 2026-09-06, by code inspection |
-| Last updated | 2026-09-12 — Phase 4 written and building, **not yet run** |
+| Last updated | 2026-09-13 — ROM shadowing working on hardware; Phase 4 still unrun |
 
 ---
 
@@ -30,7 +30,7 @@ comments and the datasheet-derived guesses said.
 
 | Metric | Then | Now | |
 |---|---:|---:|---|
-| ROM image | 12,896 B | 32,768 B | of 65,536 — 50% free |
+| ROM image | 12,896 B | 34,448 B | of 65,536 — 47% free |
 | Writable data segment | 0 B | 0 B | `_DATA` + `_BSS` still empty, as required |
 | INT vectors that work | 4 | 13 | 10h, 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h, 19h, 1Ah, 1Eh*, IRQ0, IRQ4 |
 | Blocking defects | 11 | 0 | all eleven fixed and confirmed on hardware |
@@ -159,7 +159,8 @@ anything had run*, and this was not part of that.
 
 | # | Where | Defect | Fix |
 |---|---|---|---|
-| 12 | `diskide.asm` | A sector count of zero reached the drive as a count of zero, which ATA defines as **256 sectors**, while the `LOOP` that drains DRQ ran 65536 times — 32 MB driven through the caller's buffer from a drive sending 128 KB | `IDE_READ_SECTOR` and `IDE_WRITE_SECTOR` now return success without touching the drive when the count is zero |
+| 12 | `diskide.asm` | A sector count of zero reached the drive as a count of zero, which ATA defines as **256 sectors**, while the `LOOP` that drains DRQ ran 65536 times — 32 MB driven through the caller's buffer from a drive sending 128 KB | `IDE_READ_SECTOR` and `IDE_WRITE_SECTOR` now return success without touching the drive when the count is zero. Confirmed on hardware |
+| 13 | `19h_boot.asm` | `reboot_` jumped to the reset entry without setting **DX**, so POST's first instruction — `cmp dx,DEVICE_ID` — failed and dropped into `error_halt`. The board stopped dead with nothing on the console | `mov dx,DEVICE_ID` before the jump. Confirmed on hardware 2026-09-13 |
 
 `fn42` and `fn43` can deliver one. `pkt_rw_validate` rejects a block count of 128 and
 above but says nothing about zero, and the EDD packet interface both permits it and
@@ -167,7 +168,17 @@ defines it as "transfer nothing". The CHS path never could — `rwv_common` test
 count before the loop — which is part of why this sat unnoticed: DOS boots entirely
 through CHS.
 
-Two smaller things went with it. `IDE_READ_SECTOR` took the loop count with `mov CX,ARG(6)`
+Defect 13 is the only one on either list that was found by **running** the code rather
+than reading it, and it is a good argument for why that has to happen. Nothing about
+`reboot_` looks wrong on the page: the routine assembles to exactly what it says, the far
+jump lands on `bootstrap` in `boot.asm`, and `bootstrap` jumps to `F000:0000` the way it
+does after a cold reset. What the page does not show is that DX carries the 386EX
+component identifier out of a hardware reset and that `start.asm` tests it before doing
+anything else — so a software restart has to present the register state a reset would
+have, and this one did not. The value is a named constant in `i386ex.inc` now, used by
+both the test and the routine that has to satisfy it, so the two cannot drift apart.
+
+Two smaller things went with defect 12. `IDE_READ_SECTOR` took the loop count with `mov CX,ARG(6)`
 — a **word** load of an argument whose low byte alone had just been handed to the drive in
 `wr_lba`, so the two could disagree the moment anything put rubbish in the high half; both
 directions now zero-extend the same byte. And `write_data` was documented as taking its
@@ -467,14 +478,206 @@ trick depends on; both far jumps took the `EA` form with the right selector and 
 
 > After DOS boots. None of this blocks the milestone.
 
-- **reset** — Ctrl-Alt-Del path: warm-boot flag `1234h` at `40:72` and a clean re-entry to
-  INT 19h.
-- **speed** — Shadow the ROM into DRAM (`SHADOW_MODE`); the BIOS currently executes from
-  8-bit ROM at 5 wait states, which every disk and console call pays for.
-- **watchdog** — Confirm the bus-monitor watchdog does not trip during long DOS I/O. It is
-  enabled today (`WATCH_BUS 1`).
-- **slave** — Second IDE device, and the SD-card driver slots already reserved in
-  `read_tab`/`write_tab`.
+- ~~**reset** — Ctrl-Alt-Del path.~~ **Done, confirmed on hardware 2026-09-13.** `reboot_` writes `1234h` to `40:72`, POST reads it before
+  the segment-0 test and skips the 576K memory march, and the POST line confirms which
+  path was taken. `reboot_` itself is proven, defect 13 and all. Section 06c.
+
+  **The console reset trigger is done too**, and confirmed on hardware 2026-09-13.
+  Operating notes for it live in `0README.TXT`, which is where someone looking at this
+  board in a year will actually look. An earlier version of this note called it
+  blocked, on the grounds that a serial console has no Ctrl and no Alt — `kbd_flag` is
+  zeroed at init and never written, so there are no modifier states to test. True, and
+  beside the point: nothing requires the sequence to be *Ctrl-Alt-Del*. Control characters
+  arrive over the wire as ordinary bytes.
+
+  **Three `Ctrl-^` in a row restarts the board.** `int_irq4` watches for them before the
+  character goes anywhere and jumps straight to `reboot_`, so the restart is the same one
+  SETUP uses, warm-boot flag and all. The matching characters are eaten rather than
+  delivered — this is an escape out of the running system, not data, and a partial sequence
+  reaching DOS would be worse than losing it.
+
+  `1Eh` was picked over the more obvious Ctrl-`]` (`1Dh`) because that is the **telnet
+  escape** and would be swallowed by the terminal program before ever reaching the board,
+  and over Ctrl-`\` (`1Ch`) because that is SIGQUIT to a Unix terminal. Nothing in common
+  use binds Ctrl-`^`. Both the character and the repeat count are named constants at the
+  top of `16h_kbd.asm`.
+
+  The counter lives in `alt_input`, the BDA byte that on a PC accumulates Alt+numpad digits
+  and here has nothing to do. If real keyboard hardware ever arrives this moves to a real
+  Ctrl-Alt-Del and the field goes back to its proper job.
+
+  Any program can also set `40:72` and jump to `FFFF:0000`, which is the PC convention and
+  this BIOS honours it.
+- ~~**speed** — Shadow the ROM into DRAM (`SHADOW_MODE`).~~ **Done, confirmed on
+  hardware 2026-09-13.** `shadow_rom` in `start.asm`; POST reports it and DOS boots from
+  the shadowed copy. Section 06b.
+- ~~**watchdog** — Confirm the bus-monitor watchdog does not trip during long DOS I/O.~~
+  **Answered 2026-09-13, by measurement.** It cannot. Section 06d.
+- ~~**slave** — Second IDE device.~~ **Done, confirmed on hardware 2026-09-13 at every
+  layer**: enumeration, the driver transfer path, and INT 13h.
+  A second CF card was fitted and both `IDENT 1` and `HDINIT` handle it:
+
+  ```
+  IDE master  LBA 62976 = 30 Mb  flags 0B
+              drive 492/8/16   INT 13h 492/4/32   (translated)
+  IDE slave   LBA 254208 = 124 Mb  flags 0F
+              drive 993/8/32   INT 13h 993/8/32
+  ```
+
+  The slave needs no translation — 993 cylinders is inside the 1024 limit, so what INT 13h
+  reports is the geometry the card reports. The master is translated and both figures come
+  to the same 62976 sectors. Enumeration, the parameter tables and INT 41h/46h were already
+  written for two drives in Phase 1; this is the first time a second drive existed to prove
+  it.
+
+  **The transfer path on unit 1 is confirmed too**, once `SECCMP` could reach it:
+
+  ```
+  MON>SECCMP 0 8 1
+  SECCMP: slave, 8 sectors from LBA 0
+  SECCMP: slave -- one command and 8 singles agree byte for byte
+  SECCMP: zero-count guard ... returned 00 (want 00)
+  ```
+
+  It could not before. `SECCMP` took no drive argument and silently read the master —
+  which is an easy thing to run against a freshly fitted slave and believe, and was run
+  that way once. It takes a trailing drive now, like `IDENT` and `LBA`, and names the drive
+  in its own output so the default cannot mislead again.
+
+  **INT 13h against drive 81h** now has a command. `INT13 [drive]` calls AH=08h for the
+  geometry, then AH=02h for a sector, and compares that against a direct driver read of the
+  same sector — the INT 13h analogue of what `SECCMP` does one layer down. It proves
+  `get_disk_table` finding the right `T_DISKTAB` for the drive code, `cv_lba` turning CHS
+  into an LBA, and the dispatch through `bda.disk_tab[]` reaching the right unit. For the
+  master all of that runs every time DOS boots; for the slave nothing exercises it, and
+  nothing will until there is a filesystem on that card.
+
+  The read is deliberately **not** at cylinder 0, head 0, sector 1. That is LBA 0 whatever
+  `cv_lba` does with it, so the test would pass with the conversion completely broken. A
+  cylinder, head and sector away from the origin are used instead, the LBA is computed from
+  the geometry AH=08h reported, and the two reads are compared — so agreement means the
+  BIOS and the monitor reached the same sector by different routes.
+
+  Both drives pass:
+
+  ```
+  INT13: drive 81 -- 993 cyl, 8 head, 32 sec/trk;  2 drive(s) present
+         reading C1 H2 S3, which is LBA 322
+  INT13: slave -- INT 13h C1 H2 S3 and the driver at LBA 322 agree
+
+  INT13: drive 80 -- 492 cyl, 4 head, 32 sec/trk;  2 drive(s) present
+         reading C1 H2 S3, which is LBA 194
+  INT13: master -- INT 13h C1 H2 S3 and the driver at LBA 194 agree
+  ```
+
+  The arithmetic cross-checks from two directions: `((1x8)+2)x32+2 = 322` for the slave and
+  `((1x4)+2)x32+2 = 194` for the master, with the master using the **translated** 492/4/32
+  rather than its physical 492/8/16 — which is the geometry AH=08h is supposed to report
+  and the one `cv_lba` is supposed to convert against. `2 drive(s) present` is AH=08h
+  returning the count from `bda.hd_number`.
+
+  The master was worth running as a control even though DOS exercises that path daily: DOS
+  never reads a sector at a CHS chosen to make a broken `cv_lba` visible.
+
+  The SD-card slots in `read_tab`/`write_tab` remain reserved and empty.
+
+### Phase 6 · Floppy — **starting**
+
+> The first hardware added to this board since the BIOS began. Everything before this
+> phase worked with what was already soldered down.
+
+**The hardware.** An ECB Disk I/O V3, built around an SMC **FDC9266** — uPD765/8272
+compatible with an integrated data separator. 34-pin connector, jumperable to Shugart or
+PC pinout: four drives Shugart, two PC. 720 KB and 1.44 MB among the supported formats.
+
+**It has no DMA.** That is stated by the board and corroborated by its own register map:
+TC, which on a PC is a signal from the DMA controller, is a software-writable bit of the
+digital output register here. So a transfer is the CPU moving 512 bytes through the data
+register while polling the main status register, and asserting TC by hand at the end.
+
+**Where it lives.** Z80 I/O port N reaches the 386EX at `0x400 + N` — the rule
+`0README.TXT` records for the MF/PIC, and the reason `install_SIO0(0x448)` works. A card
+jumpered to `30h-3Fh` is therefore at `0x430-0x43F`: status at `430` (aliases `432`, `434`,
+`436`), data at `431` (aliases `433`, `435`, `437`), DOR/DIR at `438`.
+
+**It will be polled, and that is a simplification rather than a compromise.** Every jumper
+option for the interrupt pin is Z80-world — Z80 `~INT`, `~NMI`, the MF/PIC, or an
+ECB-ModPrn CTC — and none of them is a 386EX ICU input. Since PIO puts the CPU in the
+transfer loop regardless, an interrupt would only help with seek and motor-spinup
+completion, and those poll perfectly well through MSR and SENSE INTERRUPT STATUS. `int_irq6`
+stays the EOI-only stub it has always been.
+
+**One consequence worth deciding before the driver is written.** 1.44 MB is 500 kbps — a
+byte every 16 microseconds, about 320 clocks at 20 MHz. Comfortable, but nothing may stall
+the loop for longer than that, and IRQ4 currently runs on every character the console
+receives. Either the data phase runs with interrupts off, which is 8.2 ms a sector and will
+drop keystrokes typed during a transfer, or it stays open and the IRQ4 handler has to be
+measured against a 16 microsecond budget. The tick survives either way: 8.2 ms is well
+inside one 54.9 ms period.
+
+**Open, and being answered by probing rather than by asking:**
+
+- ~~Shugart or PC pinout, and how many drives of what type~~ — **PC pinout, so two
+  drives.** All four common types are wanted and configurable: 360Kb and 1.2Mb 5.25 inch,
+  720Kb and 1.44Mb 3.5 inch. `set_floppy()` in `set1302.c` is implemented and stores the
+  answer in `bda.floppy_tab[]`, inside the NVRAM checksum, exactly as `disk_tab[]` works
+  for the hard disks. The type codes are the PC/AT CMOS values deliberately, because
+  INT 13h AH=08h hands them back in BL. Nothing is probed and nothing can be: a PC floppy
+  interface offers no way to ask a drive what it is, or even whether it is there
+- ~~DOR bit 7~~ — **`~FDC_RST`, software-controlled reset.** Settled, and it matters more
+  than it looks. The latch at `38h` is a **74LS273**, which clears to zero at power-on, so
+  the board comes up with the controller **held in reset** and stays that way until
+  software writes bit 7. A cold machine will read `00` from the status register, not `80h`.
+
+  That latch is also **write only** — reading `38h` returns the digital input register, not
+  what was last written — so every write has to supply all eight bits at once. A driver
+  needs a shadow byte, and `bda.motor_status` is the place for it: it is the byte a PC uses
+  for the same job, and the motor-timeout machinery around it is already wired. `int_irq0`
+  counts `motor_count` down and calls `FDC_stop_motor`, which is a bare `ret` in `stub.asm`
+  waiting to be filled in
+- The P0/P1/P2 drive-select encoding — a single motor bit and three select bits is nothing
+  like a PC DOR
+- Which alias the board is actually jumpered to
+- ~~How the data rate is selected~~ — **`MINI`, latch bit 2.** The schematic settles it.
+  `FDC_CLK` comes from U16, a fixed 8 MHz oscillator with no divider and nothing switching
+  it, which on a 765-family part is 500 kbps MFM. Taken alone that would make the board
+  high-density only. But `MINI` is latch bit 2 wired to the FDC's MINI pin — the
+  eight-inch-versus-mini-floppy input — and those two classes differ by exactly the factor
+  of two between 500 kbps and 250 kbps.
+
+  So the rate control is `MINI`, and **DENSEL is not a rate control at all**. JP6 connects
+  DENSEL to the latch and from there out to the drive's density pin, which is why the
+  board's own notes describe that bit purely in terms of what the drive does with it. Both
+  rates are available and all four drive types are reachable. Worth confirming against the
+  FDC9266 datasheet's description of the MINI pin before the driver depends on it.
+
+  360Kb media in a 1.2Mb drive stays out of reach regardless — that needs 300 kbps, which
+  two-rate hardware does not have. Genuine 360Kb drives are unaffected, and there are some
+  here.
+
+**Four more facts from the schematic that shape the driver:**
+
+- **JP3 defaults to open — the FDC interrupt is not connected at all.** The polled design
+  was already the right call for lack of a 386EX-compatible interrupt target; it is now
+  simply the only option, unless that jumper is changed.
+- **JP4 defaults to RDY tied to ground.** PC drives do not supply a ready signal, so the
+  board fakes one and the controller always believes a drive is ready. The driver cannot
+  use RDY to notice a missing drive, which is another reason drive presence has to come
+  from the SETUP configuration.
+- **JP5 defaults to always reporting TWO SIDES.** Harmless — all four supported types are
+  double-sided.
+- **Drive select does not come from the latch.** The FDC's own `US0`/`US1` outputs, which
+  carry the drive number from the command byte, are decoded by a 74LS139 into four select
+  lines. The latch's P0/P1/P2 bits feed the IBM-PC connector's motor and select pins
+  instead. This is the part of the schematic hardest to read at the resolution available
+  and the one place a driver is most likely to get it wrong, so it wants confirming before
+  anything tries to select drive 1.
+
+The `FDC` monitor command is the first step. It reads the status register at all four
+aliases and the digital input register, and distinguishes a live controller from an empty
+bus the only way that is reliable: an idle 765 reads `80h` and a floating bus reads `FF`.
+If something answers, it issues SENSE INTERRUPT STATUS — a command that moves no media and
+touches no motor — and reports what comes back. It writes nothing to the DOR.
 
 ---
 
@@ -484,17 +687,24 @@ Each rung is independently observable on the serial console, and each one only d
 the rungs below it. Do not skip ahead — a failure at rung 9 with rungs 1–8 unverified is
 very hard to diagnose.
 
-**All ten rungs are climbed except rung 3.** The CHS transfer loop calls the driver one
-sector at a time and so sidesteps the multi-sector path, but `fn42` and `fn43` pass the
-block count straight through and do depend on it — it is the only thing below the DOS boot
-that remains unverified.
+**All ten rungs are climbed.** Rung 3 was the last, and it fell on 2026-09-13:
 
-Rung 3 now has the command the rung actually describes: **`SECCMP <lba> [<sectors>]`**
-reads N sectors in one driver call, then reads the same N one at a time, and compares them
-byte for byte. Both paths go through `IDE_READ_SECTOR`, so what is under test is the
-driver's own multi-sector loop rather than the raw port sequence `SEC2` walks. It finishes
-by calling the driver with a count of zero, which is what defect 12 above was about — if
-that line is the last thing on the console, the guard is not working.
+```
+MON>SECCMP 0 8
+SECCMP: 8 sectors from LBA 0 -- one command and 8 singles agree byte for byte
+SECCMP: zero-count guard ... returned 00 (want 00)
+```
+
+`SECCMP <lba> [<sectors>]` reads N sectors in one driver call, then reads the same N one
+at a time, and compares them byte for byte. Both paths go through `IDE_READ_SECTOR`, so
+what is under test is the driver's own multi-sector loop — the per-sector DRQ wait and the
+buffer advance `read_data` leaves in BX — rather than the raw port sequence `SEC2` walks.
+The second line is defect 12: the driver called with a count of zero, which before the fix
+would have asked the drive for 256 sectors and run the DRQ loop 65536 times.
+
+This is the path `fn42` and `fn43` take. The CHS calls sidestep it by asking for one sector
+at a time, which is why a DOS that boots proved nothing about it, and why it stayed the
+last unverified thing below the boot for so long.
 
 The ladder earned its keep. Rungs 7 and 8 in particular — a hand-written boot sector
 printing through INT 14h, then the same sector printing through INT 10h — were what
@@ -565,6 +775,189 @@ mode fault has no IDT to land in. Write something recognisable into the source f
 
 Once those pass, the real test is DOS: `HIMEM.SYS` in `CONFIG.SYS` exercises 88h and 87h
 together and is the reason 88h was the first item of the phase.
+
+---
+
+## 06b · ROM shadowing — **working**
+
+Confirmed on hardware 2026-09-13. POST prints the shadowed line and MS-DOS 6 boots to a
+prompt from the DRAM copy:
+
+```
+CPU_clk 20.00mhz  EquipFlag 0222h  ConvMem 640Kb  ExtMem 63Mb  SRAM 32Kb
+BIOS running from DRAM, 16-bit at 2 wait states (shadowed)
+```
+
+The BIOS executed from 8-bit ROM at 5 wait states, and every INT 10h character and every
+IDE sector paid for it. CS2 already covers the whole first megabyte of DRAM — 16 bits wide
+at 2 wait states — and the two overlap at `F0000`. While UCS is enabled it is the one that
+answers there, so the ROM cannot be copied over itself: the copy has to run from somewhere
+else while UCS is switched off.
+
+`shadow_rom` in `start.asm` runs immediately after `test_1to8`, which is the first moment
+there is tested DRAM to copy into, and before anything records an `F000`-relative address:
+
+1. Copy the ROM to a scratch segment at `XFER_AD` (`0x20000`), and compare it back.
+2. Far jump into that copy, so execution is no longer inside the ROM.
+3. Clear the enable bit in `UCSMSKL`. `F0000` answers from DRAM from here on.
+4. Copy the scratch back to `F0000`, and compare it back.
+5. Far jump to `F000`, which is now the DRAM copy.
+
+There was an implementation in `unused/startup.asm` from the SBC188 era and it is where
+the structure came from, but it could not be used as it stood: its jump back to `F000` is
+inside an `%if 0`, so POST would have carried on at `CS=0x2000` and `set_the_vectors`
+would have built the entire interrupt table with `mov ax,cs` pointing into scratch memory
+that DOS later overwrites.
+
+**Both checks can fail without consequence**, which is the part that made this safe enough
+to enable by default. A failure at step 1 leaves the ROM exactly as it was. A failure at
+step 4 switches UCS back on, and the far jump at step 5 returns to the real ROM rather
+than to a copy that is not there. The board boots either way — slowly, but it boots. This
+matters more than it looks: the DRAM under `F0000` is the **one part of the first megabyte
+`test_1to8` never reaches**, and shadowing is what writes to it.
+
+Because those fallbacks are silent, POST now prints which one happened:
+
+```
+BIOS running from DRAM, 16-bit at 2 wait states (shadowed)
+BIOS running from EPROM, 8-bit at 5 wait states
+```
+
+That is read from the UCS enable bit, not from a flag anyone set — it is the hardware's
+own answer. Without the line, a board that quietly fell back would look identical to one
+that worked.
+
+Two things to know about the result:
+
+- **`F0000` is writable now.** Writes into the BIOS used to land on ROM and do nothing.
+  Nothing in this BIOS writes there — `_DATA` and `_BSS` are empty by design — but a stray
+  far pointer that used to be harmless is not any more.
+- **`SHADOW_MODE` and `HALF_MEM` are mutually exclusive**, since `HALF_MEM` exists
+  precisely to exclude the DRAM shadowing needs. Setting both is now an assembly-time
+  `%error` rather than a build that copies 64K into nothing and jumps to it.
+
+---
+
+## 06c · The warm-boot flag — **working**
+
+Confirmed on hardware 2026-09-13: a save from SETUP restarts the board and POST reports
+the march skipped.
+
+`reboot_` writes `WARM_BOOT` (`1234h`) to `bda.reset_flag` at `40:72` before restarting,
+and POST skips the memory march when it finds it there.
+
+The saving is worth more than it first looks. `seg_test` walks a single bit through all 32
+bit positions, so every 64K segment costs 32 passes of a `REP STOSD` **and** a
+`REPE SCASD` over 16384 dwords — about 1.05M dword bus cycles a segment, across nine
+segments. On a 16-bit bus at 2 wait states that is seconds, not milliseconds.
+
+POST says which path it took, because the first version of this did not and the difference
+turned out to be hard to judge by eye against a boot that also spends 2.3 seconds in a
+deliberate `delay(23)` waiting for a SETUP keypress:
+
+```
+Memory march skipped -- warm start, flag 1234h was set at 40:72
+Memory march ran -- cold start
+```
+
+The answer is carried in `bda.mfg_test`, the BDA's own initialization-flags byte, which
+nothing else in this BIOS writes. POST sets it on the warm path only, after the test of
+segment 0 has zeroed the area, so a cold start leaves it at zero by simply not passing
+through there.
+
+The thing that needed care is **when** the flag can be read. POST's test of segment 0
+zeroes the whole first 64K and the BDA lives inside it, so the flag has to be read before
+that test and carried across to `test_1to8`, which is much later. It is parked in the
+stack segment — the 32K at `A8000` that `size_SRAM` points SS at, which neither memory
+test reaches (segment 0 covers `00000-0FFFF`, `test_1to8` covers `10000-9FFFF`). SP starts
+at `8000h` and grows down, so a word at offset 4 is 32K clear of anything the stack will
+touch, and `seg_test` has already been over that memory.
+
+Being zeroed by the segment-0 test is also what **clears** the flag, so the start after a
+warm one is cold again with nothing having to reset it explicitly. The magic value is
+defined once in `bda.h` and reaches the assembly through the `bda.inc` that `copt`
+generates from it, so `reboot_` and POST cannot drift apart on it.
+
+Two things worth knowing:
+
+- **A warm start does not zero memory.** `seg_test` clears what it tests, so `10000-9FFFF`
+  keeps its previous contents on this path. Nothing in the BIOS depends on that zeroing,
+  and segment 0 — vectors and BDA — is still tested and cleared every time. But it is the
+  difference to reach for if something ever behaves differently after a SETUP reboot than
+  after a power cycle.
+- **A cold start could take the warm path by accident.** DRAM comes up indeterminate, so
+  there is a 1-in-65536 chance the flag reads as `1234h` on a genuine power-on and the
+  march is skipped. That is the same exposure every PC BIOS has had with this flag, and
+  the cost is a boot that did not test its memory rather than one that misbehaves.
+
+---
+
+## 06d · The bus-monitor watchdog — answered
+
+The Phase 5 item asked whether the watchdog can trip during long DOS I/O. It cannot, and
+the margin is not close.
+
+First, what a trip would actually do, because this is not the usual watchdog story.
+`start.asm` sets BUSMON in `WDTSTATUS` and WDTRDY in `PWRCON`, so the watchdog's job is to
+**supply READY** to a bus cycle that has not finished in time. A trip does not reset the
+board; it terminates the cycle early with whatever happened to be on the bus. The symptom
+would be silent bad data, which is why this could never have been settled by watching the
+machine and waiting for something to go wrong.
+
+The `WDT` monitor command reads the configuration out:
+
+```
+WDT: WDTSTATUS 02 -- bus monitor ON
+     PWRCON    1C -- WDTRDY on, HSREADY on
+     reload 003FFFFF = 4194303 counts   (never written by this BIOS)
+     count  003FFFFF 003FFFFF 003FFFFF 003FFFFF
+     at 20 mhz that is about 209715 usec before READY is forced
+```
+
+The reload value is `003FFFFF` — 2^22-1, the power-on default, since nothing in this BIOS
+ever writes `WDTRLDH`/`WDTRLDL`. At 20 MHz that is **209 ms**. The slowest legitimate
+access on this board is CS0 or CS1 at 7 wait states, which is roughly 9 clocks, or 450 ns.
+The watchdog has about **466,000 times** the headroom it needs.
+
+That conclusion does not depend on knowing the watchdog's exact clock source, which is the
+one thing the command cannot tell you. Even at CLK2 rather than the CPU clock the timeout
+is 105 ms; even at an implausible one count per nanosecond it would still be four
+milliseconds, or nine thousand times the slowest access. Any reading of the datasheet
+gives the same answer.
+
+Two honest notes on that output:
+
+- **The four count samples prove nothing**, and cannot. Reading the counter takes a bus
+  cycle, and a bus cycle is exactly what reloads it in this mode, so `003FFFFF` is the only
+  value the monitor can ever observe. The conclusion rests on the arithmetic, not on the
+  samples.
+- **`PWRCON` reads back `1C` where `start.asm` writes `0C`.** Bit 4 is set by something
+  other than this BIOS. Nothing appears to depend on it and the board has run this way for
+  years, but it is unexplained, and worth a glance by anyone who has the datasheet open.
+
+### What this means for a future Unix
+
+The watchdog needs no driver and cannot be starved: in BUSMON+WDTRDY mode there is no
+interrupt, no reset and nothing to service. Coherent, or anything else, can ignore it.
+
+The risk that does matter for a Unix is **device probing**. A Unix boot walks a list of
+candidate I/O addresses looking for hardware. On this board only CS0 (`0400-04FF`), CS1
+(`01F0-01FF`) and the 386EX internal peripherals claim a cycle at all. If an unclaimed
+cycle runs all the way to the watchdog, every probe of absent hardware costs 209 ms — a
+dozen probes is three seconds, and a driver polling a missing device in a loop is
+indistinguishable from a hang. DOS gets away with this because it probes almost nothing.
+
+**This is not yet known.** The HIMEM lockup is the one piece of evidence and it is
+ambiguous: HIMEM spun reading port `64h`, which nothing decodes, and whether those reads
+returned floating-bus `FF` immediately or took 209 ms each cannot be told apart from the
+console. The `IOTIME` monitor command exists to settle it — time a read of an undecoded
+port (`64`, `300`) against a decoded one (`1F7`, `F834`).
+
+If undecoded cycles do cost 209 ms, the fix is cheap and belongs in the BIOS rather than
+in the OS: shorten `WDTRLDH`/`WDTRLDL`, which this BIOS currently never writes at all.
+There is five orders of magnitude of slack between the slowest real access and the current
+reload, so a much shorter timeout would still be a safe bus-hang backstop while making a
+failed probe cost microseconds instead of a fifth of a second.
 
 ---
 
@@ -710,17 +1103,41 @@ backup snapshots.
 | `0USAGE.TXT` | keep | The BDA fields regrouped by subsystem rather than by address. Derived from bda.h; genuinely useful reference for Phases 1–3. |
 | `COPYING` | keep | GPLv3. |
 
-### Two makefile cleanups worth doing at the same time
+### The makefile cleanup — **done 2026-09-13**
 
-The bottom of the makefile carries a "Leftovers from SBC188" dependency block naming
-eleven files that do not exist in this tree — `sio.c`, `nvram.c`, `debug.c`, `kbd.c`,
-`m8563lib.c`, `vga3lib.c`, `fdc8272.c`, `wd37c65.c`, `dprintf.c`, `font2.c` and `foo.c`.
-They are harmless, but they make the file much harder to read than it needs to be.
+Two of these were real: a file could be edited and the build would not rebuild what
+depended on it, which is the kind of fault that wastes an afternoon and a ROM burn before
+anyone suspects the makefile.
 
-The dependency variables are stale in both directions. `INCLUDES` still lists `zero.inc`,
-and `CINCL` still lists `zero.h` and `sbc188.h`, none of which anything includes any more.
-More usefully, **`serial.inc` appears in no dependency list at all** even though
-14h_sio0.asm includes it — edit that file today and the build will not notice.
+- **`serial.inc` appeared in no dependency list at all**, though 14h_sio0.asm includes it.
+  Added to `INCLUDES`.
+- **`i386ex.h` was missing from `CINCL`**, though main.c includes it. The same fault, on
+  the C side, and not previously noticed. Added.
+- `zero.inc` left `INCLUDES`; `zero.h` and `sbc188.h` left `CINCL`. Nothing includes any
+  of the three.
+- Dependency lines for `foo.c`, `muldiv.asm`, `libc.c`, `microSD.c`, `testide.c` and
+  `test.c` were removed. None of those sources is in this directory.
+
+A third problem turned up while checking the first two, and it was the worst of them:
+**eight modules spelled the include `i386EX.inc` while git tracks the file as
+`i386ex.inc`**, and `INCLUDES` used the uppercase spelling too. That resolves only because
+the filesystem is case-insensitive. On a case-sensitive one — which is what the build host
+looks like from `start.map`, and what any Linux CI would be — eight of the sixteen assembly
+modules would simply have failed to find their include file. All now spell it the way git
+does.
+
+Both variables are now derived from what the tree actually includes, transitive headers
+included, and every name in them exists. Verified with a clean rebuild on 2026-09-13 —
+which is the only way to check this particular class of fix, since the symptom of getting
+it wrong is a build that does too little rather than one that fails.
+
+> The **`0rom128.HEX`** item that used to sit here was overstated. There is no such file in
+> `SBC386/bios`; the only copies in the tree are in `TestROMS/TEST1-2018-02-23/`, which is a
+> 2018 archive and obviously not current. The `all:` target builds `rom064` through
+> `rom512` and is self-consistent. **Decided 2026-09-13: no archive copies.** The build
+> produces `rom064` through `rom512` and that is all it needs to produce; git already keeps
+> the history, and a second set of files with a different naming convention was only ever a
+> way to get that wrong.
 
 ---
 
@@ -728,6 +1145,40 @@ More usefully, **`serial.inc` appears in no dependency list at all** even though
 
 Small things that are known, deliberate, or simply not done yet. None of them block the
 DOS prompt.
+
+### Running DOS on this board
+
+- **HIMEM.SYS needs `/MACHINE:PS2`.** Without it the machine locks up during CONFIG.SYS
+  processing, before any driver message appears.
+
+  HIMEM drives the A20 line, and on an AT-class machine it does that through the 8042
+  keyboard controller. This board has no 8042 -- the keyboard is the serial console fed
+  from IRQ4 -- and the only external I/O windows it decodes are CS0 at `0400-04FF` and CS1
+  at `01F0-01FF`. A read of port `64h` therefore returns floating-bus `FF`, the
+  input-buffer-full bit is set forever, and HIMEM spins in its wait loop. A20 here is the
+  386EX PORT92, which POST enables once at `start.asm` and never touches again.
+
+  `/MACHINE:PS2` selects handler 2, which uses port `92h`. Confirmed 2026-09-13:
+
+  ```
+  HIMEM: DOS XMS Driver, Version 3.09 - 02/23/93
+  Installed A20 handler number 2.
+  64K High Memory Area is available.
+  ```
+
+  This is not a workaround for a BIOS bug and there is nothing to fix in the ROM. No model
+  byte says "AT in every respect except that it has no 8042", so `AH=C0h` reports the
+  truth -- model FCh -- and the switch says the rest. It was worth asking whether a
+  different submodel would steer HIMEM's auto-detection to handler 2 on its own; the answer
+  is to leave it alone. An explicit switch is immune to HIMEM version differences, and
+  reporting a PS/2 model to every other program that reads `C0h` in order to influence one
+  driver is a bad trade. Revisit when real keyboard hardware lands after Phase 5 -- if it
+  brings an 8042, auto-detection starts working by itself.
+
+- **Three `Ctrl-^` restarts the board.** The console stands in for Ctrl-Alt-Del; see
+  Phase 5. The characters are eaten, so a single stray `Ctrl-^` never reaches DOS. The
+  restart sets the warm-boot flag, so it skips the memory march — power-cycle instead if
+  what you want is a full test.
 
 ### Functional gaps
 
@@ -740,16 +1191,28 @@ DOS prompt.
   that emits them natively. Writing the state machine now means writing something built to
   be deleted. The serial console keeps working for everything except in-line editing until
   then.
+
+  Note that this reasoning does **not** extend to a console reset trigger, which was
+  briefly listed as blocked for the same reason and is not — see Phase 5.
 - **INT 10h function 08h cannot report screen contents.** There is no display buffer —
   a deliberate choice, since real memory-mapped video is planned for this board and a
   pretend buffer at `B800:0000` would only have to be torn out again. `08h` returns a
   space in attribute `07h`; `09h`/`0Ah` write to the terminal and restore the cursor
   rather than editing a buffer. Everything DOS leans on is honest.
 - **INT 13h `4Eh`** (set hardware configuration) still returns invalid-command. Normal.
-- **`equip_flag` floppy bits** are still never set. Video bits now are.
-- **Multi-sector transfers are unverified** — but `SECCMP` now exists to verify them,
-  and writing it turned up defect 12. See the ladder note above.
-- **All of Phase 4 is unverified.** It assembles; it has never run. Section 06a.
+- ~~**`equip_flag` floppy bits** are still never set.~~ **Done** — set from the SETUP
+  floppy configuration. Bit 0 for presence, bits 7:6 for the count less one. Until now
+  INT 11h had been telling DOS this machine has no floppy drives, which until now was
+  true.
+- ~~**Multi-sector transfers are unverified.**~~ **Verified on hardware 2026-09-13**
+  with `SECCMP 0 8`, along with the defect 12 guard. See the ladder note above.
+- ~~**All of Phase 4 is unverified.**~~ **Phase 4 is fully verified on hardware**,
+  2026-09-13. `87h` moved the first 512 bytes of the BIOS from `F0000` to the 2Mb mark
+  through protected mode and compared clean -- the item that could have taken the board
+  down. `88h` agrees with the BDA and is consumed successfully by HIMEM.SYS. `C0h` reads
+  back correctly. `86h` measured **99%** of the time it was asked for over a 1.1 second
+  run, which settles the one thing a single call could not: the counter is genuinely at
+  1mhz, not merely moving. Section 06a.
 - **No boot-device byte in NVRAM.** Phase 2 called for one; `set_fixed()` stores geometry
   overrides instead, and `19h_boot.asm` has drive 80h hardwired. Nothing needs it yet,
   but the plan said otherwise and the plan was not followed here.
@@ -763,19 +1226,24 @@ DOS prompt.
 - ~~**IDE wait states are still `3`** in `wtab1`.~~ **Done.** `CS1ADL` now carries 7,
   matching `CS0`. The value had already been proven at runtime from the monitor; it is
   just permanent now.
-- **The `0rom128.HEX` copy rule is still missing** from the makefile. It was removed
-  while `all:` still listed the target, which made every build fail at the last step;
-  the target was dropped from `all:`, so nothing regenerates that file now. Whatever you
-  burn, do not burn `0rom128.HEX` expecting it to be current.
-- ~~**SETUP halts instead of rebooting.**~~ **Done.** `set_top()` now calls `reboot()`
-  in `19h_boot.asm`, which drains the console and jumps to `FFFF:0000` — the reset entry,
-  where `bootstrap` in `boot.asm` sits — so a warm start takes the same path a cold one
-  does. It is not a hardware reset and the peripherals keep their state, but `start.asm`
-  survives re-entry: the expanded I/O unlock opens with a read of `REMAPCFGH` precisely to
-  put that state machine back to a known point, and every port that matters is written
-  from `wtab1`/`btab1` rather than assumed.
-- **The makefile dependency block** still needs the cleanup described above — stale
-  entries, and `serial.inc` in no list at all.
+- ~~**The `0rom128.HEX` copy rule is still missing.**~~ **Not a real problem** — no such
+  file exists in the build directory, and `all:` is self-consistent. See section 08.
+- ~~**SETUP halts instead of rebooting.**~~ **Done, and confirmed working on hardware
+  2026-09-13** — saving from SETUP restarts the board and it comes back up through POST.
+  `set_top()` now calls `reboot()` in `19h_boot.asm`, which drains the console, loads DX
+  with `DEVICE_ID`, and jumps to `FFFF:0000` — the reset entry, where `bootstrap` in
+  `boot.asm` sits — so a warm start takes the same path a cold one does. The DX load is
+  defect 13: without it POST's first test fails and the board halts silently.
+
+  It is not a hardware reset and the peripherals keep their state, but `start.asm`
+  survives re-entry. The expanded I/O unlock is the part that had to be checked, and it
+  is safe for a reason worth writing down: it talks to ports `22h`/`23h`, which are in the
+  fixed AT range and respond whether or not the ESE bit is already set, and it opens with
+  a read that returns the state machine to a known point from wherever it was. Everything
+  else that matters is written from `wtab1`/`btab1` rather than assumed.
+- ~~**The makefile dependency block.**~~ **Done 2026-09-13**, and it turned up two
+  missing dependencies rather than one, plus an include-case mismatch that would have
+  broken the build on any case-sensitive filesystem. See section 08.
 
 ### Files added during this work
 
@@ -796,7 +1264,8 @@ Phase 4 added no files. `15h_misc.asm`, `stub.asm`, `start.asm`, `monitor.asm`,
 ### Monitor commands
 
 `DUMP` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST` `MKBOOT`
-`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IRQFIND` `GO` `INT15` `SECCMP` `EXIT`
+`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IOTIME` `IRQFIND` `GO` `INT13` `INT15`
+`SECCMP` `WDT` `EXIT`
 
 Several were written to answer one question and kept because they answered it — `IRQFIND`
 found the SIO0 interrupt line, `SECRAW` proved a card was short a byte per sector,

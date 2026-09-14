@@ -56,7 +56,7 @@
     56                              <1> %endif
     57                              <1> ;
     58                              <1> ; end SEG_DEF.inc
-    37                                  %include "i386EX.inc"
+    37                                  %include "i386ex.inc"
     38                              <1> ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     39                              <1> ; i386EX.inc  --  register definitions for the Intel 80386EX processor
     40                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -93,380 +93,388 @@
     71                              <1> %define defd
     72                              <1> ;*/
     73                              <1> 
-    74                              <1> ;/* The Address Configuration register
-    75                              <1> ;*/
-    76                              <1> defb REMAPCFGH  equ     0x0023
-    77                              <1> defb REMAPCFGL  equ     0x0022
-    78                              <1> defw REMAPCFG   equ     0x0022
-    79                              <1> 
-    80                              <1> ;/* The A20gate and fast CPU Reset
-    81                              <1> ;*/
-    82                              <1> defb PORT92     equ     0xF092
-    83                              <1> defb PORT92_AT  equ     0x0092
-    84                              <1> 
-    85                              <1> ;
-    86                              <1> ;/* The DMA Controller and Bus Arbiter
-    87                              <1> ;*/
-    88                              <1> defb DMA0TAR    equ     0xF000
-    89                              <1> defb DMA0TAR_AT equ     0x0000
-    90                              <1> defb DMA0BYC    equ     0xF001
-    91                              <1> defb DMA0BYC_AT equ     0x0001
-    92                              <1> defb DMA1TAR    equ     0xF002
-    93                              <1> defb DMA1TAR_AT equ     0x0002
-    94                              <1> defb DMA1BYC    equ     0xF003
-    95                              <1> defb DMA1BYC_AT equ     0x0003
-    96                              <1> defb DMACMD1    equ     0xF008
-    97                              <1> defb DMACMD1_AT equ     0x0008
-    98                              <1> defb DMASTS     equ     0xF008
-    99                              <1> defb DMASTS_AT  equ     0x0008
-   100                              <1> defb DMASRR     equ     0xF009
-   101                              <1> defb DMASRR_AT  equ     0x0009
-   102                              <1> defb DMAMSK     equ     0xF00A
-   103                              <1> defb DMAMSK_AT  equ     0x000A
-   104                              <1> defb DMAMOD1    equ     0xF00B
-   105                              <1> defb DMAMOD1_AT equ     0x000B
-   106                              <1> defb DMACLRBP   equ     0xF00C
-   107                              <1> defb DMACLRBP_AT equ    0x000C
-   108                              <1> defb DMACLR     equ     0xF00D
-   109                              <1> defb DMACLR_AT  equ     0x000D
-   110                              <1> defb DMACLRMSK  equ     0xF00E
-   111                              <1> defb DMACLRMSK_AT equ   0x000E
-   112                              <1> defb DMAGRPMSK  equ     0xF00F
-   113                              <1> defb DMAGRPMSK_AT equ   0x000F
-   114                              <1> defb DMA0REQ0_1 equ     0xF010
-   115                              <1> defb DMA0REQ2_3 equ     0xF011
-   116                              <1> defb DMA1REQ0_1 equ     0xF012
-   117                              <1> defb DMA1REQ2_3 equ     0xF013
-   118                              <1> defb DMABSR     equ     0xF018
-   119                              <1> defb DMACHR     equ     0xF019
-   120                              <1> defb DMAIS      equ     0xF019
-   121                              <1> defb DMACMD2    equ     0xF01A
-   122                              <1> defb DMAMOD2    equ     0xF01B
-   123                              <1> defb DMAIEN     equ     0xF01C
-   124                              <1> defb DMAOVFE    equ     0xF01D
-   125                              <1> defb DMACLRTC   equ     0xF01E
-   126                              <1> ;
-   127                              <1> ;/* The DMA Page Registers
-   128                              <1> ;*/
-   129                              <1> defb DMA1TAR2    equ    0xF083
-   130                              <1> defb DMA1TAR2_AT equ    0x0083
-   131                              <1> defb DMA1TAR3    equ    0xF085
-   132                              <1> defb DMA1TAR3_AT equ    0x0085
-   133                              <1> defb DMA0TAR3    equ    0xF086
-   134                              <1> defb DMA0TAR3_AT equ    0x0086
-   135                              <1> defb DMA0TAR2    equ    0xF087
-   136                              <1> defb DMA0TAR2_AT equ    0x0087
-   137                              <1> ;
-   138                              <1> defb DMA0BYC2   equ     0xF098
-   139                              <1> defb DMA1BYC2   equ     0xF099
-   140                              <1> 
-   141                              <1> ;
-   142                              <1> ;/* The Master Interrupt Controller
-   143                              <1> ;*/
-   144                              <1> defb ICW1M_AT   equ     0x0020
-   145                              <1> defb ICW2M_AT   equ     0x0021
-   146                              <1> defb ICW3M_AT   equ     0x0021
-   147                              <1> defb ICW4M_AT   equ     0x0021
-   148                              <1> defb OCW1M_AT   equ     0x0021
-   149                              <1> defb OCW2M_AT   equ     0x0020
-   150                              <1> defb OCW3M_AT   equ     0x0020
-   151                              <1> 
-   152                              <1> defb ICW1M      equ     0xF020
-   153                              <1> defb ICW2M      equ     0xF021
-   154                              <1> defb ICW3M      equ     0xF021
-   155                              <1> defb ICW4M      equ     0xF021
-   156                              <1> defb OCW1M      equ     0xF021
-   157                              <1> defb OCW2M      equ     0xF020
-   158                              <1> defb OCW3M      equ     0xF020
-   159                              <1> defb IRR_M	equ	0xF020
-   160                              <1> 
-   161                              <1> ;
-   162                              <1> ;/* The Slave Interrupt Controller
-   163                              <1> ;*/
-   164                              <1> defb ICW1S_AT   equ     0x00A0
-   165                              <1> defb ICW2S_AT   equ     0x00A1
-   166                              <1> defb ICW3S_AT   equ     0x00A1
-   167                              <1> defb ICW4S_AT   equ     0x00A1
-   168                              <1> defb OCW1S_AT   equ     0x00A1
-   169                              <1> defb OCW2S_AT   equ     0x00A0
-   170                              <1> defb OCW3S_AT   equ     0x00A0
-   171                              <1> defb IRR_M_AT	equ	0x00A0
-   172                              <1> 
-   173                              <1> defb ICW1S      equ     0xF0A0
-   174                              <1> defb ICW2S      equ     0xF0A1
-   175                              <1> defb ICW3S      equ     0xF0A1
-   176                              <1> defb ICW4S      equ     0xF0A1
-   177                              <1> defb OCW1S      equ     0xF0A1
-   178                              <1> defb OCW2S      equ     0xF0A0
-   179                              <1> defb OCW3S      equ     0xF0A0
+    74                              <1> ;/* The component identifier the 386EX leaves in DX after a hardware reset:
+    75                              <1> ;*  DH is the device (23h, 386EX) and DL the stepping.  POST tests it as the
+    76                              <1> ;*  first thing it does, so anything that restarts the board in software has
+    77                              <1> ;*  to present it too -- see reboot_ in 19h_boot.asm, which learned that the
+    78                              <1> ;*  hard way.
+    79                              <1> ;*/
+    80                              <1> defw    DEVICE_ID equ   0x2309
+    81                              <1> 
+    82                              <1> ;/* The Address Configuration register
+    83                              <1> ;*/
+    84                              <1> defb REMAPCFGH  equ     0x0023
+    85                              <1> defb REMAPCFGL  equ     0x0022
+    86                              <1> defw REMAPCFG   equ     0x0022
+    87                              <1> 
+    88                              <1> ;/* The A20gate and fast CPU Reset
+    89                              <1> ;*/
+    90                              <1> defb PORT92     equ     0xF092
+    91                              <1> defb PORT92_AT  equ     0x0092
+    92                              <1> 
+    93                              <1> ;
+    94                              <1> ;/* The DMA Controller and Bus Arbiter
+    95                              <1> ;*/
+    96                              <1> defb DMA0TAR    equ     0xF000
+    97                              <1> defb DMA0TAR_AT equ     0x0000
+    98                              <1> defb DMA0BYC    equ     0xF001
+    99                              <1> defb DMA0BYC_AT equ     0x0001
+   100                              <1> defb DMA1TAR    equ     0xF002
+   101                              <1> defb DMA1TAR_AT equ     0x0002
+   102                              <1> defb DMA1BYC    equ     0xF003
+   103                              <1> defb DMA1BYC_AT equ     0x0003
+   104                              <1> defb DMACMD1    equ     0xF008
+   105                              <1> defb DMACMD1_AT equ     0x0008
+   106                              <1> defb DMASTS     equ     0xF008
+   107                              <1> defb DMASTS_AT  equ     0x0008
+   108                              <1> defb DMASRR     equ     0xF009
+   109                              <1> defb DMASRR_AT  equ     0x0009
+   110                              <1> defb DMAMSK     equ     0xF00A
+   111                              <1> defb DMAMSK_AT  equ     0x000A
+   112                              <1> defb DMAMOD1    equ     0xF00B
+   113                              <1> defb DMAMOD1_AT equ     0x000B
+   114                              <1> defb DMACLRBP   equ     0xF00C
+   115                              <1> defb DMACLRBP_AT equ    0x000C
+   116                              <1> defb DMACLR     equ     0xF00D
+   117                              <1> defb DMACLR_AT  equ     0x000D
+   118                              <1> defb DMACLRMSK  equ     0xF00E
+   119                              <1> defb DMACLRMSK_AT equ   0x000E
+   120                              <1> defb DMAGRPMSK  equ     0xF00F
+   121                              <1> defb DMAGRPMSK_AT equ   0x000F
+   122                              <1> defb DMA0REQ0_1 equ     0xF010
+   123                              <1> defb DMA0REQ2_3 equ     0xF011
+   124                              <1> defb DMA1REQ0_1 equ     0xF012
+   125                              <1> defb DMA1REQ2_3 equ     0xF013
+   126                              <1> defb DMABSR     equ     0xF018
+   127                              <1> defb DMACHR     equ     0xF019
+   128                              <1> defb DMAIS      equ     0xF019
+   129                              <1> defb DMACMD2    equ     0xF01A
+   130                              <1> defb DMAMOD2    equ     0xF01B
+   131                              <1> defb DMAIEN     equ     0xF01C
+   132                              <1> defb DMAOVFE    equ     0xF01D
+   133                              <1> defb DMACLRTC   equ     0xF01E
+   134                              <1> ;
+   135                              <1> ;/* The DMA Page Registers
+   136                              <1> ;*/
+   137                              <1> defb DMA1TAR2    equ    0xF083
+   138                              <1> defb DMA1TAR2_AT equ    0x0083
+   139                              <1> defb DMA1TAR3    equ    0xF085
+   140                              <1> defb DMA1TAR3_AT equ    0x0085
+   141                              <1> defb DMA0TAR3    equ    0xF086
+   142                              <1> defb DMA0TAR3_AT equ    0x0086
+   143                              <1> defb DMA0TAR2    equ    0xF087
+   144                              <1> defb DMA0TAR2_AT equ    0x0087
+   145                              <1> ;
+   146                              <1> defb DMA0BYC2   equ     0xF098
+   147                              <1> defb DMA1BYC2   equ     0xF099
+   148                              <1> 
+   149                              <1> ;
+   150                              <1> ;/* The Master Interrupt Controller
+   151                              <1> ;*/
+   152                              <1> defb ICW1M_AT   equ     0x0020
+   153                              <1> defb ICW2M_AT   equ     0x0021
+   154                              <1> defb ICW3M_AT   equ     0x0021
+   155                              <1> defb ICW4M_AT   equ     0x0021
+   156                              <1> defb OCW1M_AT   equ     0x0021
+   157                              <1> defb OCW2M_AT   equ     0x0020
+   158                              <1> defb OCW3M_AT   equ     0x0020
+   159                              <1> 
+   160                              <1> defb ICW1M      equ     0xF020
+   161                              <1> defb ICW2M      equ     0xF021
+   162                              <1> defb ICW3M      equ     0xF021
+   163                              <1> defb ICW4M      equ     0xF021
+   164                              <1> defb OCW1M      equ     0xF021
+   165                              <1> defb OCW2M      equ     0xF020
+   166                              <1> defb OCW3M      equ     0xF020
+   167                              <1> defb IRR_M	equ	0xF020
+   168                              <1> 
+   169                              <1> ;
+   170                              <1> ;/* The Slave Interrupt Controller
+   171                              <1> ;*/
+   172                              <1> defb ICW1S_AT   equ     0x00A0
+   173                              <1> defb ICW2S_AT   equ     0x00A1
+   174                              <1> defb ICW3S_AT   equ     0x00A1
+   175                              <1> defb ICW4S_AT   equ     0x00A1
+   176                              <1> defb OCW1S_AT   equ     0x00A1
+   177                              <1> defb OCW2S_AT   equ     0x00A0
+   178                              <1> defb OCW3S_AT   equ     0x00A0
+   179                              <1> defb IRR_M_AT	equ	0x00A0
    180                              <1> 
-   181                              <1> ;
-   182                              <1> ;/* The Timer/Counter Unit
-   183                              <1> ;*/
-   184                              <1> defb    TMR0    equ     0xF040
-   185                              <1> defb    TMR0_AT equ     0x0040
-   186                              <1> defb    TMR1    equ     0xF041
-   187                              <1> defb    TMR1_AT equ     0x0041
-   188                              <1> defb    TMR2    equ     0xF042
-   189                              <1> defb    TMR2_AT equ     0x0042
-   190                              <1> defb    TMRCON  equ     0xF043
-   191                              <1> defb    TMRCON_AT  equ  0x0043
-   192                              <1> 
-   193                              <1> ;
-   194                              <1> ;/* The Chip Select Unit
-   195                              <1> ;*/
-   196                              <1> defw    CS0ADL  equ     0xF400
-   197                              <1> defw    CS0ADH  equ     0xF402
-   198                              <1> defw    CS0MSKL equ     0xF404
-   199                              <1> defw    CS0MSKH equ     0xF406
-   200                              <1> defw    CS1ADL  equ     0xF408
-   201                              <1> defw    CS1ADH  equ     0xF40A
-   202                              <1> defw    CS1MSKL equ     0xF40C
-   203                              <1> defw    CS1MSKH equ     0xF40E
-   204                              <1> defw    CS2ADL  equ     0xF410
-   205                              <1> defw    CS2ADH  equ     0xF412
-   206                              <1> defw    CS2MSKL equ     0xF414
-   207                              <1> defw    CS2MSKH equ     0xF416
-   208                              <1> defw    CS3ADL  equ     0xF418
-   209                              <1> defw    CS3ADH  equ     0xF41A
-   210                              <1> defw    CS3MSKL equ     0xF41C
-   211                              <1> defw    CS3MSKH equ     0xF41E
-   212                              <1> defw    CS4ADL  equ     0xF420
-   213                              <1> defw    CS4ADH  equ     0xF422
-   214                              <1> defw    CS4MSKL equ     0xF424
-   215                              <1> defw    CS4MSKH equ     0xF426
-   216                              <1> defw    CS5ADL  equ     0xF428
-   217                              <1> defw    CS5ADH  equ     0xF42A
-   218                              <1> defw    CS5MSKL equ     0xF42C
-   219                              <1> defw    CS5MSKH equ     0xF42E
-   220                              <1> defw    CS6ADL  equ     0xF430
-   221                              <1> defw    CS6ADH  equ     0xF432
-   222                              <1> defw    CS6MSKL equ     0xF434
-   223                              <1> defw    CS6MSKH equ     0xF436
-   224                              <1> defw    UCSADL  equ     0xF438
-   225                              <1> defw    UCSADH  equ     0xF43A
-   226                              <1> defw    UCSMSKL equ     0xF43C
-   227                              <1> defw    UCSMSKH equ     0xF43E
-   228                              <1> 
-   229                              <1> ;
-   230                              <1> ;/* The Synchronous Serial I/O Unit
-   231                              <1> ;*/
-   232                              <1> defw    SSIOTBUF equ    0xF480
-   233                              <1> defw    SSIORBUF equ    0xF482
-   234                              <1> defw    SSIOBAUD equ    0xF484
-   235                              <1> defw    SSIOCON1 equ    0xF486
-   236                              <1> defw    SSIOCON2 equ    0xF488
-   237                              <1> defw    SSIOCTR  equ    0xF48A
-   238                              <1> 
-   239                              <1> ;
-   240                              <1> ;/* The Refresh Control Unit
-   241                              <1> ;*/
-   242                              <1> defw    RFSBAD  equ     0xF4A0
-   243                              <1> defw    RFSCIR  equ     0xF4A2
-   244                              <1> defw    RFSCON  equ     0xF4A4
-   245                              <1> defw    RFSADD  equ     0xF4A6
+   181                              <1> defb ICW1S      equ     0xF0A0
+   182                              <1> defb ICW2S      equ     0xF0A1
+   183                              <1> defb ICW3S      equ     0xF0A1
+   184                              <1> defb ICW4S      equ     0xF0A1
+   185                              <1> defb OCW1S      equ     0xF0A1
+   186                              <1> defb OCW2S      equ     0xF0A0
+   187                              <1> defb OCW3S      equ     0xF0A0
+   188                              <1> 
+   189                              <1> ;
+   190                              <1> ;/* The Timer/Counter Unit
+   191                              <1> ;*/
+   192                              <1> defb    TMR0    equ     0xF040
+   193                              <1> defb    TMR0_AT equ     0x0040
+   194                              <1> defb    TMR1    equ     0xF041
+   195                              <1> defb    TMR1_AT equ     0x0041
+   196                              <1> defb    TMR2    equ     0xF042
+   197                              <1> defb    TMR2_AT equ     0x0042
+   198                              <1> defb    TMRCON  equ     0xF043
+   199                              <1> defb    TMRCON_AT  equ  0x0043
+   200                              <1> 
+   201                              <1> ;
+   202                              <1> ;/* The Chip Select Unit
+   203                              <1> ;*/
+   204                              <1> defw    CS0ADL  equ     0xF400
+   205                              <1> defw    CS0ADH  equ     0xF402
+   206                              <1> defw    CS0MSKL equ     0xF404
+   207                              <1> defw    CS0MSKH equ     0xF406
+   208                              <1> defw    CS1ADL  equ     0xF408
+   209                              <1> defw    CS1ADH  equ     0xF40A
+   210                              <1> defw    CS1MSKL equ     0xF40C
+   211                              <1> defw    CS1MSKH equ     0xF40E
+   212                              <1> defw    CS2ADL  equ     0xF410
+   213                              <1> defw    CS2ADH  equ     0xF412
+   214                              <1> defw    CS2MSKL equ     0xF414
+   215                              <1> defw    CS2MSKH equ     0xF416
+   216                              <1> defw    CS3ADL  equ     0xF418
+   217                              <1> defw    CS3ADH  equ     0xF41A
+   218                              <1> defw    CS3MSKL equ     0xF41C
+   219                              <1> defw    CS3MSKH equ     0xF41E
+   220                              <1> defw    CS4ADL  equ     0xF420
+   221                              <1> defw    CS4ADH  equ     0xF422
+   222                              <1> defw    CS4MSKL equ     0xF424
+   223                              <1> defw    CS4MSKH equ     0xF426
+   224                              <1> defw    CS5ADL  equ     0xF428
+   225                              <1> defw    CS5ADH  equ     0xF42A
+   226                              <1> defw    CS5MSKL equ     0xF42C
+   227                              <1> defw    CS5MSKH equ     0xF42E
+   228                              <1> defw    CS6ADL  equ     0xF430
+   229                              <1> defw    CS6ADH  equ     0xF432
+   230                              <1> defw    CS6MSKL equ     0xF434
+   231                              <1> defw    CS6MSKH equ     0xF436
+   232                              <1> defw    UCSADL  equ     0xF438
+   233                              <1> defw    UCSADH  equ     0xF43A
+   234                              <1> defw    UCSMSKL equ     0xF43C
+   235                              <1> defw    UCSMSKH equ     0xF43E
+   236                              <1> 
+   237                              <1> ;
+   238                              <1> ;/* The Synchronous Serial I/O Unit
+   239                              <1> ;*/
+   240                              <1> defw    SSIOTBUF equ    0xF480
+   241                              <1> defw    SSIORBUF equ    0xF482
+   242                              <1> defw    SSIOBAUD equ    0xF484
+   243                              <1> defw    SSIOCON1 equ    0xF486
+   244                              <1> defw    SSIOCON2 equ    0xF488
+   245                              <1> defw    SSIOCTR  equ    0xF48A
    246                              <1> 
    247                              <1> ;
-   248                              <1> ;/* The Watchdog Timer Unit
+   248                              <1> ;/* The Refresh Control Unit
    249                              <1> ;*/
-   250                              <1> defw    WDTRLDH equ     0xF4C0
-   251                              <1> defw    WDTRLDL equ     0xF4C2
-   252                              <1> defw    WDTCNTH equ     0xF4C4
-   253                              <1> defw    WDTCNTL equ     0xF4C6
-   254                              <1> defw    WDTCLR  equ     0xF4C8
-   255                              <1> defb    WDTSTATUS  equ  0xF4CA
-   256                              <1> 
-   257                              <1> ;
-   258                              <1> ;/* Clock Generation and Power Management
-   259                              <1> ;*/
-   260                              <1> defb    PWRCON  equ     0xF800
-   261                              <1> defw    CLKPRS  equ     0xF804
-   262                              <1> 
-   263                              <1> ;
-   264                              <1> ;/* Device Configuration Registers
-   265                              <1> ;*/
-   266                              <1> defb    P1CFG   equ     0xF820
-   267                              <1> defb    P2CFG   equ     0xF822
-   268                              <1> defb    P3CFG   equ     0xF824
-   269                              <1> defb    PINCFG  equ     0xF826
-   270                              <1> defb    DMACFG  equ     0xF830
-   271                              <1> defb    INTCFG  equ     0xF832
-   272                              <1> defb    TMRCFG  equ     0xF834
-   273                              <1> defb    SIOCFG  equ     0xF836
-   274                              <1> 
-   275                              <1> ;
-   276                              <1> ;/* Parallel I/O Ports
-   277                              <1> ;*/
-   278                              <1> defb    P1PIN   equ     0xF860
-   279                              <1> defb    P1LTC   equ     0xF862
-   280                              <1> defb    P1DIR   equ     0xF864
-   281                              <1> defb    P2PIN   equ     0xF868
-   282                              <1> defb    P2LTC   equ     0xF86A
-   283                              <1> defb    P2DIR   equ     0xF86C
-   284                              <1> defb    P3PIN   equ     0xF870
-   285                              <1> defb    P3LTC   equ     0xF872
-   286                              <1> defb    P3DIR   equ     0xF874
-   287                              <1> 
-   288                              <1> 
-   289                              <1> ; bits.inc
-   290                              <1> ;
-   291                              <1> ; assembly language bit definitions
-   292                              <1> ;
-   293                              <1> defb    BIT0    equ     0x01
-   294                              <1> defb    BIT1    equ     0x02
-   295                              <1> defb    BIT2    equ     0x04
-   296                              <1> defb    BIT3    equ     0x08
-   297                              <1> defb    BIT4    equ     0x10
-   298                              <1> defb    BIT5    equ     0x20
-   299                              <1> defb    BIT6    equ     0x40
-   300                              <1> defb    BIT7    equ     0x80
-   301                              <1> 
-   302                              <1> defw    BIT8    equ     0x0100
-   303                              <1> defw    BIT9    equ     0x0200
-   304                              <1> defw    BIT10   equ     0x0400
-   305                              <1> defw    BIT11   equ     0x0800
-   306                              <1> defw    BIT12   equ     0x1000
-   307                              <1> defw    BIT13   equ     0x2000
-   308                              <1> defw    BIT14   equ     0x4000
-   309                              <1> defw    BIT15   equ     0x8000
-   310                              <1> 
-   311                              <1> defd    BIT16   equ     0x00010000
-   312                              <1> defd    BIT31   equ     0x80000000
-   313                              <1> 
-   314                              <1> defb    ZBIT0    equ     0
-   315                              <1> defb    ZBIT1    equ     0
-   316                              <1> defb    ZBIT2    equ     0
-   317                              <1> defb    ZBIT3    equ     0
-   318                              <1> defb    ZBIT4    equ     0
-   319                              <1> defb    ZBIT5    equ     0
-   320                              <1> defb    ZBIT6    equ     0
-   321                              <1> defb    ZBIT7    equ     0
-   322                              <1> 
-   323                              <1> defw    ZBIT8    equ     0
-   324                              <1> defw    ZBIT9    equ     0
-   325                              <1> defw    ZBIT10   equ     0
-   326                              <1> defw    ZBIT11   equ     0
-   327                              <1> defw    ZBIT12   equ     0
-   328                              <1> defw    ZBIT13   equ     0
-   329                              <1> defw    ZBIT14   equ     0
-   330                              <1> defw    ZBIT15   equ     0
-   331                              <1> 
-   332                              <1> 
-   333                              <1> ;
-   334                              <1> ;/* Asynchronout Serial I/O channel 0  (COM1)
-   335                              <1> ;*/
-   336                              <1> defb    RBR0_F4 equ     0xF4F8
-   337                              <1> defb    TBR0_F4 equ     0xF4F8
-   338                              <1> defb    DLL0_F4 equ     0xF4F8
-   339                              <1> defb    DLH0_F4 equ     0xF4F9
-   340                              <1> defb    IER0_F4 equ     0xF4F9
-   341                              <1> defb    IIR0_F4 equ     0xF4FA
-   342                              <1> defb    LCR0_F4 equ     0xF4FB
-   343                              <1> defb    MCR0_F4 equ     0xF4FC
-   344                              <1> defb    LSR0_F4 equ     0xF4FD
-   345                              <1> defb    MSR0_F4 equ     0xF4FE
-   346                              <1> defb    SCR0_F4 equ     0xF4FF
-   347                              <1> 
-   348                              <1> %define MFPIC 0
-   349                              <1> %if MFPIC
-   350                              <1> defb    RBR0    equ     0x0448
-   351                              <1> defb    TBR0    equ     0x0448
-   352                              <1> defb    DLL0    equ     0x0448
-   353                              <1> defb    DLH0    equ     0x0449
-   354                              <1> defb    IER0    equ     0x0449
-   355                              <1> defb    IIR0    equ     0x044A
-   356                              <1> defb    LCR0    equ     0x044B
-   357                              <1> defb    MCR0    equ     0x044C
-   358                              <1> defb    LSR0    equ     0x044D
-   359                              <1> defb    MSR0    equ     0x044E
-   360                              <1> defb    SCR0    equ     0x044F
-   361                              <1> %else
-   362                              <1> defb    RBR0    equ     0x03F8
-   363                              <1> defb    TBR0    equ     0x03F8
-   364                              <1> defb    DLL0    equ     0x03F8
-   365                              <1> defb    DLH0    equ     0x03F9
-   366                              <1> defb    IER0    equ     0x03F9
-   367                              <1> defb    IIR0    equ     0x03FA
-   368                              <1> defb    LCR0    equ     0x03FB
-   369                              <1> defb    MCR0    equ     0x03FC
-   370                              <1> defb    LSR0    equ     0x03FD
-   371                              <1> defb    MSR0    equ     0x03FE
-   372                              <1> defb    SCR0    equ     0x03FF
-   373                              <1> %endif
-   374                              <1> 
-   375                              <1> ;
-   376                              <1> ;/* Asynchronout Serial I/O channel 1  (COM2)
-   377                              <1> ;*/
-   378                              <1> defb    RBR1_F8 equ     0xF8F8
-   379                              <1> defb    TBR1_F8 equ     0xF8F8
-   380                              <1> defb    DLL1_F8 equ     0xF8F8
-   381                              <1> defb    DLH1_F8 equ     0xF8F9
-   382                              <1> defb    IER1_F8 equ     0xF8F9
-   383                              <1> defb    IIR1_F8 equ     0xF8FA
-   384                              <1> defb    LCR1_F8 equ     0xF8FB
-   385                              <1> defb    MCR1_F8 equ     0xF8FC
-   386                              <1> defb    LSR1_F8 equ     0xF8FD
-   387                              <1> defb    MSR1_F8 equ     0xF8FE
-   388                              <1> defb    SCR1_F8 equ     0xF8FF
-   389                              <1> 
-   390                              <1> defb    RBR1    equ     0x02F8
-   391                              <1> defb    TBR1    equ     0x02F8
-   392                              <1> defb    DLL1    equ     0x02F8
-   393                              <1> defb    DLH1    equ     0x02F9
-   394                              <1> defb    IER1    equ     0x02F9
-   395                              <1> defb    IIR1    equ     0x02FA
-   396                              <1> defb    LCR1    equ     0x02FB
-   397                              <1> defb    MCR1    equ     0x02FC
-   398                              <1> defb    LSR1    equ     0x02FD
-   399                              <1> defb    MSR1    equ     0x02FE
-   400                              <1> defb    SCR1    equ     0x02FF
-   401                              <1> 
-   402                              <1> ;/* LSRx bits
-   403                              <1> ;*/
-   404                              <1> defb    LSR_TE  equ     BIT6
-   405                              <1> defb    LSR_TBE equ     BIT5
-   406                              <1> defb    LSR_BI  equ     BIT4
-   407                              <1> defb    LSR_FE  equ     BIT3
-   408                              <1> defb    LSR_PE  equ     BIT2
-   409                              <1> defb    LSR_OE  equ     BIT1
-   410                              <1> defb    LSR_RBF equ     BIT0
-   411                              <1> 
-   412                              <1> ;/* MSRx bits
-   413                              <1> ;*/
-   414                              <1> defb	MSR_DCD	equ	BIT7
-   415                              <1> defb	MSR_RI 	equ	BIT6
-   416                              <1> defb	MSR_DSR	equ	BIT5
-   417                              <1> defb	MSR_CTS	equ	BIT4
-   418                              <1> defb	MSR_deltaDCD	equ	BIT3
-   419                              <1> defb	MSR_deltaRI	equ	BIT2
-   420                              <1> defb	MSR_deltaDSR	equ	BIT1
-   421                              <1> defb	MSR_deltaCTS	equ	BIT0
-   422                              <1> 
-   423                              <1> ;/* Bits in CR0
-   424                              <1> ;*/
-   425                              <1> defb    CR0_PE  equ     BIT0
-   426                              <1> defb    CR0_MP  equ     BIT1
-   427                              <1> defb    CR0_EM  equ     BIT2
-   428                              <1> defb    CR0_TS  equ     BIT3
-   429                              <1> defd    CR0_WP  equ     BIT16
-   430                              <1> defd    CR0_PG  equ     BIT31
-   431                              <1> 
-   432                              <1> ;/* Some ASCII character codes
-   433                              <1> ;*/
-   434                              <1> defb    ASCII_NUL       equ     0x00
-   435                              <1> defb    ASCII_BS        equ     0x08
-   436                              <1> defb    ASCII_HT        equ     0x09
-   437                              <1> defb    ASCII_LF        equ     0x0A
-   438                              <1> defb    ASCII_NL        equ     0x0A
-   439                              <1> defb    ASCII_FF        equ     0x0C
-   440                              <1> defb    ASCII_CR        equ     0x0D
-   441                              <1> defb	ASCII_ESC	equ	0x1B
-   442                              <1> defb    ASCII_SP        equ     0x20
-   443                              <1> defb    ASCII_DEL       equ     0x7F
-   444                              <1> defb	ASCII_RUB	equ	0xFF
-   445                              <1> 
-   446                              <1> 
-   447                              <1> ;/* End of i386EX.inc */
+   250                              <1> defw    RFSBAD  equ     0xF4A0
+   251                              <1> defw    RFSCIR  equ     0xF4A2
+   252                              <1> defw    RFSCON  equ     0xF4A4
+   253                              <1> defw    RFSADD  equ     0xF4A6
+   254                              <1> 
+   255                              <1> ;
+   256                              <1> ;/* The Watchdog Timer Unit
+   257                              <1> ;*/
+   258                              <1> defw    WDTRLDH equ     0xF4C0
+   259                              <1> defw    WDTRLDL equ     0xF4C2
+   260                              <1> defw    WDTCNTH equ     0xF4C4
+   261                              <1> defw    WDTCNTL equ     0xF4C6
+   262                              <1> defw    WDTCLR  equ     0xF4C8
+   263                              <1> defb    WDTSTATUS  equ  0xF4CA
+   264                              <1> 
+   265                              <1> ;
+   266                              <1> ;/* Clock Generation and Power Management
+   267                              <1> ;*/
+   268                              <1> defb    PWRCON  equ     0xF800
+   269                              <1> defw    CLKPRS  equ     0xF804
+   270                              <1> 
+   271                              <1> ;
+   272                              <1> ;/* Device Configuration Registers
+   273                              <1> ;*/
+   274                              <1> defb    P1CFG   equ     0xF820
+   275                              <1> defb    P2CFG   equ     0xF822
+   276                              <1> defb    P3CFG   equ     0xF824
+   277                              <1> defb    PINCFG  equ     0xF826
+   278                              <1> defb    DMACFG  equ     0xF830
+   279                              <1> defb    INTCFG  equ     0xF832
+   280                              <1> defb    TMRCFG  equ     0xF834
+   281                              <1> defb    SIOCFG  equ     0xF836
+   282                              <1> 
+   283                              <1> ;
+   284                              <1> ;/* Parallel I/O Ports
+   285                              <1> ;*/
+   286                              <1> defb    P1PIN   equ     0xF860
+   287                              <1> defb    P1LTC   equ     0xF862
+   288                              <1> defb    P1DIR   equ     0xF864
+   289                              <1> defb    P2PIN   equ     0xF868
+   290                              <1> defb    P2LTC   equ     0xF86A
+   291                              <1> defb    P2DIR   equ     0xF86C
+   292                              <1> defb    P3PIN   equ     0xF870
+   293                              <1> defb    P3LTC   equ     0xF872
+   294                              <1> defb    P3DIR   equ     0xF874
+   295                              <1> 
+   296                              <1> 
+   297                              <1> ; bits.inc
+   298                              <1> ;
+   299                              <1> ; assembly language bit definitions
+   300                              <1> ;
+   301                              <1> defb    BIT0    equ     0x01
+   302                              <1> defb    BIT1    equ     0x02
+   303                              <1> defb    BIT2    equ     0x04
+   304                              <1> defb    BIT3    equ     0x08
+   305                              <1> defb    BIT4    equ     0x10
+   306                              <1> defb    BIT5    equ     0x20
+   307                              <1> defb    BIT6    equ     0x40
+   308                              <1> defb    BIT7    equ     0x80
+   309                              <1> 
+   310                              <1> defw    BIT8    equ     0x0100
+   311                              <1> defw    BIT9    equ     0x0200
+   312                              <1> defw    BIT10   equ     0x0400
+   313                              <1> defw    BIT11   equ     0x0800
+   314                              <1> defw    BIT12   equ     0x1000
+   315                              <1> defw    BIT13   equ     0x2000
+   316                              <1> defw    BIT14   equ     0x4000
+   317                              <1> defw    BIT15   equ     0x8000
+   318                              <1> 
+   319                              <1> defd    BIT16   equ     0x00010000
+   320                              <1> defd    BIT31   equ     0x80000000
+   321                              <1> 
+   322                              <1> defb    ZBIT0    equ     0
+   323                              <1> defb    ZBIT1    equ     0
+   324                              <1> defb    ZBIT2    equ     0
+   325                              <1> defb    ZBIT3    equ     0
+   326                              <1> defb    ZBIT4    equ     0
+   327                              <1> defb    ZBIT5    equ     0
+   328                              <1> defb    ZBIT6    equ     0
+   329                              <1> defb    ZBIT7    equ     0
+   330                              <1> 
+   331                              <1> defw    ZBIT8    equ     0
+   332                              <1> defw    ZBIT9    equ     0
+   333                              <1> defw    ZBIT10   equ     0
+   334                              <1> defw    ZBIT11   equ     0
+   335                              <1> defw    ZBIT12   equ     0
+   336                              <1> defw    ZBIT13   equ     0
+   337                              <1> defw    ZBIT14   equ     0
+   338                              <1> defw    ZBIT15   equ     0
+   339                              <1> 
+   340                              <1> 
+   341                              <1> ;
+   342                              <1> ;/* Asynchronout Serial I/O channel 0  (COM1)
+   343                              <1> ;*/
+   344                              <1> defb    RBR0_F4 equ     0xF4F8
+   345                              <1> defb    TBR0_F4 equ     0xF4F8
+   346                              <1> defb    DLL0_F4 equ     0xF4F8
+   347                              <1> defb    DLH0_F4 equ     0xF4F9
+   348                              <1> defb    IER0_F4 equ     0xF4F9
+   349                              <1> defb    IIR0_F4 equ     0xF4FA
+   350                              <1> defb    LCR0_F4 equ     0xF4FB
+   351                              <1> defb    MCR0_F4 equ     0xF4FC
+   352                              <1> defb    LSR0_F4 equ     0xF4FD
+   353                              <1> defb    MSR0_F4 equ     0xF4FE
+   354                              <1> defb    SCR0_F4 equ     0xF4FF
+   355                              <1> 
+   356                              <1> %define MFPIC 0
+   357                              <1> %if MFPIC
+   358                              <1> defb    RBR0    equ     0x0448
+   359                              <1> defb    TBR0    equ     0x0448
+   360                              <1> defb    DLL0    equ     0x0448
+   361                              <1> defb    DLH0    equ     0x0449
+   362                              <1> defb    IER0    equ     0x0449
+   363                              <1> defb    IIR0    equ     0x044A
+   364                              <1> defb    LCR0    equ     0x044B
+   365                              <1> defb    MCR0    equ     0x044C
+   366                              <1> defb    LSR0    equ     0x044D
+   367                              <1> defb    MSR0    equ     0x044E
+   368                              <1> defb    SCR0    equ     0x044F
+   369                              <1> %else
+   370                              <1> defb    RBR0    equ     0x03F8
+   371                              <1> defb    TBR0    equ     0x03F8
+   372                              <1> defb    DLL0    equ     0x03F8
+   373                              <1> defb    DLH0    equ     0x03F9
+   374                              <1> defb    IER0    equ     0x03F9
+   375                              <1> defb    IIR0    equ     0x03FA
+   376                              <1> defb    LCR0    equ     0x03FB
+   377                              <1> defb    MCR0    equ     0x03FC
+   378                              <1> defb    LSR0    equ     0x03FD
+   379                              <1> defb    MSR0    equ     0x03FE
+   380                              <1> defb    SCR0    equ     0x03FF
+   381                              <1> %endif
+   382                              <1> 
+   383                              <1> ;
+   384                              <1> ;/* Asynchronout Serial I/O channel 1  (COM2)
+   385                              <1> ;*/
+   386                              <1> defb    RBR1_F8 equ     0xF8F8
+   387                              <1> defb    TBR1_F8 equ     0xF8F8
+   388                              <1> defb    DLL1_F8 equ     0xF8F8
+   389                              <1> defb    DLH1_F8 equ     0xF8F9
+   390                              <1> defb    IER1_F8 equ     0xF8F9
+   391                              <1> defb    IIR1_F8 equ     0xF8FA
+   392                              <1> defb    LCR1_F8 equ     0xF8FB
+   393                              <1> defb    MCR1_F8 equ     0xF8FC
+   394                              <1> defb    LSR1_F8 equ     0xF8FD
+   395                              <1> defb    MSR1_F8 equ     0xF8FE
+   396                              <1> defb    SCR1_F8 equ     0xF8FF
+   397                              <1> 
+   398                              <1> defb    RBR1    equ     0x02F8
+   399                              <1> defb    TBR1    equ     0x02F8
+   400                              <1> defb    DLL1    equ     0x02F8
+   401                              <1> defb    DLH1    equ     0x02F9
+   402                              <1> defb    IER1    equ     0x02F9
+   403                              <1> defb    IIR1    equ     0x02FA
+   404                              <1> defb    LCR1    equ     0x02FB
+   405                              <1> defb    MCR1    equ     0x02FC
+   406                              <1> defb    LSR1    equ     0x02FD
+   407                              <1> defb    MSR1    equ     0x02FE
+   408                              <1> defb    SCR1    equ     0x02FF
+   409                              <1> 
+   410                              <1> ;/* LSRx bits
+   411                              <1> ;*/
+   412                              <1> defb    LSR_TE  equ     BIT6
+   413                              <1> defb    LSR_TBE equ     BIT5
+   414                              <1> defb    LSR_BI  equ     BIT4
+   415                              <1> defb    LSR_FE  equ     BIT3
+   416                              <1> defb    LSR_PE  equ     BIT2
+   417                              <1> defb    LSR_OE  equ     BIT1
+   418                              <1> defb    LSR_RBF equ     BIT0
+   419                              <1> 
+   420                              <1> ;/* MSRx bits
+   421                              <1> ;*/
+   422                              <1> defb	MSR_DCD	equ	BIT7
+   423                              <1> defb	MSR_RI 	equ	BIT6
+   424                              <1> defb	MSR_DSR	equ	BIT5
+   425                              <1> defb	MSR_CTS	equ	BIT4
+   426                              <1> defb	MSR_deltaDCD	equ	BIT3
+   427                              <1> defb	MSR_deltaRI	equ	BIT2
+   428                              <1> defb	MSR_deltaDSR	equ	BIT1
+   429                              <1> defb	MSR_deltaCTS	equ	BIT0
+   430                              <1> 
+   431                              <1> ;/* Bits in CR0
+   432                              <1> ;*/
+   433                              <1> defb    CR0_PE  equ     BIT0
+   434                              <1> defb    CR0_MP  equ     BIT1
+   435                              <1> defb    CR0_EM  equ     BIT2
+   436                              <1> defb    CR0_TS  equ     BIT3
+   437                              <1> defd    CR0_WP  equ     BIT16
+   438                              <1> defd    CR0_PG  equ     BIT31
+   439                              <1> 
+   440                              <1> ;/* Some ASCII character codes
+   441                              <1> ;*/
+   442                              <1> defb    ASCII_NUL       equ     0x00
+   443                              <1> defb    ASCII_BS        equ     0x08
+   444                              <1> defb    ASCII_HT        equ     0x09
+   445                              <1> defb    ASCII_LF        equ     0x0A
+   446                              <1> defb    ASCII_NL        equ     0x0A
+   447                              <1> defb    ASCII_FF        equ     0x0C
+   448                              <1> defb    ASCII_CR        equ     0x0D
+   449                              <1> defb	ASCII_ESC	equ	0x1B
+   450                              <1> defb    ASCII_SP        equ     0x20
+   451                              <1> defb    ASCII_DEL       equ     0x7F
+   452                              <1> defb	ASCII_RUB	equ	0xFF
+   453                              <1> 
+   454                              <1> 
+   455                              <1> ;/* End of i386EX.inc */
     38                                  %include "macro.inc"
     39                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     40                              <1> ;
@@ -703,128 +711,139 @@
     48 00000008 ????????????????    <1> parallel_dev	resw	4	; printer port device codes */
     49 00000010 ????                <1> equip_flag	resw	1		; int 12h equipment flags */
     50 00000012 ??                  <1> mfg_test	resb	1		; initialization flags */
-    51 00000013 ????                <1> memory_size	resw	1	; base memory size in Kilowords (1224) */
-    52 00000015 ??                  <1> mfg_err_flag	resb	1
-    53 00000016 ??                  <1> mfg_err_flag2	resb	1
-    54                              <1> ; */
-    55                              <1> ; first Keyboard data area */
-    56 00000017 ??                  <1> kbd_flag	resb	1	; shift status &c. */
-    57 00000018 ??                  <1> kbd_flag1	resb	1	;  mrre  */
-    58 00000019 ??                  <1> alt_input	resb	1	; save alternate kbd entry code */
-    59 0000001A ????                <1> buffer_head	resw	1
-    60 0000001C ????                <1> buffer_tail	resw	1
-    61                              <1> ; */
-    62 0000001E <res 20h>           <1> kbd_buffer	resw	16	; buffer empty when  head==tail**/
-    63                              <1> ; */
-    64                              <1> ; Diskette data area */
-    65 0000003E ??                  <1> seek_status	resb	1	; drive recalibration status */
-    66                              <1> ; bits 3..0 drive must recalibrate before next seek */
-    67 0000003F ??                  <1> motor_status	resb	1	; bits 3..0 motor running */
-    68                              <1> ; bit 7 current op is write */
-    69 00000040 ??                  <1> motor_count	resb	1	; timeout counter for motor turn-off */
-    70 00000041 ??                  <1> fd_status	resb	1	; return code status byte */
-    71 00000042 ??????????????      <1> fd_ctrl_stat	resb	7	; controller return bytes */
-    72                              <1> ; */
-    73                              <1> ; Video Display data area -- also used for video emulation */
-    74 00000049 ??                  <1> vid_mode	resb	1	; current display mode */
-    75 0000004A ????                <1> vid_columns	resw	1	; no. of columns on the screen */
-    76 0000004C ????                <1> vid_buf_len	resw	1	; length of video buffer in bytes*//
-    77 0000004E ????                <1> vid_start	resw	1	; start address of screen regeneration (in vid buf)*//
-    78 00000050 <res 10h>           <1> vid_cursor	resw	8	; cursor postition on up to 8 screens */
-    79 00000060 ????                <1> vid_cursor_mode	resw	1
-    80 00000062 ??                  <1> vid_active_page	resb	1
-    81 00000063 ????                <1> vid_addr_chip	resw	1	; I/O address for the video chip (6845,EGA,VGA)*//
-    82 00000065 ??                  <1> vid_crt_mode	resb	1	; current setting of the 3x8 register ???? */
-    83 00000066 ??                  <1> vid_palette	resb	1	; current color setting / palette **/
-    84                              <1> ; */
-    85                              <1> ; POST and ROM data */
-    86 00000067 ????????            <1> io_rom_addr	resd	1	; far word to ROM initialization routine */
-    87                              <1> %define io_rom_addr_low io_rom_addr
-    88                              <1> %define io_rom_addr_seg (io_rom_addr+2)
-    89 0000006B ??                  <1> interrupt_flag	resb	1	; indicates an interrupt occurred */
-    90                              <1> ; */
-    91                              <1> ; Timer data area  18.206602 hz  = ~54.925 ms  */
-    92 0000006C ????                <1> timer_count_low	resw	1	; low word of timer count */
-    93 0000006E ????                <1> timer_count_high	resw	1
-    94                              <1> %define timer_count timer_count_low
-    95                              <1> ; use timer_count as the double word timer counter */
-    96 00000070 ??                  <1> timer_overflow	resb	1	; timer has rolled over since last read */
-    97                              <1> ; */
-    98                              <1> ; System & Keboard data area */
-    99 00000071 ??                  <1> kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
-   100 00000072 ????                <1> reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
-   101                              <1> ; */
-   102                              <1> ; Fixed (Hard) disk data area */
-   103 00000074 ??                  <1> hd_status	resb	1	; status info for hard disk */
-   104                              <1> %define disk_status1 hd_status
-   105 00000075 ??                  <1> hd_number	resb	1	; number of hard disks (for int 13h, fn 8h) */
-   106 00000076 ??                  <1> control_byte	resb	1	; head control ???? */
-   107 00000077 ??                  <1> port_offset	resb	1	; obsolete, maybe ???? */
-   108                              <1> ; */
-   109                              <1> ; Timeout counters */
-   110 00000078 ????????            <1> printer_timeout	resb	4	; four bytes for each interaace */
-   111 0000007C ????????            <1> serial_timeout	resb	4	; four bytes for each interacce */
+    51                              <1> ; */
+    52                              <1> ; POST writes what it decided here, after the test of segment 0 has */
+    53                              <1> ; zeroed the area, so the answer survives to be reported.  Nothing else */
+    54                              <1> ; in this BIOS writes mfg_test.                                        */
+    55                              <1> %define WARM_POST 0x01	; warm start: the memory march was skipped */
+    56 00000013 ????                <1> memory_size	resw	1	; base memory size in Kilowords (1224) */
+    57 00000015 ??                  <1> mfg_err_flag	resb	1
+    58 00000016 ??                  <1> mfg_err_flag2	resb	1
+    59                              <1> ; */
+    60                              <1> ; first Keyboard data area */
+    61 00000017 ??                  <1> kbd_flag	resb	1	; shift status &c. */
+    62 00000018 ??                  <1> kbd_flag1	resb	1	;  mrre  */
+    63 00000019 ??                  <1> alt_input	resb	1	; save alternate kbd entry code */
+    64 0000001A ????                <1> buffer_head	resw	1
+    65 0000001C ????                <1> buffer_tail	resw	1
+    66                              <1> ; */
+    67 0000001E <res 20h>           <1> kbd_buffer	resw	16	; buffer empty when  head==tail**/
+    68                              <1> ; */
+    69                              <1> ; Diskette data area */
+    70 0000003E ??                  <1> seek_status	resb	1	; drive recalibration status */
+    71                              <1> ; bits 3..0 drive must recalibrate before next seek */
+    72 0000003F ??                  <1> motor_status	resb	1	; bits 3..0 motor running */
+    73                              <1> ; bit 7 current op is write */
+    74 00000040 ??                  <1> motor_count	resb	1	; timeout counter for motor turn-off */
+    75 00000041 ??                  <1> fd_status	resb	1	; return code status byte */
+    76 00000042 ??????????????      <1> fd_ctrl_stat	resb	7	; controller return bytes */
+    77                              <1> ; */
+    78                              <1> ; Video Display data area -- also used for video emulation */
+    79 00000049 ??                  <1> vid_mode	resb	1	; current display mode */
+    80 0000004A ????                <1> vid_columns	resw	1	; no. of columns on the screen */
+    81 0000004C ????                <1> vid_buf_len	resw	1	; length of video buffer in bytes*//
+    82 0000004E ????                <1> vid_start	resw	1	; start address of screen regeneration (in vid buf)*//
+    83 00000050 <res 10h>           <1> vid_cursor	resw	8	; cursor postition on up to 8 screens */
+    84 00000060 ????                <1> vid_cursor_mode	resw	1
+    85 00000062 ??                  <1> vid_active_page	resb	1
+    86 00000063 ????                <1> vid_addr_chip	resw	1	; I/O address for the video chip (6845,EGA,VGA)*//
+    87 00000065 ??                  <1> vid_crt_mode	resb	1	; current setting of the 3x8 register ???? */
+    88 00000066 ??                  <1> vid_palette	resb	1	; current color setting / palette **/
+    89                              <1> ; */
+    90                              <1> ; POST and ROM data */
+    91 00000067 ????????            <1> io_rom_addr	resd	1	; far word to ROM initialization routine */
+    92                              <1> %define io_rom_addr_low io_rom_addr
+    93                              <1> %define io_rom_addr_seg (io_rom_addr+2)
+    94 0000006B ??                  <1> interrupt_flag	resb	1	; indicates an interrupt occurred */
+    95                              <1> ; */
+    96                              <1> ; Timer data area  18.206602 hz  = ~54.925 ms  */
+    97 0000006C ????                <1> timer_count_low	resw	1	; low word of timer count */
+    98 0000006E ????                <1> timer_count_high	resw	1
+    99                              <1> %define timer_count timer_count_low
+   100                              <1> ; use timer_count as the double word timer counter */
+   101 00000070 ??                  <1> timer_overflow	resb	1	; timer has rolled over since last read */
+   102                              <1> ; */
+   103                              <1> ; System & Keboard data area */
+   104 00000071 ??                  <1> kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
+   105 00000072 ????                <1> reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
+   106                              <1> ; */
+   107                              <1> ; reboot() writes WARM_BOOT here before restarting the board, and POST */
+   108                              <1> ; reads it to decide whether the memory march can be skipped.  Any       */
+   109                              <1> ; program can set it and jump to FFFF:0000 -- that is the PC convention  */
+   110                              <1> ; and this BIOS honours it.                                             */
+   111                              <1> %define WARM_BOOT 0x1234
    112                              <1> ; */
-   113                              <1> ; Keyboard additional data area -- buffer location within segment 40h */
-   114 00000080 ????                <1> buffer_start	resw	1	; offset of keyboard buffer start**/
-   115 00000082 ????                <1> buffer_end	resw	1		; offset of end of kbd buffer */
-   116                              <1> ; */
-   117                              <1> ; EGA/PGA? data work area (graphic mode?  probably available) */
-   118 00000084 ??                  <1> ega_rows	resb	1		; rows on the active screen (less 1)**/
-   119 00000085 ????                <1> ega_points	resw	1		; bytes per charateer	*/
-   120 00000087 ??                  <1> ega_info	resb	1		; mode options ????*//
-   121 00000088 ??                  <1> ega_info_3	resb	1		; switch settings*//
-   122 00000089 ????                <1> ega_rsvd	resb	2	; reserved for adapter mfgrs */
+   113                              <1> ; Fixed (Hard) disk data area */
+   114 00000074 ??                  <1> hd_status	resb	1	; status info for hard disk */
+   115                              <1> %define disk_status1 hd_status
+   116 00000075 ??                  <1> hd_number	resb	1	; number of hard disks (for int 13h, fn 8h) */
+   117 00000076 ??                  <1> control_byte	resb	1	; head control ???? */
+   118 00000077 ??                  <1> port_offset	resb	1	; obsolete, maybe ???? */
+   119                              <1> ; */
+   120                              <1> ; Timeout counters */
+   121 00000078 ????????            <1> printer_timeout	resb	4	; four bytes for each interaace */
+   122 0000007C ????????            <1> serial_timeout	resb	4	; four bytes for each interacce */
    123                              <1> ; */
-   124                              <1> ; Disk / Diskette media data */
-   125 0000008B ??                  <1> fd_last_data_rate	resb	1	; last data rate selected */
-   126 0000008C ??                  <1> hd_status_reg	resb	1		; hard disk status register */
-   127 0000008D ??                  <1> hd_error_reg	resb	1		; hard disk error register */
-   128 0000008E ??                  <1> hd_int_flag	resb	1	; HD interrupt flag */
-   129 0000008F ??                  <1> hd_cntrl	resb	1		; HD/FD combo controller bit flag */
-   130 00000090 ????                <1> hd_media	resb	2	; media state */
-   131 00000092 ????                <1> hd_op_start	resb	2	; operation start state */
-   132 00000094 ????                <1> hd_track	resw	1		; HD present cylinder number */
-   133                              <1> ; */
-   134                              <1> ; Additional Keyboard flags */
-   135 00000096 ??                  <1> kbd_flag3	resb	1	; mode state & type flags */
-   136 00000097 ??                  <1> kbd_flag2	resb	1	; kbd LED flags */
-   137                              <1> ; */
-   138                              <1> ; Real Time Clock data area */
-   139 00000098 ????????            <1> rtc_user_flag_addr	resd	1	; far address of user's wait flag */
-   140 0000009C ????????            <1> rtc_user_wait_flag	resd	1	; user wait flag */
-   141 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
-   142                              <1> ; */
-   143                              <1> ; Miscellaneous */
-   144 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
-   145 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
-   146                              <1> ; */
-   147                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
-   148 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
-   149 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
-   150 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
-   151 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
-   152                              <1> ; this size is stored in CMOS on the PC/AT */
-   153 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
-   154 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
-   155                              <1> ; */
-   156                              <1> ; start of 31 bytes of NVRAM informaiion */
-   157 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
-   158                              <1> ; starts with 2 bytes of SIO0 params */
-   159 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
-   160 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   161 000000ED <res 11h>           <1> nvram_unused	resb	17
-   162 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   163                              <1> ; end of 31 bytes of NVRAM information */
-   164                              <1> ; */
-   165 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   166                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   167 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   168                              <1> ; */
-   169                              <1> ; Extentsion to BDA during BIOS startup */
-   170                              <1> ; */
-   171                              <1> endstruc
-   171          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   124                              <1> ; Keyboard additional data area -- buffer location within segment 40h */
+   125 00000080 ????                <1> buffer_start	resw	1	; offset of keyboard buffer start**/
+   126 00000082 ????                <1> buffer_end	resw	1		; offset of end of kbd buffer */
+   127                              <1> ; */
+   128                              <1> ; EGA/PGA? data work area (graphic mode?  probably available) */
+   129 00000084 ??                  <1> ega_rows	resb	1		; rows on the active screen (less 1)**/
+   130 00000085 ????                <1> ega_points	resw	1		; bytes per charateer	*/
+   131 00000087 ??                  <1> ega_info	resb	1		; mode options ????*//
+   132 00000088 ??                  <1> ega_info_3	resb	1		; switch settings*//
+   133 00000089 ????                <1> ega_rsvd	resb	2	; reserved for adapter mfgrs */
+   134                              <1> ; */
+   135                              <1> ; Disk / Diskette media data */
+   136 0000008B ??                  <1> fd_last_data_rate	resb	1	; last data rate selected */
+   137 0000008C ??                  <1> hd_status_reg	resb	1		; hard disk status register */
+   138 0000008D ??                  <1> hd_error_reg	resb	1		; hard disk error register */
+   139 0000008E ??                  <1> hd_int_flag	resb	1	; HD interrupt flag */
+   140 0000008F ??                  <1> hd_cntrl	resb	1		; HD/FD combo controller bit flag */
+   141 00000090 ????                <1> hd_media	resb	2	; media state */
+   142 00000092 ????                <1> hd_op_start	resb	2	; operation start state */
+   143 00000094 ????                <1> hd_track	resw	1		; HD present cylinder number */
+   144                              <1> ; */
+   145                              <1> ; Additional Keyboard flags */
+   146 00000096 ??                  <1> kbd_flag3	resb	1	; mode state & type flags */
+   147 00000097 ??                  <1> kbd_flag2	resb	1	; kbd LED flags */
+   148                              <1> ; */
+   149                              <1> ; Real Time Clock data area */
+   150 00000098 ????????            <1> rtc_user_flag_addr	resd	1	; far address of user's wait flag */
+   151 0000009C ????????            <1> rtc_user_wait_flag	resd	1	; user wait flag */
+   152 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
+   153                              <1> ; */
+   154                              <1> ; Miscellaneous */
+   155 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
+   156 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   157                              <1> ; */
+   158                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   159 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   160 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   161 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   162 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   163                              <1> ; this size is stored in CMOS on the PC/AT */
+   164 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   165 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   166                              <1> ; */
+   167                              <1> ; start of 31 bytes of NVRAM informaiion */
+   168 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   169                              <1> ; starts with 2 bytes of SIO0 params */
+   170 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   171 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   172 000000ED <res 11h>           <1> nvram_unused	resb	17
+   173 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   174                              <1> ; end of 31 bytes of NVRAM information */
+   175                              <1> ; */
+   176 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   177                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   178 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   179                              <1> ; */
+   180                              <1> ; Extentsion to BDA during BIOS startup */
+   181                              <1> ; */
+   182                              <1> endstruc
+   182          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     42                                  %undef XXX
     43                                  
     44                                  	global	int_10h

@@ -22,6 +22,30 @@ enum {	FX_NONE, FX_uSD,	/* not paired -- micro SD on-board	*/
 	};
 
 
+/* Floppy drive types.
+ *
+ * These are the PC/AT CMOS values and the numbering is deliberate, not
+ * arbitrary: INT 13h AH=08h hands the type back in BL and software has
+ * recognised these particular numbers since 1984.
+ *
+ * Type 5, the 2.88Mb drive, is absent on purpose -- it needs a 1 Mbps data
+ * rate and the FDC9266 on the Disk I/O board does not reach it.
+ *
+ * There is no way to detect what is plugged into a PC floppy cable, which
+ * is why this is a SETUP question rather than something POST works out.
+ */
+enum {	FD_NONE,	/* 0				*/
+	FD_360,		/* 1   360Kb  5.25"  40 trk   9 sec  250 kbps	*/
+	FD_1200,	/* 2  1.2Mb   5.25"  80 trk  15 sec  500 kbps	*/
+	FD_720,		/* 3   720Kb  3.5"   80 trk   9 sec  250 kbps	*/
+	FD_1440,	/* 4  1.44Mb  3.5"   80 trk  18 sec  500 kbps	*/
+
+	FD_END
+	};
+
+#define NFLOPPY nelem(bda.floppy_tab)
+
+
 typedef
 struct _NVRAM {
 	T_CONFIG_SERIAL sio0;

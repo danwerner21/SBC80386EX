@@ -7,6 +7,11 @@ serial_dev	resw	4	; serial port device codes */
 parallel_dev	resw	4	; printer port device codes */
 equip_flag	resw	1		; int 12h equipment flags */
 mfg_test	resb	1		; initialization flags */
+; */
+; POST writes what it decided here, after the test of segment 0 has */
+; zeroed the area, so the answer survives to be reported.  Nothing else */
+; in this BIOS writes mfg_test.                                        */
+%define WARM_POST 0x01	; warm start: the memory march was skipped */
 memory_size	resw	1	; base memory size in Kilowords (1224) */
 mfg_err_flag	resb	1
 mfg_err_flag2	resb	1
@@ -57,6 +62,12 @@ timer_overflow	resb	1	; timer has rolled over since last read */
 ; System & Keboard data area */
 kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
 reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
+; */
+; reboot() writes WARM_BOOT here before restarting the board, and POST */
+; reads it to decide whether the memory march can be skipped.  Any       */
+; program can set it and jump to FFFF:0000 -- that is the PC convention  */
+; and this BIOS honours it.                                             */
+%define WARM_BOOT 0x1234
 ; */
 ; Fixed (Hard) disk data area */
 hd_status	resb	1	; status info for hard disk */

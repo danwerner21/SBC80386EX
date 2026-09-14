@@ -34,7 +34,7 @@
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 %include "stack.inc"
 %define XXX
@@ -45,7 +45,30 @@
 	global	int_irq4
 	global	kbd_init_
 
+	extern	reboot_			; 19h_boot.asm -- restarts the board
+
 segment	_TEXT
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; The console reset sequence -- this machine's Ctrl-Alt-Del
+;
+; A serial console has no Ctrl and no Alt to press: it delivers characters,
+; not key events, which is why kbd_flag never holds anything.  Nothing
+; requires the sequence to be that particular one, though, so the trigger is
+; a character unlikely to arrive by accident, three times in a row.
+;
+; 1Eh is Ctrl-^.  It was picked over the more obvious Ctrl-] (1Dh) because
+; that is the telnet escape and would be eaten by the terminal program
+; before it ever reached the board, and over Ctrl-\ (1Ch) because that is
+; SIGQUIT to a Unix terminal.  Nothing in common use binds Ctrl-^.
+;
+; The count lives in alt_input, which on a PC accumulates Alt+numpad digits
+; and here has nothing to do: there is no Alt and no numpad.  If real
+; keyboard hardware ever arrives, this moves to a real Ctrl-Alt-Del and the
+; field goes back to its proper job.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+RESET_KEY	equ	0x1E		; Ctrl-^
+RESET_COUNT	equ	3		; how many in a row
 ASCII_BEL	equ 	0X08
 
 NS_EOI		equ	0x20		; non-specific end of interrupt
@@ -72,6 +95,7 @@ kbd_init_:
 	mov	word [buffer_tail],KBD_START
 	mov	byte [kbd_flag],0
 	mov	byte [kbd_flag1],0
+	mov	byte [alt_input],0	; the console reset sequence counter
 
 	mov	dx,IER0			; receive data available
 	mov	al,0x01
@@ -110,6 +134,20 @@ int_irq4:
 	in	al,dx
 	and	al,0x7F			; the console is 7-bit clean
 
+; Watch for the reset sequence before the character goes anywhere.  The
+; matching characters are eaten rather than delivered: this is an escape
+; out of the running system, not data, and a partial sequence reaching DOS
+; would be worse than losing it.
+	cmp	al,RESET_KEY
+	je	.rkey
+	mov	byte [alt_input],0	; anything else breaks the run
+	jmp	short .stuff
+.rkey:
+	inc	byte [alt_input]
+	cmp	byte [alt_input],RESET_COUNT
+	jb	.1			; not there yet; eat it and carry on
+	jmp	reboot_			; does not return
+.stuff:
 	call	kbd_stuff
 	jmp	.1
 .9:

@@ -23,7 +23,9 @@
 /* Usage: keyboard			*/
 	byte	kbd_flag;	/* shift status &c. */
 	byte	kbd_flag1;	/*  more  */
-	byte	alt_input;	/* save alternate kbd entry code */
+	byte	alt_input;	/* PC: accumulates Alt+numpad digits.  Here:
+				   counts consecutive Ctrl-^ for the console
+				   reset sequence -- see 16h_kbd.asm */
 	byte	kbd_break_flag;	/* bit 7 set if Break key is pressed */
 	word	buffer_head;
 	word	buffer_tail;

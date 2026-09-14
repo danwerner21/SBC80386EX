@@ -147,6 +147,24 @@ jleds(code);
 	}
 	bda.equip_flag = (bda.equip_flag & ~0x0030) | 0x0020;
 
+	/* Floppy bits, from the SETUP configuration.  Bit 0 says drives are
+	   present at all and bits 7:6 carry the count less one -- which is
+	   why a single drive reads as 00 there and not as 01.  Nothing is
+	   probed: a PC floppy interface offers no way to ask.  These bits
+	   were never set before, so INT 11h has been telling DOS this
+	   machine has no floppy drives, which until now it did not. */
+	{
+		int	nfd = 0;
+
+		if( bda.floppy_tab[0] != FD_NONE )	++nfd;
+		if( bda.floppy_tab[1] != FD_NONE )	++nfd;
+
+		bda.equip_flag &= ~0x00C1;
+		if( nfd )
+			bda.equip_flag |= (word)(0x0001
+					| ((word)(nfd - 1) << 6));
+	}
+
 
 	/* Set the keyboard ring buffer up and turn the SIO0 receive
 	   interrupt on.  From here the UART is drained by the ISR the
@@ -173,6 +191,36 @@ jleds(code);
 			bda.extended_memory / 1024u,
 			(word)bda.SRAM_size
 			);
+
+	/* Say where this BIOS is executing from.
+	   Shadowing switches UCS off, so its chip-select enable bit is the
+	   honest answer -- no flag anyone set, just the hardware state.
+	   It is worth a line because the fallbacks in start.asm are silent by
+	   design: a board whose DRAM under F0000 will not hold the copy still
+	   boots, only slowly, and there would otherwise be nothing to say so.
+	   UCSMSKL is a genuine 16-bit register, so it is read as a word. */
+	{
+		word	ucs;
+
+		ASM {
+			mov	dx,UCSMSKL
+			in	ax,dx
+			mov	[ucs],ax
+		}
+		printf("BIOS running from %s\n",
+			(ucs & 1) ? "EPROM, 8-bit at 5 wait states"
+				  : "DRAM, 16-bit at 2 wait states (shadowed)");
+	}
+
+	/* Whether POST marched over memory, and why not if it did not.
+	   Worth a line for the same reason the one above is: the warm path
+	   is silent otherwise, and the difference it makes is several
+	   seconds of boot -- which is easy to misjudge by eye and easy to
+	   assume is working when it is not. */
+	printf("Memory march %s\n",
+		(bda.mfg_test & WARM_POST)
+		  ? "skipped -- warm start, flag 1234h was set at 40:72"
+		  : "ran -- cold start");
 
 #if 0
 	cprintf("\n\nThe output routine \"cprintf\" is now attached to SIO0\n"

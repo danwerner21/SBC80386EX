@@ -22,7 +22,7 @@
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 
 	global	int_17h

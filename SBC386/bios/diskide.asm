@@ -79,7 +79,7 @@ IDE_CMD_SET_FEATURE EQU 	0EFh
 
 
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 %define XXX
 %include "bda.inc"

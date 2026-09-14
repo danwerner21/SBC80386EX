@@ -34,6 +34,14 @@
 %define defd
 ;*/
 
+;/* The component identifier the 386EX leaves in DX after a hardware reset:
+;*  DH is the device (23h, 386EX) and DL the stepping.  POST tests it as the
+;*  first thing it does, so anything that restarts the board in software has
+;*  to present it too -- see reboot_ in 19h_boot.asm, which learned that the
+;*  hard way.
+;*/
+defw    DEVICE_ID equ   0x2309
+
 ;/* The Address Configuration register
 ;*/
 defb REMAPCFGH  equ     0x0023

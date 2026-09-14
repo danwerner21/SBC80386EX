@@ -11,6 +11,11 @@ typedef struct _BDA {
 	word	parallel_dev[4];	/* printer port device codes */
 	word	equip_flag;		/* int 12h equipment flags */
 	byte	mfg_test;		/* initialization flags */
+/* */
+/* POST writes what it decided here, after the test of segment 0 has */
+/* zeroed the area, so the answer survives to be reported.  Nothing else */
+/* in this BIOS writes mfg_test.                                        */
+#define WARM_POST 0x01	/* warm start: the memory march was skipped */
 	word	memory_size;	/* base memory size in Kilowords (1024) */
 	byte	mfg_err_flag;
 	byte	mfg_err_flag2;
@@ -71,6 +76,12 @@ typedef struct _BDA {
 
 	byte	kbd_break_flag;	/* bit 7 set if Break key is pressed */
 	word	reset_flag;	/* word=0x1234 if Reset is underway (80286) */
+/* */
+/* reboot() writes WARM_BOOT here before restarting the board, and POST */
+/* reads it to decide whether the memory march can be skipped.  Any       */
+/* program can set it and jump to FFFF:0000 -- that is the PC convention  */
+/* and this BIOS honours it.                                             */
+#define WARM_BOOT 0x1234
 
 /* */
 /* Fixed (Hard) disk data area */

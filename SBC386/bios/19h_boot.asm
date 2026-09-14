@@ -27,10 +27,10 @@
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 %include "bda.inc"		; serial_dev, for the console drain in reboot_
-; ASCII_CR and ASCII_LF come from i386EX.inc -- "ascii.h" is a C
+; ASCII_CR and ASCII_LF come from i386ex.inc -- "ascii.h" is a C
 ; header and NASM cannot read it
 
 	global	int_18h
@@ -259,12 +259,27 @@ msg_retry:
 ; the user sees a truncated message and reads it as a crash.  The port comes
 ; from bda.serial_dev[0] rather than a constant, since the console may be
 ; the on-chip SIO0 at 3F8h or the MF/PIC at 448h.
+;
+; DX has to be loaded before the jump, and this is the whole reason the
+; first version of this routine did not work.  The very first thing POST
+; does is 'cmp dx,DEVICE_ID' -- DX carries the 386EX component identifier
+; out of a hardware reset, and start.asm checks it before anything else.
+; Arriving without it fails that test and lands in error_halt, which is a
+; cli/hlt loop: the board simply stops, with no output to say why.  A
+; software restart has to present the register state a reset would have.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	global	reboot_
 reboot_:
 	cli
 
 	get_bda	DS
+
+; Tell POST this is a warm start, so it can skip the memory march.  The
+; test of segment 0 during POST zeroes the BDA, which is what puts this
+; back to zero again -- the next start after this one is a cold one unless
+; something asks otherwise.
+	mov	word [reset_flag],WARM_BOOT
+
 	mov	dx,[serial_dev]		; console base, 0 if none was installed
 	or	dx,dx
 	jz	.2
@@ -278,4 +293,5 @@ reboot_:
 	jnz	.2
 	loop	.1
 .2:
+	mov	dx,DEVICE_ID		; what a hardware reset would have left
 	jmp	0xFFFF:0x0000		; the reset entry, into boot.asm

@@ -22,7 +22,7 @@
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 
 segment	_TEXT
@@ -175,6 +175,79 @@ _int15_call:
 
 ; Re-form BP.  The interrupt leaves the stack balanced at BP-16, and the
 ; nine words just pushed put it at BP-34.
+	mov	bp,sp
+	add	bp,34
+
+	les	di,[bp+4]			; ES:DI -> T_REGS again
+	pop	word [es:di+14]			; ES	(pushed last)
+	pop	word [es:di+12]			; DS
+	pop	word [es:di+10]			; DI
+	pop	word [es:di+8]			; SI
+	pop	word [es:di+6]			; DX
+	pop	word [es:di+4]			; CX
+	pop	word [es:di+2]			; BX
+	pop	word [es:di+0]			; AX
+	pop	word [es:di+16]			; FLAGS
+
+	popm	ax,bx,cx,dx,si,di,ds,es
+	pop	bp
+	ret			; __cdecl -- caller pops the argument
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; int13_call -- issue INT 13h with a given register set, for INT13
+;
+;	void __cdecl int13_call(T_REGS *regs);
+;
+; A near copy of int15_call above, differing in one instruction.  They are
+; not folded into one routine that takes the interrupt number because the
+; only ways to do that are a branch whose condition has to survive the
+; register marshalling untouched, or patching the INT instruction itself --
+; both of them clever where this needs to be obvious.  The frame arithmetic
+; here is the part worth getting right, and it is identical to int15_call's,
+; which is proven.
+;
+; ES:BX and CX reach the handler as given, which is what AH=02h needs.
+;
+;    Enter with (__cdecl -- the caller cleans up):
+;	[bp+4]	offset of T_REGS
+;	[bp+6]	segment of T_REGS
+;
+;    Exit with:
+;	*regs updated, every one of the monitor's own registers preserved
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	global	_int13_call
+_int13_call:
+	push	bp
+	mov	bp,sp
+	pushm	ax,bx,cx,dx,si,di,ds,es		; SP is now BP-16
+
+	les	di,[bp+4]			; ES:DI -> T_REGS
+	push	word [es:di+14]			; ES for the handler
+	push	word [es:di+12]			; DS for the handler
+	mov	ax,[es:di+0]
+	mov	bx,[es:di+2]
+	mov	cx,[es:di+4]
+	mov	dx,[es:di+6]
+	mov	si,[es:di+8]
+	mov	di,[es:di+10]			; DI last: it held the pointer
+	pop	ds
+	pop	es				; SP is back to BP-16
+
+	int	0x13				; *** the call under test ***
+
+	pushf
+	push	ax
+	push	bx
+	push	cx
+	push	dx
+	push	si
+	push	di
+	push	ds
+	push	es
+
+; The interrupt leaves the stack balanced at BP-16, and the nine words just
+; pushed put it at BP-34.
 	mov	bp,sp
 	add	bp,34
 

@@ -33,4 +33,7 @@ extern void __cdecl go_call(word seg, word off, T_REGS *regs);
 /* in monitor.asm -- issue INT 15h with a given register set */
 extern void __cdecl int15_call(T_REGS *regs);
 
+/* in monitor.asm -- the same, for INT 13h */
+extern void __cdecl int13_call(T_REGS *regs);
+
 #endif

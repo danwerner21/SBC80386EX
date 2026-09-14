@@ -302,10 +302,61 @@ int set_fixed(void)
 }
 
 
+/* The order here must match the FD_ enum in "nvram.h" exactly, the same
+   way fixed_disks[] matches the FX_ enum. */
+T_STR floppy_types[] = {
+	"None",
+	"360Kb   5.25 inch, 40 track",
+	"1.2Mb   5.25 inch, 80 track",
+	"720Kb   3.5 inch,  80 track",
+	"1.44Mb  3.5 inch,  80 track",
+	};
+
+
+/*
+ * Which drive is on which cable position.
+ *
+ * Nothing can be probed here.  A PC floppy interface gives no way to ask a
+ * drive what it is -- not its capacity, not even whether it is there -- so
+ * the configuration is the only source of truth, and a wrong answer here
+ * shows up later as a drive that will not read.
+ *
+ * The values live in bda.floppy_tab[], which is inside the 31 bytes covered
+ * by the NVRAM checksum, exactly as disk_tab[] is for the hard disks.
+ */
 int set_floppy(void)
 {
-	printf("\nFloppy disk setup is not implemented\n");
-	return 0;
+	int	unit, opt, modified = 0;
+	byte	cur;
+
+	printf("\nFloppy drives\n");
+	printf("\nThe interface cannot be asked what is attached, so what\n");
+	printf("is set here is what the BIOS will believe.\n");
+
+	for( unit = 0; unit < NFLOPPY; unit++ ) {
+
+		cur = bda.floppy_tab[unit];
+		if( cur >= nelem(floppy_types) )	cur = FD_NONE;
+
+		printf("\n%s is %s\n",
+			unit ? "Drive B" : "Drive A",
+			floppy_types[cur]);
+
+		opt = option_get(
+			unit ? "Drive B" : "Drive A",
+			floppy_types, nelem(floppy_types) );
+
+		if( opt >= 1  &&  opt <= nelem(floppy_types) ) {
+			bda.floppy_tab[unit] = (byte)(opt - 1);
+			modified = 1;
+		}
+	}
+
+	if( modified )
+		printf("\nStored.  The new settings take effect at the next"
+		       " boot.\n");
+
+	return modified;
 }
 
 

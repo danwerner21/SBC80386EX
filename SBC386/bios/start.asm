@@ -30,8 +30,18 @@
 %define wFPU 		1
 %define HALF_MEM 	0		; 1 = exclude DRAM that overlaps the ROM
 				; 0 = DRAM & ROM overlap
-%define SHADOW_MODE 	0		; shadow ROM in DRAM
+%define SHADOW_MODE 	1		; shadow ROM in DRAM
 %define WATCH_BUS 	1		; Watchdog timer monitors bus
+
+; Shadowing copies the ROM into the DRAM underneath it, which is exactly the
+; DRAM that HALF_MEM exists to exclude.  The two cannot both be set; say so
+; at assembly time rather than leaving a build that copies 64K into nothing
+; and then jumps to it.
+%if SHADOW_MODE
+ %if HALF_MEM
+  %error "SHADOW_MODE needs the DRAM under F0000 that HALF_MEM excludes"
+ %endif
+%endif
 
 ;%define MFPIC 		1	; no COMCLK, use MFPIC (defined in i386ex.inc)
 
@@ -45,7 +55,7 @@
 
 
 %include "seg_def.inc"
-%include "i386EX.inc"
+%include "i386ex.inc"
 %include "macro.inc"
 %include "timer.inc"
 %define XXX
@@ -476,7 +486,10 @@ segment _TEXT
 ;	global	start		; declared above
 start:
         cli
-	cmp	dx,0x2309	; device ID
+; DX carries the component identifier out of a hardware reset.  reboot_ in
+; 19h_boot.asm has to load it by hand, which is why this is a named constant
+; now rather than a literal in one place.
+	cmp	dx,DEVICE_ID	; device ID
 	je	start1
 error_halt:
 	cli
@@ -591,6 +604,26 @@ size_SRAM:
 ;
 ; Test low 64K memory and ROM checksum
 ;
+;
+; Is this a warm start?
+;
+; The flag has to be read here, before the test of segment 0 below, because
+; that test zeroes the whole first 64K and the BDA sits inside it -- which is
+; also, conveniently, what clears the flag so that the start after this one
+; is a cold one again.
+;
+; The answer is parked in the stack segment.  That is the 32K at A8000 which
+; size_SRAM set SS to, and neither memory test reaches it: segment 0 covers
+; 00000-0FFFF and test_1to8 covers 10000-9FFFF.  SP starts at 8000h and
+; grows down, so a word at offset 4 is 32K clear of anything the stack will
+; ever touch, and seg_test has already been over that memory.
+;
+WARM_MARK	equ	4	; word in the stack segment; see above
+
+	get_bda	ES
+    es	mov	ax,[reset_flag]
+    ss	mov	[WARM_MARK],ax
+
 	mov	al,0001b	; show '0001' in the LITES
 	call	lites
 ;
@@ -720,7 +753,40 @@ wait00:
 ;
 ; Test memory from 1000:0000h to 7000:FFFFh
 ;
+; The size this arrives at has to be the same either way, since it is what
+; reaches bda.memory_size: the loop below ends with AX one segment past the
+; last one tested, and the warm path just starts there.
+%if HALF_MEM
+LAST_SEG	equ	0x8000
+%else
+LAST_SEG	equ	0xA000
+%endif
+
 test_1to8:
+    ss	mov	ax,[WARM_MARK]
+	cmp	ax,WARM_BOOT
+	jne	.cold
+
+; A warm start.  This memory was marched over on the way in and has not
+; been without power since, so the march buys nothing but the time it
+; takes -- and it takes seconds, not milliseconds: seg_test walks a single
+; bit through all 32 positions, so each 64K segment costs 32 passes of a
+; REP STOSD and a REPE SCASD, and there are nine segments.
+;
+; What this path does not do is zero the memory.  The BIOS does not depend
+; on that, but it is the difference worth reaching for if something ever
+; behaves differently after a SETUP reboot than after a power cycle.
+;
+; Record the decision where main.c can report it.  The test of segment 0
+; has already zeroed the BDA, so this survives, and a cold start leaves the
+; byte at zero by simply not coming through here.
+	get_bda	ES
+    es	or	byte [mfg_test],WARM_POST
+
+	mov	ax,LAST_SEG
+	jmp	short .sized
+
+.cold:
 	xor	si,si
 	mov	dx,1<<14	; 16K dwords
 	mov	ax,1000h	; 2nd 64K segment
@@ -729,17 +795,123 @@ test_1to8:
 	call	seg_test	; halts on error
 	mov	ax,es
 	add	ah,10h		; increment to next segment
-%if HALF_MEM
-	cmp	ah,0x80		; are we done
-%else
-	cmp	ah,0xA0		; test all of low 64K
-%endif
+	cmp	ah,LAST_SEG>>8	; are we done
 	jb	.1
 
 	; segment 8000:0000 is not yet enabled
-
+.sized:
 	shr	ax,6		; size in K bytes
 	mov	bx,ax		; save in BX
+
+
+%if SHADOW_MODE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Shadow the ROM into DRAM
+;
+; The BIOS executes from 8-bit ROM at 5 wait states, and every INT 10h
+; character and every IDE sector pays for it.  CS2 already covers the whole
+; first megabyte of DRAM -- 16 bits wide at 2 wait states -- and the two
+; overlap at F0000.  While UCS is enabled it is the one that answers there,
+; so the ROM cannot simply be copied over itself: the copy has to run from
+; somewhere else while UCS is switched off.
+;
+;   1. copy the ROM to a scratch segment, and check it arrived
+;   2. jump into that copy, so execution is no longer inside the ROM
+;   3. switch UCS off -- F0000 answers from DRAM from here on
+;   4. copy the scratch back to F0000, and check it arrived
+;   5. jump back to F000, which is now the DRAM copy
+;
+; Either check can fail without consequence.  A failure at step 1 leaves the
+; ROM exactly as it was; a failure at step 4 switches UCS back on and returns
+; to the real ROM.  Slower, but running.  Neither is expected -- but the DRAM
+; under F0000 is the one part of the first megabyte that test_1to8 does not
+; reach, and this is what writes to it, so it gets checked here instead.
+;
+; Between step 3 and the end of step 4, nothing may read DGROUP data or call
+; anything that does: DS-relative reads land at F0000, which is uninitialised
+; DRAM until that copy finishes.  That is why this stretch is bare string
+; moves and port writes, with DS pointed at the scratch and not at DGROUP.
+;
+; This is done here rather than earlier because it needs DRAM that has been
+; tested, and it must be before anything records a F000-relative address.
+;
+; One consequence worth knowing: F0000 is writable afterwards.  Writes into
+; the BIOS used to fall on ROM and do nothing; now they land.  Nothing in
+; this BIOS writes there -- _DATA and _BSS are empty by design -- but a stray
+; far pointer that used to be harmless is not any more.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+SHADOW_SEG	equ	XFER_AD>>4	; scratch, inside the range just tested
+SHADOW_WORDS	equ	32768		; 64K, as words
+
+shadow_rom:
+	pushm	ax,bx,cx,dx,si,di,ds,es
+	cli				; belt and braces: the vectors at
+					;  0000:0000 are not built yet, so an
+					;  interrupt taken here has nowhere to go
+	cld
+
+; 1 -- the ROM into the scratch segment
+	mov	ax,cs			; F000, the ROM
+	mov	ds,ax
+	cnop
+	mov	ax,SHADOW_SEG
+	mov	es,ax
+	cnop
+	xor	si,si
+	xor	di,di
+	mov	cx,SHADOW_WORDS
+	rep	movsw
+
+	xor	si,si			; and check it arrived
+	xor	di,di
+	mov	cx,SHADOW_WORDS
+	repe	cmpsw
+	jne	.9			; scratch DRAM will not hold it;
+					;  leave the ROM alone and say nothing
+
+; 2 -- into the copy.  CS is the scratch segment from here.
+	jmp	SHADOW_SEG:.in_ram
+.in_ram:
+
+; 3 -- switch UCS off
+	mov	dx,UCSMSKL		; the low mask carries the enable bit
+	in	ax,dx
+	and	al,~BIT0
+	out	dx,ax
+
+; 4 -- the scratch back into F0000, which is DRAM now
+	mov	ax,SHADOW_SEG
+	mov	ds,ax
+	cnop
+	mov	ax,0xF000
+	mov	es,ax
+	cnop
+	xor	si,si
+	xor	di,di
+	mov	cx,SHADOW_WORDS
+	rep	movsw
+
+	xor	si,si			; and check that one too
+	xor	di,di
+	mov	cx,SHADOW_WORDS
+	repe	cmpsw
+	je	.5
+
+; The DRAM under the ROM will not hold it.  Put UCS back, and the far jump
+; below returns to the real ROM instead of to a copy that is not there.
+	mov	dx,UCSMSKL
+	in	ax,dx
+	or	al,BIT0
+	out	dx,ax
+.5:
+
+; 5 -- back to F000, shadowed or not
+	jmp	0xF000:.back
+.back:
+.9:
+	popm	ax,bx,cx,dx,si,di,ds,es
+%endif
+
 
 ;
 ; Set up the interrupt vectors in 0x0000:  0000h..0200h

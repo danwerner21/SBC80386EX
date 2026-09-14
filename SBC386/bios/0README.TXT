@@ -1,6 +1,42 @@
 File:  0README.TXT
 
 ===============
+Sat 13-Sep-2026
+===============
+DW:  Operating notes for the current ROM.
+
+CONSOLE RESET -- three Ctrl-^ (1Eh) in a row, typed at the serial console,
+restarts the board.  This is the machine's Ctrl-Alt-Del: a serial console
+delivers characters rather than key events, so there is no Ctrl and no Alt
+to press, and any sufficiently unlikely character sequence will do instead.
+
+The three characters are eaten rather than passed to DOS, so a stray single
+Ctrl-^ never reaches an application.  The restart goes through reboot_ in
+19h_boot.asm and sets the warm-boot flag at 40:72, which means POST skips
+the memory march -- power-cycle instead when a full memory test is wanted.
+
+Ctrl-^ was chosen over the more obvious Ctrl-] (1Dh) because Ctrl-] is the
+telnet escape and would be swallowed by the terminal program before ever
+reaching the board.  Ctrl-\ (1Ch) is SIGQUIT to a Unix terminal and was
+rejected for the same kind of reason.  The character and the repeat count
+are RESET_KEY and RESET_COUNT at the top of 16h_kbd.asm.
+
+SETUP -- press any key during the POST scroll.  Entry 5 is the debug
+monitor; type EXIT to leave it.  Monitor commands are UPPER CASE, and every
+numeric argument is hexadecimal.
+
+HIMEM.SYS -- must be loaded with /MACHINE:PS2.  Without it the machine locks
+up in CONFIG.SYS.  HIMEM drives the A20 line through the 8042 keyboard
+controller on an AT, and this board has no 8042; the read of port 64h
+returns floating-bus FF and HIMEM spins forever.  A20 here is the 386EX
+PORT92, enabled once at POST.
+
+ECB I/O ADDRESSING -- Z80 I/O port N appears to the 386EX at 0x400 + N, as
+the 13-May-2018 entry below describes for the MF/PIC.  An ECB card jumpered
+to Z80 30h-3Fh is therefore at 0x430-0x43F.
+
+
+===============
 Sun 13-May-2018
 ===============
 JRC:  After the disaster with the orginal DRAM board, and with no

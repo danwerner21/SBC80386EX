@@ -103,7 +103,8 @@ extern	int_1Ah		; (CMOS clock)
 extern	int_1Bh		; (ctrl-Break)
 extern	int_1Ch		; (timer tick)
 extern	int_1Dh		; (video parameter table)
-extern	disk_base_table	; (floppy disk params, INT 1Eh)
+extern	disk_base_1440	; (floppy disk params, INT 1Eh -- the
+			;  default until POST knows the drive type)
 extern	int_1Fh		; (font 80h..0FFh)
 
 extern	int_msdos	; returns error code
@@ -180,7 +181,7 @@ page0vectors:	; these are condensed
 	dw	int_1Bh		; (ctrl-Break)
 	dw	int_1Ch		; (timer tick)
 	dw	int_1Dh		; (video parameter table)
-	dw	disk_base_table	; (floppy disk params)
+	dw	disk_base_1440	; (floppy disk params)
 	dw	int_1Fh		; (font 80h..0FFh)
 ;
 ;  MSDOS reserved	20h .. 3Fh

@@ -34,6 +34,7 @@
 #include "nvram.h"
 #include "getline.h"
 #include "hdinit.h"	/* hd_enumerate() */
+#include "diskfdc.h"	/* fd_reset() */
 
 void lites(int);
 int install_SIO0(int);
@@ -163,6 +164,19 @@ jleds(code);
 		if( nfd )
 			bda.equip_flag |= (word)(0x0001
 					| ((word)(nfd - 1) << 6));
+
+		/* Put the controller in a known state, for the same reason
+		   hd_reset() runs on the IDE side: a warm boot leaves an ECB
+		   card in whatever state it was in, and Ctrl-^ does not
+		   assert the system reset line at all.
+
+		   It also sets seek_status, which nothing else does. Without
+		   it a zeroed BDA reads as "every drive is calibrated" and
+		   the driver will happily transfer at a cylinder it has
+		   never moved a head to -- which the controller reports as
+		   wrong-cylinder in ST2, long after the mistake was made. */
+		if( nfd )
+			fd_reset();
 	}
 
 

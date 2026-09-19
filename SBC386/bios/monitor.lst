@@ -901,3 +901,7 @@
    265 00000156 585B595A5E5F1F07        	popm	ax,bx,cx,dx,si,di,ds,es
    266 0000015E 5D                      	pop	bp
    267 0000015F C3                      	ret			; __cdecl -- caller pops the argument
+   268                                  
+   269                                  ; The floppy data-phase routines used to be here.  They are part of the
+   270                                  ; driver, not of the monitor, and now live in "diskfdc.asm" -- the monitor
+   271                                  ; calls them through the same declarations in "debugmon.h".

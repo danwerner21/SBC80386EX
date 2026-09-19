@@ -187,7 +187,7 @@ int_irq0:
 	je	.3
 	dec	byte [motor_count]
 	jnz	.3
-	extern	FDC_stop_motor	; currently in stub.asm
+	extern	FDC_stop_motor	; in diskfdc.asm
 	call	FDC_stop_motor
 .3:
 ; handle the printer & serial line timeouts

@@ -265,3 +265,7 @@ _int13_call:
 	popm	ax,bx,cx,dx,si,di,ds,es
 	pop	bp
 	ret			; __cdecl -- caller pops the argument
+
+; The floppy data-phase routines used to be here.  They are part of the
+; driver, not of the monitor, and now live in "diskfdc.asm" -- the monitor
+; calls them through the same declarations in "debugmon.h".

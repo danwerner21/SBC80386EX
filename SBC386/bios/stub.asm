@@ -75,16 +75,14 @@ global	clear_irq7	;
 global	int_1Bh		; (ctrl-Break)
 global	int_1Ch		; (timer tick)
 global	int_1Dh		; (video parameter table)
-global	int_1Eh		; (floppy disk params -- now unused, see
-			;  disk_base_table below)
-global	disk_base_table	; (floppy disk params, where INT 1Eh points)
+global	int_1Eh		; (floppy disk params -- now unused; the tables
+			;  are in 40h_flop.asm)
 global	int_1Fh		; (font 80h..0FFh)
 ;
 ;  MSDOS reserved	20h .. 3Fh
 ;
 global	int_msdos
 ;
-global	int_40h		; Floppy disk driver
 global	param_hd0	; fixed disk parameters
 global	int_42h		; Video driver
 global	param_VGA	; VGA/EGA character table
@@ -179,40 +177,18 @@ int_1Fh:
 %define INVALID_COMMAND		1
 int_EMM:
 int_msdos:
-int_40h:	; floppy disk handler
+; int_40h now lives in 40h_flop.asm.  It returned invalid-command here for
+; as long as there was no floppy controller to talk to.
 	sti
 	mov	ah,INVALID_COMMAND
 	stc
 	retf	2
 
 
-;
-; INT 1Eh -- the diskette parameter table
-;
-; There is no floppy controller on this board, but the vector still has to
-; point at a well-formed table.  DOS reads it during startup, and some of
-; its drivers copy it into RAM and patch it rather than calling the BIOS at
-; all, so the IRET this vector used to carry left them reading the first
-; eleven bytes of a code stream and believing it.
-;
-; The values are the standard 1.44Mb set -- what a PC/AT-class BIOS reports
-; and what any reader will accept.  Nothing here is ever acted on, since
-; INT 13h sends every floppy call to int_40h above, which returns
-; "invalid command".
-;
-	align	2
-disk_base_table:
-	db	0xDF		; step rate 0Dh, head unload time Fh
-	db	0x02		; head load time 1, DMA used
-	db	0x25		; ticks to wait before the motor is stopped
-	db	0x02		; bytes per sector, 2 = 512
-	db	18		; sectors per track
-	db	0x1B		; gap length between sectors
-	db	0xFF		; data length
-	db	0x54		; gap length when formatting
-	db	0xF6		; fill byte for formatting
-	db	0x0F		; head settle time, milliseconds
-	db	0x08		; motor start time, eighths of a second
+; The INT 1Eh diskette parameter table used to be here, a single 1.44Mb
+; set, put in during Phase 4 when there was no floppy controller and
+; nothing ever read it.  There are now four of them, one per drive type,
+; in "40h_flop.asm" where the code that hands them out lives.
 
 
 param_hd0:
@@ -313,9 +289,6 @@ KBD_getchar_:
 	ret			;  scan code INT 16h returns alongside it
 
 
-	global	FDC_stop_motor
-	global	FDC_stop_motor_
-FDC_stop_motor_:
-FDC_stop_motor:
-; totally a dummy routine
-	ret
+; FDC_stop_motor now lives in fdcpio.asm, where it can reach the latch
+; shadow.  It was a bare RET here for as long as there was no floppy
+; controller to stop.

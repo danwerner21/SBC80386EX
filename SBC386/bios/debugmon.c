@@ -251,6 +251,62 @@ static void io_dump( word port, word count, int wide )
 
 
 /*
+ * Command and result bytes to and from a 765.
+ *
+ * Every byte in either direction is gated by the main status register: RQM
+ * says the controller is ready for one, DIO says which way it is willing to
+ * move.  Waiting for the pair rather than counting cycles is what makes the
+ * sequence independent of the clock.
+ *
+ * The deadline is the 18.2hz tick rather than a spin count, and that is not
+ * a detail.  A spin count has to be guessed against a wait whose real length
+ * is set by the media: READ ID gives up only after two index pulses, which
+ * at 300 rpm is 400ms, and a loop of 30000 port reads at seven wait states
+ * is nearer 75ms.  Counting iterations gave an answer that looked like a
+ * wedged controller and was nothing of the sort.  Two seconds is longer than
+ * any single 765 operation and short enough to stay a diagnostic.
+ */
+#define FDC_TIMEOUT	36		/* 18.2hz ticks -- about two seconds */
+
+static int fdc_wait( word base, word want )
+{
+	word	t0 = bda.timer_count_low;
+	word	msr;
+
+	do {
+		msr = io_read(base,0);
+
+		/* EXEC is in the mask deliberately.  During a non-DMA
+		   execution phase MSR reads F0, and F0 & C0 is C0 -- so a
+		   result-phase read that only looked at RQM and DIO would
+		   cheerfully pull sector data out of the data register and
+		   report it as status.  That is exactly what happened: the
+		   first "ST0 ST1 ST2" printed were EB 4D 53, the opening
+		   bytes of a DOS boot sector. */
+		if( (msr & 0xE0) == want )	return( 0 );
+	} while( (word)(bda.timer_count_low - t0) < FDC_TIMEOUT );
+
+	return( -1 );
+}
+
+
+static int fdc_put( word base, word val )
+{
+	if( fdc_wait(base,0x80) )	return( -1 );	/* wants a byte in */
+	io_write((word)(base + 1),val,0);
+	return( 0 );
+}
+
+
+static int fdc_get( word base, word *val )
+{
+	if( fdc_wait(base,0xC0) )	return( -1 );	/* has a byte out */
+	*val = io_read((word)(base + 1),0);
+	return( 0 );
+}
+
+
+/*
  * True if the operator has typed Ctrl-C.  A long dump at 9600 baud takes
  * a while, so Ctrl-C stops it.  Anything else typed is swallowed rather
  * than left in the buffer, where it would turn up at the next MON>
@@ -2133,10 +2189,19 @@ void debugmon(void)
  * and only the jumpering says which is meant.
  *
  * Expect 00 on a cold machine.  The latch at 38h is a 74LS273, which clears
- * to zero at power-on, and bit 7 of it is ~FDC_RST -- so out of reset the
- * board holds the controller in reset until software says otherwise.  This
- * writes 80h there: reset released, motor off, TC low, P0/P1/P2 clear,
- * MINI clear and DENSEL clear.
+ * to zero at power-on, and bit 7 of it is ~FDC_RST -- so the board holds the
+ * controller in reset until software says otherwise.
+ *
+ * Reset is PULSED here, not merely released: 00 to the latch and then 80.
+ * Writing 80 on its own only resets the part if bit 7 happened to be low
+ * beforehand, which is true exactly once in the life of a power-on.  A
+ * controller left wedged mid-command -- and one will be, the first time a
+ * driver gets a command sequence wrong -- needs a real falling edge, and
+ * this is the only thing on the board that can produce one.
+ *
+ * Which also means a console reset does not clear it: Ctrl-^ jumps to the
+ * reset vector rather than asserting the system reset line, so an ECB card
+ * keeps whatever state it was in.
  *
  * MINI, bit 2, is the data rate: FDC_CLK is a fixed 8mhz oscillator and the
  * MINI pin is what halves it, so this is the 500 kbps setting.  Nothing is
@@ -2187,21 +2252,24 @@ void debugmon(void)
 
 			msr = io_read(live,0);
 
-			if( msr != 0x80 ) {
-				printf("FDC: MSR %02X at %03X --%s releasing"
-				       " reset (latch 438 <- 80)\n",
-					msr, live,
-					(msr == 0x00)
-					  ? " held in reset, as expected after"
-					    " power-on;"
-					  : " not idle;");
+			printf("FDC: MSR %02X at %03X --%s pulsing reset"
+			       " (latch 438 <- 00 then 80)\n",
+				msr, live,
+				(msr == 0x00)
+				  ? " held in reset, as expected after"
+				    " power-on;"
+				  : (msr == 0x80)
+				    ? " idle;"
+				    : " wedged mid-command;");
 
-				io_write(0x438,0x80,0);
+			io_write(0x438,0x00,0);		/* ~FDC_RST low */
+			for( i = 0; i < 200; i++ )
+				(void)io_read(live,0);	/* a few microseconds */
+			io_write(0x438,0x80,0);		/* and released */
 
-				for( i = 0; i < 2000; i++ ) {
-					msr = io_read(live,0);
-					if( msr == 0x80 )	break;
-				}
+			for( i = 0; i < 2000; i++ ) {
+				msr = io_read(live,0);
+				if( msr == 0x80 )	break;
 			}
 
 			printf("FDC: MSR %02X --%s%s%s%s\n", msr,
@@ -2249,6 +2317,705 @@ void debugmon(void)
 
 			printf("FDC: controller answering at %03X, data"
 			       " register at %03X.\n", live, base);
+			continue;
+		}
+
+/*
+ * FDID -- spin a drive up and read a sector ID off the media.
+ *
+ * This is the rung above FDC.  READ ID is the smallest operation that
+ * needs everything real: a drive selected, a motor turning, a head over a
+ * track, the data separator locked to the bit stream, and the data rate
+ * right.  What it does not need is a transfer loop or any TC handling, so
+ * it isolates the analogue half of the problem from the driver half.
+ *
+ * Its result phase is the useful part.  Seven bytes come back, and the last
+ * four are the C/H/R/N of whatever sector header passed under the head --
+ * which is to say the drive tells you what geometry the media actually is,
+ * rather than you telling it.
+ *
+ * The latch value is an argument because two of its fields are still
+ * unknown.  P0/P1/P2 might or might not be how a drive gets selected on
+ * this board -- the schematic suggests drive select comes from the FDC's
+ * own US0/US1 through a 74LS139 instead -- and the sense of MINI, which is
+ * the data rate, has not been confirmed against the FDC9266 datasheet.
+ * Rather than guess either, both are yours to sweep:
+ *
+ *     82  motor on, MINI clear   -- 500 kbps, for 1.44Mb and 1.2Mb media
+ *     86  motor on, MINI set     -- 250 kbps, for 720Kb and 360Kb media
+ *
+ * add 40 to either for DENSEL, and 08/10/20 for P2/P1/P0.
+ *
+ * ST0 is what to read first.  Bits 7:6 clear mean the ID was found.  40h
+ * means abnormal termination, and then ST1 bit 0 -- missing address mark --
+ * is the signature of a head that is reading nothing it recognises: wrong
+ * data rate, wrong drive, no disk, or a motor that never span.
+ */
+		if( is_cmd(&cp,"FDID") )
+		{
+			dword	v;
+			word	base, latch, drive, msr, i, t0;
+			word	r[7];
+			int	bad;
+
+			base  = 0x436;
+			latch = 0x82;
+			drive = 0;
+
+			if( parse_val(&cp,&v) )		latch = (word)v;
+			if( parse_val(&cp,&v) )		drive = (word)(v & 3);
+
+			printf("FDID: latch %02X, FDC drive %u\n",
+				latch, drive);
+
+			/* Pulse reset with the caller's bits, so this
+			   recovers a wedged controller instead of refusing
+			   to talk to one.  Bit 7 low asserts reset; the rest
+			   of the latch -- motor, MINI, DENSEL, P0/P1/P2 --
+			   is held across the pulse. */
+			io_write(0x438,(word)(latch & 0x7F),0);
+			for( i = 0; i < 200; i++ )
+				(void)io_read(base,0);
+			io_write(0x438,latch,0);
+
+			/* A 3.5 inch drive wants about half a second to reach
+			   speed; ten ticks of the 18.2hz clock is 550ms. */
+			t0 = bda.timer_count_low;
+			while( (word)(bda.timer_count_low - t0) < 10 )
+				;
+
+			msr = io_read(base,0);
+			if( msr != 0x80 ) {
+				printf("FDID: MSR %02X after a reset pulse --"
+				       " the controller will not go idle.\n",
+					msr);
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			/* A 765 raises one reset interrupt per drive and will
+			   not behave until they are all collected.  Four
+			   SENSE INTERRUPT STATUS commands clear them, and the
+			   answers run C0, C1, C2, C3 -- the low two bits are
+			   the drive the interrupt belongs to.  A fifth call
+			   would answer 80h, invalid command, which is what an
+			   empty queue looks like. */
+			for( i = 0; i < 4; i++ ) {
+				if( fdc_put(base,0x08) )	break;
+				fdc_get(base,&r[0]);
+				fdc_get(base,&r[1]);
+			}
+			printf("      reset interrupts cleared,"
+			       " last ST0 %02X\n", r[0]);
+
+			/* SPECIFY: step rate 6ms, head unload 240ms, head
+			   load 4ms, and the low bit set for non-DMA. */
+			bad  = fdc_put(base,0x03);
+			bad |= fdc_put(base,0xDF);
+			bad |= fdc_put(base,0x03);
+			if( bad ) {
+				printf("FDID: SPECIFY was not accepted\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			/* RECALIBRATE: step to track 0. */
+			bad  = fdc_put(base,0x07);
+			bad |= fdc_put(base,drive);
+			if( bad ) {
+				printf("FDID: RECALIBRATE was not accepted\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			/* Waiting on the drive-busy bits was wrong: they are
+			   not set yet when the last command byte goes in, so
+			   the loop fell straight through and the SENSE that
+			   followed asked a controller still working on the
+			   seek.  Ask for the result instead, and keep asking.
+			   80h means "nothing has finished", so anything else
+			   is the answer -- which is what waiting for an
+			   interrupt would have got, done by polling. */
+			r[0] = 0x80;
+			r[1] = 0;
+			t0 = bda.timer_count_low;
+			do {
+				if( fdc_put(base,0x08) )	break;
+				if( fdc_get(base,&r[0]) )	break;
+
+				/* 80h is a one-byte answer.  Reading a PCN
+				   after it waits for a byte the controller
+				   was never going to send, which burns the
+				   whole deadline on the first pass and
+				   leaves the real completion uncollected --
+				   and an uncollected seek keeps the drive
+				   busy bit set, which is what MSR 81 was. */
+				if( r[0] == 0x80 )		continue;
+
+				fdc_get(base,&r[1]);		/* PCN */
+				break;
+			} while( (word)(bda.timer_count_low - t0)
+							< FDC_TIMEOUT );
+
+			msr = io_read(base,0);
+			printf("      after RECALIBRATE, MSR %02X,"
+			       " ST0 %02X  PCN %02X%s\n",
+				msr, r[0], r[1],
+				(r[0] == 0x80)
+				  ? "   (never completed)"
+				  : ((r[0] & 0xC0) == 0x00 && (r[0] & 0x20))
+				    ? "   (seek end -- head is at track 0)"
+				    : (r[0] & 0x10)
+				      ? "   (equipment check -- no track 0"
+					" signal, so no drive is answering)"
+				      : (r[0] & 0x08)
+					? "   (not ready)"
+					: "");
+
+			/* READ ID, MFM.  Head 0. */
+			bad  = fdc_put(base,0x4A);
+			bad |= fdc_put(base,(word)(drive & 3));
+			if( bad ) {
+				printf("FDID: READ ID was not accepted\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			bad = 0;
+			for( i = 0; i < 7; i++ ) {
+				if( fdc_get(base,&r[i]) ) {
+					bad = 1;
+					break;
+				}
+			}
+
+			if( bad ) {
+				printf("FDID: READ ID gave no result phase"
+				       " -- the controller is stuck\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			printf("      READ ID -> ST0 %02X  ST1 %02X  ST2 %02X"
+			       "   C%u H%u R%u N%u\n",
+				r[0], r[1], r[2],
+				r[3], r[4], r[5], r[6]);
+
+			if( (r[0] & 0xC0) == 0x00 )
+				printf("FDID: sector ID found."
+				       "  N%u means %u bytes a sector.\n",
+					r[6], (word)(128 << (r[6] & 7)));
+			else if( r[1] & 0x01 )
+				printf("FDID: missing address mark -- the head"
+				       " is reading nothing it recognises.\n"
+				       "      Wrong data rate, wrong drive,"
+				       " no disk, or the motor never span.\n");
+			else
+				printf("FDID: abnormal termination,"
+				       " ST1 %02X ST2 %02X\n", r[1], r[2]);
+
+			io_write(0x438,0x80,0);	/* motor off, reset released */
+			printf("      motor off\n");
+			continue;
+		}
+
+/*
+ * FDREAD -- read one sector off a floppy, the whole way through.
+ *
+ * The rung above FDID.  Everything FDID proved is reused: reset pulse,
+ * interrupt queue drained, SPECIFY, RECALIBRATE.  What is new is the part
+ * that could not be tested by reading an ID -- moving 512 bytes through the
+ * data register with nothing allowed to interrupt, then terminating the
+ * command with TC out of latch bit 0.
+ *
+ * This exists as a monitor command rather than going straight into a driver
+ * because a transfer loop that is subtly wrong looks like bad media, and
+ * debugging that through DOS and INT 13h at the same time is three unknowns
+ * at once.  Here the sector arrives, or it does not, and the seven result
+ * bytes say why.
+ *
+ * ST1 is where a transfer goes to explain itself.  Bit 4 is overrun -- the
+ * loop was too slow and a byte went past uncollected, which is the failure
+ * disabling interrupts is meant to prevent.  Bit 5 is a CRC error in the
+ * data field.  Bit 2 is no data: the sector asked for is not on the track.
+ */
+		if( is_cmd(&cp,"FDREAD") )
+		{
+			dword	v;
+			word	base, latch, drive, msr, i, t0;
+			word	cyl, head, sec;
+			word	r[7];
+			byte	*buf;
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} m;
+			int	rc;
+
+			base  = 0x436;
+			latch = 0x82;
+			cyl   = 0;
+			head  = 0;
+			sec   = 1;
+			drive = 0;
+
+			if( parse_val(&cp,&v) )		latch = (word)v;
+			if( parse_val(&cp,&v) )		cyl   = (word)v;
+			if( parse_val(&cp,&v) )		head  = (word)(v & 1);
+			if( parse_val(&cp,&v) )		sec   = (word)v;
+
+			if( sec == 0 ) {
+				printf("usage: FDREAD [<latch>] [<cyl>]"
+				       " [<head>] [<sector>]\n"
+				       "       hex; sectors count from 1."
+				       "  Default 82 0 0 1.\n");
+				continue;
+			}
+
+			m.fp.seg = 0x1000;	/* the scratch SECCMP uses */
+			m.fp.off = 0;
+			buf = m.p;
+
+			printf("FDREAD: latch %02X, C%u H%u S%u\n",
+				latch, cyl, head, sec);
+
+			/* Reset pulse, then drain the four reset
+			   interrupts, exactly as FDID does. */
+			io_write(0x438,(word)(latch & 0x7F),0);
+			for( i = 0; i < 200; i++ )	(void)io_read(base,0);
+			io_write(0x438,latch,0);
+
+			t0 = bda.timer_count_low;
+			while( (word)(bda.timer_count_low - t0) < 10 )
+				;
+
+			if( io_read(base,0) != 0x80 ) {
+				printf("FDREAD: controller will not go idle\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+			for( i = 0; i < 4; i++ ) {
+				if( fdc_put(base,0x08) )	break;
+				fdc_get(base,&r[0]);
+				fdc_get(base,&r[1]);
+			}
+
+			fdc_put(base,0x03);		/* SPECIFY */
+			fdc_put(base,0xDF);
+			fdc_put(base,0x03);		/* non-DMA */
+
+			/* RECALIBRATE, then SEEK if the track is not 0. */
+			fdc_put(base,0x07);
+			fdc_put(base,drive);
+			r[0] = 0x80;
+			t0 = bda.timer_count_low;
+			do {
+				if( fdc_put(base,0x08) )	break;
+				if( fdc_get(base,&r[0]) )	break;
+				if( r[0] == 0x80 )		continue;
+				fdc_get(base,&r[1]);
+				break;
+			} while( (word)(bda.timer_count_low - t0) < 36 );
+
+			if( cyl ) {
+				fdc_put(base,0x0F);		/* SEEK */
+				fdc_put(base,(word)((head << 2) | drive));
+				fdc_put(base,cyl);
+				r[0] = 0x80;
+				t0 = bda.timer_count_low;
+				do {
+					if( fdc_put(base,0x08) )	break;
+					if( fdc_get(base,&r[0]) )	break;
+					if( r[0] == 0x80 )		continue;
+					fdc_get(base,&r[1]);
+					break;
+				} while( (word)(bda.timer_count_low - t0) < 36 );
+				printf("        SEEK -> ST0 %02X  PCN %02X\n",
+					r[0], r[1]);
+			}
+
+			/* READ DATA, MFM, one sector.  EOT is set to the
+			   sector wanted so the controller stops there by
+			   itself rather than running to the end of the
+			   track. */
+			rc  = fdc_put(base,0x46);
+			rc |= fdc_put(base,(word)((head << 2) | drive));
+			rc |= fdc_put(base,cyl);
+			rc |= fdc_put(base,head);
+			rc |= fdc_put(base,sec);
+			rc |= fdc_put(base,0x02);	/* N: 512 bytes */
+			rc |= fdc_put(base,sec);	/* EOT */
+			rc |= fdc_put(base,0x1B);	/* GPL for MFM 512 */
+			rc |= fdc_put(base,0xFF);	/* DTL, unused when N */
+			if( rc ) {
+				printf("FDREAD: the command was not taken\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			rc = fdc_pio_in(base,buf,512);
+
+			/* TC ends the command.  Pulsed, not left asserted. */
+			io_write(0x438,(word)(latch | 0x01),0);
+			io_write(0x438,latch,0);
+
+			for( i = 0; i < 7; i++ ) {
+				if( fdc_get(base,&r[i]) ) {
+					printf("FDREAD: result phase stopped"
+					       " after %u bytes\n", i);
+					break;
+				}
+			}
+
+			msr = io_read(base,0);
+			io_write(0x438,0x80,0);		/* motor off */
+
+			printf("        transfer %s;  ST0 %02X ST1 %02X"
+			       " ST2 %02X   C%u H%u R%u N%u   MSR %02X\n",
+				(rc == 0) ? "complete"
+					  : (rc == 1) ? "cut short"
+						      : "timed out",
+				r[0], r[1], r[2], r[3], r[4], r[5], r[6], msr);
+
+			if( (r[0] & 0xC0) != 0x00 ) {
+				printf("FDREAD: failed --%s%s%s%s\n",
+					(r[1] & 0x10) ? " overrun (the loop"
+							" was too slow)" : "",
+					(r[1] & 0x20) ? " CRC error in the"
+							" data field" : "",
+					(r[1] & 0x04) ? " no data (sector not"
+							" on this track)" : "",
+					(r[1] & 0x01) ? " missing address"
+							" mark" : "");
+				continue;
+			}
+
+			printf("FDREAD: sector read.  First 16 bytes:\n       ");
+			for( i = 0; i < 16; i++ )
+				printf(" %02X", (word)buf[i]);
+			printf("\n");
+			if( cyl == 0 && head == 0 && sec == 1 )
+				printf("        bytes 1FE-1FF are %02X %02X"
+				       " -- %s\n",
+					(word)buf[510], (word)buf[511],
+					(buf[510] == 0x55 && buf[511] == 0xAA)
+					  ? "a boot signature"
+					  : "not a boot signature");
+			continue;
+		}
+
+/*
+ * FDWRITE -- write one sector, then read it back and compare.
+ *
+ * The last untested path on the floppy side, and the only destructive one.
+ * Every argument is required, with no defaults at all: a command that
+ * overwrites a sector should not be runnable by pressing return, and the
+ * disk in the drive when this is tried should be one nobody minds losing.
+ *
+ * It verifies itself. Writing and reporting success on the controller's own
+ * say-so proves very little -- the IDE driver in this tree had a write path
+ * whose documentation and behaviour disagreed for years, and it was only
+ * ever caught by reading back. So this fills the buffer with a pattern that
+ * depends on the sector address, writes it, clears the buffer, reads it
+ * again and compares. Nothing short of a byte-for-byte match is reported as
+ * working.
+ *
+ * ST1 bit 1 is the one to watch: write protect. Bit 4 is underrun, the
+ * write-side equivalent of overrun, and it means the sector on the media is
+ * now damaged rather than merely unwritten.
+ */
+		if( is_cmd(&cp,"FDWRITE") )
+		{
+			dword	v;
+			word	base, latch, drive, i, t0;
+			word	cyl, head, sec;
+			word	r[7];
+			byte	*buf;
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} m;
+			int	rc, bad;
+
+			base  = 0x436;
+			drive = 0;
+
+			/* All four, or none: no defaults on a command that
+			   overwrites something. */
+			latch = cyl = head = sec = 0;
+			rc = 0;
+			if( parse_val(&cp,&v) )	{ latch = (word)v;       rc++; }
+			if( parse_val(&cp,&v) )	{ cyl   = (word)v;       rc++; }
+			if( parse_val(&cp,&v) )	{ head  = (word)(v & 1); rc++; }
+			if( parse_val(&cp,&v) )	{ sec   = (word)v;       rc++; }
+
+			if( rc != 4 || latch == 0 || sec == 0 ) {
+				printf("usage: FDWRITE <latch> <cyl> <head>"
+				       " <sector>\n"
+				       "       every argument required, hex."
+				       "  82 = 500kbps, 86 = 250kbps.\n"
+				       "       THIS OVERWRITES THE SECTOR."
+				       "  Use a disk you do not want.\n");
+				continue;
+			}
+
+			m.fp.seg = 0x1000;
+			m.fp.off = 0;
+			buf = m.p;
+
+			printf("FDWRITE: latch %02X, C%u H%u S%u --"
+			       " overwriting\n", latch, cyl, head, sec);
+
+			/* A pattern that depends on where it is going, so a
+			   write that lands on the wrong sector cannot pass
+			   by looking like the right one. */
+			for( i = 0; i < 512; i++ )
+				buf[i] = (byte)(i + cyl * 7 + head * 13
+						  + sec * 29);
+
+			io_write(0x438,(word)(latch & 0x7F),0);
+			for( i = 0; i < 200; i++ )	(void)io_read(base,0);
+			io_write(0x438,latch,0);
+			t0 = bda.timer_count_low;
+			while( (word)(bda.timer_count_low - t0) < 10 )
+				;
+
+			if( io_read(base,0) != 0x80 ) {
+				printf("FDWRITE: controller will not go"
+				       " idle\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+			for( i = 0; i < 4; i++ ) {
+				if( fdc_put(base,0x08) )	break;
+				fdc_get(base,&r[0]);
+				fdc_get(base,&r[1]);
+			}
+
+			fdc_put(base,0x03);		/* SPECIFY */
+			fdc_put(base,0xDF);
+			fdc_put(base,0x03);
+
+			fdc_put(base,0x07);		/* RECALIBRATE */
+			fdc_put(base,drive);
+			r[0] = 0x80;
+			t0 = bda.timer_count_low;
+			do {
+				if( fdc_put(base,0x08) )	break;
+				if( fdc_get(base,&r[0]) )	break;
+				if( r[0] == 0x80 )		continue;
+				fdc_get(base,&r[1]);
+				break;
+			} while( (word)(bda.timer_count_low - t0) < 36 );
+
+			if( cyl ) {
+				fdc_put(base,0x0F);		/* SEEK */
+				fdc_put(base,(word)((head << 2) | drive));
+				fdc_put(base,cyl);
+				r[0] = 0x80;
+				t0 = bda.timer_count_low;
+				do {
+					if( fdc_put(base,0x08) )	break;
+					if( fdc_get(base,&r[0]) )	break;
+					if( r[0] == 0x80 )		continue;
+					fdc_get(base,&r[1]);
+					break;
+				} while( (word)(bda.timer_count_low - t0)
+								< 36 );
+			}
+
+			/* WRITE DATA, MFM, one sector. */
+			rc  = fdc_put(base,0x45);
+			rc |= fdc_put(base,(word)((head << 2) | drive));
+			rc |= fdc_put(base,cyl);
+			rc |= fdc_put(base,head);
+			rc |= fdc_put(base,sec);
+			rc |= fdc_put(base,0x02);
+			rc |= fdc_put(base,sec);	/* EOT */
+			rc |= fdc_put(base,0x1B);	/* GPL */
+			rc |= fdc_put(base,0xFF);	/* DTL */
+			if( rc ) {
+				printf("FDWRITE: the command was not taken\n");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			rc = fdc_pio_out(base,buf,512);
+
+			io_write(0x438,(word)(latch | 0x01),0);	/* TC */
+			io_write(0x438,latch,0);
+
+			for( i = 0; i < 7; i++ )
+				if( fdc_get(base,&r[i]) )	break;
+
+			printf("         write %s;  ST0 %02X ST1 %02X"
+			       " ST2 %02X\n",
+				(rc == 0) ? "complete"
+					  : (rc == 1) ? "cut short"
+						      : "timed out",
+				r[0], r[1], r[2]);
+
+			if( (r[0] & 0xC0) != 0x00 ) {
+				printf("FDWRITE: failed --%s%s%s\n",
+					(r[1] & 0x02) ? " WRITE PROTECTED" : "",
+					(r[1] & 0x10) ? " underrun (the sector"
+							" on the media is now"
+							" damaged)" : "",
+					(r[1] & 0x01) ? " missing address"
+							" mark" : "");
+				io_write(0x438,0x80,0);
+				continue;
+			}
+
+			/* Read it back.  Clearing the buffer first means a
+			   read that quietly does nothing cannot pass. */
+			for( i = 0; i < 512; i++ )	buf[i] = 0;
+
+			rc  = fdc_put(base,0x46);	/* READ DATA */
+			rc |= fdc_put(base,(word)((head << 2) | drive));
+			rc |= fdc_put(base,cyl);
+			rc |= fdc_put(base,head);
+			rc |= fdc_put(base,sec);
+			rc |= fdc_put(base,0x02);
+			rc |= fdc_put(base,sec);
+			rc |= fdc_put(base,0x1B);
+			rc |= fdc_put(base,0xFF);
+
+			rc = fdc_pio_in(base,buf,512);
+			io_write(0x438,(word)(latch | 0x01),0);
+			io_write(0x438,latch,0);
+			for( i = 0; i < 7; i++ )
+				if( fdc_get(base,&r[i]) )	break;
+
+			io_write(0x438,0x80,0);		/* motor off */
+
+			if( (r[0] & 0xC0) != 0x00 || rc ) {
+				printf("FDWRITE: the read back failed,"
+				       " ST0 %02X ST1 %02X\n", r[0], r[1]);
+				continue;
+			}
+
+			bad = -1;
+			for( i = 0; i < 512; i++ ) {
+				if( buf[i] == (byte)(i + cyl * 7 + head * 13
+							+ sec * 29) )
+					continue;
+				bad = (int)i;
+				break;
+			}
+
+			if( bad < 0 )
+				printf("FDWRITE: written and read back,"
+				       " 512 bytes agree\n");
+			else
+				printf("FDWRITE: differs at byte %u -- got"
+				       " %02X, wanted %02X\n",
+					(word)bad, (word)buf[bad],
+					(word)(byte)(bad + cyl * 7
+						+ head * 13 + sec * 29));
+			continue;
+		}
+
+/*
+ * FD13 -- call INT 13h against a floppy and report what the 765 said.
+ *
+ * FDREAD and FDWRITE reach the controller directly.  This goes the way DOS
+ * goes -- INT 13h, int_40h, the driver -- and then prints the seven result
+ * bytes the driver left in bda.fd_ctrl_stat[].  Those bytes are the whole
+ * point: a status code alone says "seek error", which is a summary written
+ * by fd_result() and can be wrong about the cause.  ST0, ST1 and ST2 say
+ * what the controller actually reported.
+ *
+ * Reading them after a failed DOS operation is not possible any other way:
+ * the monitor is only reachable through SETUP during POST, and the test of
+ * segment 0 zeroes the BDA on the way there.
+ *
+ *	ST0 bits 7:6	00 normal, 01 abnormal, 10 invalid command
+ *	ST1 bit 7	end of cylinder -- reached EOT rather than TC
+ *	    bit 5	CRC error in the data field
+ *	    bit 4	overrun or underrun: the loop was too slow
+ *	    bit 2	no data: that sector is not on this track
+ *	    bit 1	not writable: the disk is write protected
+ *	    bit 0	missing address mark
+ *	ST2 bit 5	CRC error in the data field
+ *	    bit 4	wrong cylinder: the header says another track
+ *	    bit 0	missing data address mark
+ */
+		if( is_cmd(&cp,"FD13") )
+		{
+			T_REGS	regs;
+			dword	v;
+			word	fn, cyl, head, sec, cnt, cur_ds, i, got;
+			union {
+				byte	*p;
+				struct { word off; word seg; } fp;
+			} m;
+
+			fn = cyl = head = sec = 0;
+			cnt = 1;
+			got = 0;
+			if( parse_val(&cp,&v) )	{ fn   = (word)v;       got++; }
+			if( parse_val(&cp,&v) )	{ cyl  = (word)v;       got++; }
+			if( parse_val(&cp,&v) )	{ head = (word)(v & 1); got++; }
+			if( parse_val(&cp,&v) )	{ sec  = (word)v;       got++; }
+			parse_val(&cp,&v);
+			if( got == 4 && v )	cnt = (word)v;
+
+			if( got != 4 || sec == 0 ) {
+				printf("usage: FD13 <fn> <cyl> <head> <sec>"
+				       " [<count>]\n"
+				       "       hex.  02 reads, 03 WRITES,"
+				       " 04 verifies, 08 parameters.\n"
+				       "       drive A only.  03 overwrites"
+				       " the sector.\n");
+				continue;
+			}
+
+			m.fp.seg = 0x1000;
+			m.fp.off = 0;
+
+			ASM {
+				mov	ax,ds
+				mov	[cur_ds],ax
+			}
+
+			regs.ax = (word)((fn << 8) | (cnt & 0xFF));
+			regs.cx = (word)(((cyl & 0x00FF) << 8)
+					| ((cyl >> 2) & 0x00C0)
+					| (sec & 0x003F));
+			regs.dx = (word)(head << 8);	/* DL = 0, drive A */
+			regs.bx = m.fp.off;
+			regs.es = m.fp.seg;
+			regs.ds = cur_ds;
+			regs.si = regs.di = 0;
+			regs.flags = 0;
+
+			printf("FD13: AH=%02X AL=%02X CX=%04X DX=%04X\n",
+				fn, cnt, regs.cx, regs.dx);
+
+			int13_call(&regs);
+
+			printf("      returned AH=%02X AL=%02X  %s\n",
+				(word)(regs.ax >> 8), (word)(regs.ax & 0xFF),
+				(regs.flags & 1) ? "CY -- failed" : "NC");
+
+			printf("      765 result:");
+			for( i = 0; i < 7; i++ )
+				printf(" %02X", (word)bda.fd_ctrl_stat[i]);
+			printf("\n      ST0 %02X ST1 %02X ST2 %02X   C%u H%u"
+			       " R%u N%u\n",
+				(word)bda.fd_ctrl_stat[0],
+				(word)bda.fd_ctrl_stat[1],
+				(word)bda.fd_ctrl_stat[2],
+				(word)bda.fd_ctrl_stat[3],
+				(word)bda.fd_ctrl_stat[4],
+				(word)bda.fd_ctrl_stat[5],
+				(word)bda.fd_ctrl_stat[6]);
+			printf("      fd_status %02X  seek_status %02X"
+			       "  latch %02X\n",
+				(word)bda.fd_status,
+				(word)bda.seek_status,
+				(word)bda.motor_status);
 			continue;
 		}
 

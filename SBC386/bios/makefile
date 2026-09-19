@@ -97,7 +97,8 @@ OBJECTS = start.o sizer.o crc16.o diskide.o errno.o \
 	11h_12h.o 13h_disk.o 14h_sio0.o 15h_misc.o 1Ah_time.o \
 	main.o signon.o getline.o set1302.o icu.o \
 	strtobcd.o strtoint.o testmain.o stub.o debugmon.o monitor.o hdinit.o \
-	19h_boot.o 17h_prn.o 10h_video.o 16h_kbd.o
+	19h_boot.o 17h_prn.o 10h_video.o 16h_kbd.o \
+	fdcpio.o diskfdc.o 40h_flop.o
 
 TEST = test.o cprintf.o
 
@@ -190,6 +191,12 @@ sizer.o:	sizer.asm $(INCLUDES)
 diskide.o:	diskide.asm $(INCLUDES)
 	$(ASM) $(NOPT) -o$@ -ldiskide.lst   diskide.asm
 
+fdcpio.o:	fdcpio.asm $(INCLUDES)
+	$(ASM) $(NOPT) -o$@ -lfdcpio.lst   fdcpio.asm
+
+40h_flop.o:	40h_flop.asm $(INCLUDES)
+	$(ASM) $(NOPT) -o$@ -l40h_flop.lst   40h_flop.asm
+
 errno.o:	errno.asm $(INCLUDES)
 	$(ASM) $(NOPT) -o$@ -lerrno.lst   errno.asm
 
@@ -275,6 +282,9 @@ stub.o:	stub.asm	$(INCLUDES)
 monitor.o:	monitor.asm	$(INCLUDES)
 sizer.o:	sizer.asm	$(INCLUDES)
 diskide.o:	diskide.asm	$(INCLUDES)
+fdcpio.o:	fdcpio.asm	$(INCLUDES)
+40h_flop.o:	40h_flop.asm	$(INCLUDES)
+diskfdc.o:	diskfdc.c $(CINCL)
 
 signon.o:	signon.c $(CINCL)
 set1302.o:	set1302.c $(CINCL)

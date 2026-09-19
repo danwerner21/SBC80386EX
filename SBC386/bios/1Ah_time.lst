@@ -1028,7 +1028,7 @@
    187 000000A8 7409                    	je	.3
    188 000000AA FE0E4000                	dec	byte [motor_count]
    189 000000AE 7503                    	jnz	.3
-   190                                  	extern	FDC_stop_motor	; currently in stub.asm
+   190                                  	extern	FDC_stop_motor	; in diskfdc.asm
    191 000000B0 E8(0000)                	call	FDC_stop_motor
    192                                  .3:
    193                                  ; handle the printer & serial line timeouts

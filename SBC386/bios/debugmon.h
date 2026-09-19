@@ -36,4 +36,8 @@ extern void __cdecl int15_call(T_REGS *regs);
 /* in monitor.asm -- the same, for INT 13h */
 extern void __cdecl int13_call(T_REGS *regs);
 
+/* in monitor.asm -- the floppy data phase, non-DMA, interrupts off */
+extern int __cdecl fdc_pio_in(word base, byte far *buf, word count);
+extern int __cdecl fdc_pio_out(word base, byte far *buf, word count);
+
 #endif

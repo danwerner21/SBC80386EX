@@ -637,7 +637,10 @@ inside one 54.9 ms period.
   waiting to be filled in
 - The P0/P1/P2 drive-select encoding — a single motor bit and three select bits is nothing
   like a PC DOR
-- Which alias the board is actually jumpered to
+- ~~Which alias the board is actually jumpered to~~ — **unanswerable, and it does not
+  matter.** All four are aliases of one register by design, so nothing read at one of them
+  says anything about the jumpering. 436/437 is the pair to use, being the N8VEM
+  convention the board notes cite
 - ~~How the data rate is selected~~ — **`MINI`, latch bit 2.** The schematic settles it.
   `FDC_CLK` comes from U16, a fixed 8 MHz oscillator with no divider and nothing switching
   it, which on a 765-family part is 500 kbps MFM. Taken alone that would make the board
@@ -673,11 +676,390 @@ inside one 54.9 ms period.
   and the one place a driver is most likely to get it wrong, so it wants confirming before
   anything tries to select drive 1.
 
-The `FDC` monitor command is the first step. It reads the status register at all four
-aliases and the digital input register, and distinguishes a live controller from an empty
-bus the only way that is reliable: an idle 765 reads `80h` and a floating bus reads `FF`.
-If something answers, it issues SENSE INTERRUPT STATUS — a command that moves no media and
-touches no motor — and reports what comes back. It writes nothing to the DOR.
+### The controller is alive
+
+Confirmed 2026-09-19 by the `FDC` monitor command:
+
+```
+FDC: main status register --  430=00  432=00  434=00  436=00
+     digital input 438=FF   (bit 0 is ~DC, disk change)
+FDC: MSR 00 at 436 -- held in reset, as expected after power-on; releasing reset
+FDC: MSR 80 -- RQM DIO=out idle
+     SENSE INTERRUPT STATUS -> ST0 C0, PCN 00  (reset seen -- the part is alive)
+```
+
+`ST0 = C0` is the part that cannot be faked. "Abnormal termination due to reset" is
+something only a live 765 produces once its reset line is released — a floating bus or a
+pull-up cannot manufacture it. The `00` at every alias beforehand is the 74LS273 doing
+what it does at power-on, holding the controller in reset until software says otherwise.
+
+**That run also worked by luck, and the second one did not.** The probe wrote `80h` to the
+latch and called it a reset, which it was — but only because bit 7 happened to be low
+beforehand, which is true exactly once in the life of a power-on. The next attempt found
+the controller wedged at `MSR 71` (RQM clear, EXEC and BUSY set, drive 0 seeking) and
+writing `80h` again did nothing at all, because there was no edge. Reset is a **pulse**:
+`00` then `80`. Both commands do that now, so either one recovers a stuck controller
+instead of refusing to speak to it.
+
+Two consequences reach past the probe:
+
+- **A console reset does not clear an ECB card.** `Ctrl-^` jumps to the reset vector; it
+  does not assert the system reset line, so the 74LS273 keeps its contents and the FDC
+  keeps whatever state it was in. The IDE path already knows this in its own way —
+  `hd_reset()` soft-resets the interface at every POST — and the floppy driver will need
+  to do the same rather than trusting the board to come up clean.
+- **A 765 raises one reset interrupt per drive and misbehaves until they are all
+  collected.** `FDID` issues SENSE INTERRUPT STATUS four times after the pulse. The
+  answers run `C0`, `C1`, `C2`, `C3` — the low two bits are the drive each interrupt
+  belongs to — and a *fifth* call would answer `80h`, which is what an empty queue looks
+  like.
+
+### The media reads
+
+Confirmed 2026-09-19. `FDID 82`, a 1.44Mb disk in drive A:
+
+```
+      READ ID -> ST0 00  ST1 00  ST2 00   C0 H0 R18 N2
+FDID: sector ID found.  N2 means 512 bytes a sector.
+```
+
+All three status bytes clean, and the ID is a real one: cylinder 0, head 0, **sector 18**,
+512 bytes. Sector 18 exists only on a 1.44Mb format. The head read an actual sector header
+off the media, which means the drive was selected, the motor was turning, the head was on
+a track, the data separator locked, and the data rate was right — all of it, in one answer.
+
+With the result-length fix in, the whole sequence runs clean:
+
+```
+      after RECALIBRATE, MSR 80, ST0 20  PCN 00   (seek end -- head is at track 0)
+      READ ID -> ST0 00  ST1 00  ST2 00   C0 H0 R8 N2
+```
+
+`MSR 80` idle, the drive busy bit cleared now that the interrupt is collected, `ST0 20`
+seek end, `PCN 00` confirming the head reached track 0. The sector number differing between
+runs — 18 the first time, 8 the second — is itself the proof: READ ID returns whichever
+header rotates under the head next, so a number that changes is a disk that is turning.
+
+**That settles both remaining unknowns.**
+
+- **P0/P1/P2 are not how a drive is selected.** All three were clear and drive 0 answered.
+  Drive select comes from the drive number in the FDC command, through `US0`/`US1` and the
+  74LS139, which is what the schematic suggested and what was least certain about that
+  reading.
+- **MINI clear is 500 kbps.** The rate inference from the fixed 8 MHz oscillator holds, and
+  DENSEL plays no part in it. `86` should read 720Kb and 360Kb media the same way.
+
+### The driver — **working**
+
+Read, write, directory and file access from DOS, 2026-09-19. Phase 6 complete.
+
+**Four bugs stood between the driver being written and the driver working, and each one
+hid the next.** That is the part worth keeping: every fix changed the symptom rather than
+resolving it, and three of the four were invisible until an instrument was built to read
+the controller's own status.
+
+| | what it was | how it looked |
+|---|---|---|
+| 1 | `40h_flop.asm` called into C without setting DS to DGROUP | hang, motor never started |
+| 2 | SPECIFY only issued in `fd_reset()`, which DOS did not call first | overrun on every transfer |
+| 3 | `seek_status` never initialised, so the head was never homed | wrong cylinder in ST2 |
+| 4 | `fd_seek_done()` took any drive's interrupt as its own | recalibrate always failed |
+
+**One.** Watcom compiles this BIOS with `-zdp`, so DS *is* DGROUP, and the driver reaches
+the BDA through `bda_ptr` which lives there. Entered from DOS, INT 40h arrives with the
+caller's DS, so `bda_ptr` read garbage and every timeout loop spun for ever.
+`fn00_reset_disk` in `13h_disk.asm` had done this correctly for years with a comment saying
+why. A new assembly-to-C boundary was written without following the convention next door.
+
+**Two.** After a hardware reset a 765 is in **DMA mode**, where it asserts DRQ per byte
+instead of handshaking through RQM -- and this board has no DMA, so nothing answers.
+SPECIFY's low bit selects non-DMA, and it lived only in `fd_reset()`, reachable solely
+through INT 13h function 00h. Everything analogue worked: the head found the sector, the
+separator locked, the ID came back correct, and then the controller streamed 512 bytes at
+nobody. It is issued before every transfer now -- three command bytes, against depending on
+some earlier call having happened.
+
+**Three.** `fd_reset()` sets `seek_status` to `0F`, "every drive needs recalibrating", and
+nothing called it. A zeroed BDA therefore reads as "already calibrated", so `fd_seek()`
+with `cyl == 0` returned without ever moving a head. POST calls `fd_reset()` now, for the
+same reason `hd_reset()` runs on the IDE side.
+
+**Four.** A 765 queues one interrupt per drive after a reset, and they sit there until
+collected. `fd_seek_done()` accepted the first answer that was not `80h` without checking
+whose it was, so a recalibrate collected drive 2's leftover -- `ST0 C2`, interrupt code 11,
+unit 2 -- and concluded it had failed. The low two bits of ST0 name the drive; anything
+else is discarded now and the question asked again.
+
+That last one was self-perpetuating in a way worth noticing. An earlier change had made any
+failure set the recalibrate bit, so that DOS's *Retry* would re-home the head and succeed.
+With bug 4 present that guaranteed every retry went through the one broken path, and made a
+recoverable error permanent.
+
+### What actually found them
+
+`FD13` did -- a monitor command that calls INT 13h the way DOS does and then prints the
+seven bytes the 765 returned. Before it existed, three fixes went in on plausible reasoning
+and none of them was the fault. After it existed, each bug was named by its own status
+bytes: `ST1 10` overrun, `ST2 10` wrong cylinder, `ST0 C2` an interrupt belonging to
+another drive.
+
+The lesson is not new to this project -- `IDENT`, `IRQFIND` and `WDT` were all built on the
+same principle -- but it was learned again the expensive way. **`FD13` should have been
+written before the driver, not after the third failure to explain it.** And when `fd_seek`
+turned out to discard the one status that mattered, that was a gap in the instrument, not
+in the theory.
+
+One bug stood between the driver being written and the driver working, and it is worth
+recording because the answer was already in the tree. **`40h_flop.asm` called into C
+without setting DS to DGROUP.** Watcom compiles this BIOS with `-zdp` -- DS *is* DGROUP --
+and `diskfdc.c` reaches the BDA through `bda_ptr`, which lives there. Entered from DOS,
+INT 40h arrives with whatever DS the caller had, so `bda_ptr` read garbage, `bda` pointed
+somewhere random, and `bda.timer_count_low` never advanced. Every timeout loop in the
+driver then spun for ever.
+
+The symptom named the cause precisely, once read carefully: the machine hung **and the
+motor never started**. DOS calls AH=00h first, and `fd_reset()` asserts the reset line with
+the motor off before waiting for SENSE INTERRUPT STATUS -- so it hung one call before
+anything would have spun a disk.
+
+`fn00_reset_disk` in `13h_disk.asm` had done it correctly for years, with a comment saying
+why: *"the C helpers address through DGROUP"*. A new assembly-to-C boundary was written
+without following the convention the file next door had already established. It is also
+why `FDREAD` worked throughout: the monitor is C, so DS is DGROUP the whole way down, and
+the driver only broke when reached from assembly that arrived from outside.
+
+### The driver
+
+`fdcpio.asm` holds the two things that have to be assembly: the data phase, and
+`FDC_stop_motor`, which `int_irq0` calls having saved only BX, CX and DS. `diskfdc.c`
+holds the logic -- reset, SPECIFY, recalibrate, seek, one sector in or out, and 765 status
+decoded into the `error.h` codes the IDE path already uses. `40h_flop.asm` is the BIOS
+surface: `int_40h` with functions 00, 01, 02, 03, 04, 08 and 15, looping one sector per
+driver call, and four INT 1Eh parameter tables selected by the configured drive type.
+
+State lives in the BDA fields a PC uses for the same jobs: `motor_status` as the latch
+shadow, `motor_count` for the timeout `int_irq0` already counts down, `seek_status` as the
+per-drive "needs recalibrating" bit, `fd_status` and `fd_ctrl_stat[]` for function 01h.
+
+None of it has run. The monitor commands remain, and remain the thing to fall back on:
+`FDREAD` exercises the same sequences without INT 13h or DOS in the way, so a `DIR A:`
+that fails while `FDREAD` succeeds puts the fault in `40h_flop.asm` and nowhere below it.
+
+### A session lost to a bad CF card
+
+Worth recording because the symptom was so convincing. After the driver went in, the board
+stopped booting: POST clean, both IDE drives enumerated, and then "Non-System disk or disk
+error" from the volume boot record. It looked exactly like a BIOS regression, and it was
+not one -- the CF image was corrupt, and would not boot on another PC either.
+
+Everything pointed the wrong way. The failure appeared in the same build as a large change.
+`equip_flag` had gained a bit. It survived a power cycle, which ruled out the warm-boot
+path. Setting the floppy types to None and clearing that bit changed nothing. Neutralising
+`int_40h` behind a build switch, so it answered invalid-command exactly as the old stub
+did, changed nothing either -- which should have been the moment to suspect the media
+rather than the code, and was not.
+
+Two lessons. **`LBA 0` and `LBA 20` were the commands that mattered**, and dumping the MBR
+and the boot sector should have come first rather than fourth; the partition table and BPB
+were readable the whole time. And **DOS had not been booted in a dozen builds** -- only
+monitor commands had been run since HIMEM last loaded -- so there was no recent known-good
+point to bisect against. Booting the machine occasionally, not just testing the piece in
+hand, is cheaper than the alternative.
+
+What is left for the driver is proving it: the INT 13h and INT 1Eh surfaces exist now and
+have never been called. The analogue half — the part that could have been
+a wiring or a rate problem, and could not be reasoned out from a schematic — is done.
+
+**One decision has to be made before the transfer loop is written.** At 500 kbps a byte
+arrives every 16 microseconds, and nothing may stall the loop for longer than that or the
+sector is lost. The IRQ4 handler is the threat: it saves nine registers, reads two ports,
+runs `kbd_stuff` with its table lookup and ring-buffer update, and then drains again in a
+loop if more than one character is waiting. That is plausibly 8 to 15 microseconds for one
+character and past the budget for two.
+
+So either the data phase runs with interrupts disabled — 8.2 ms a sector, which will drop
+console keystrokes typed *during* a transfer — or it stays open and the handler has to be
+measured and kept under 16 microseconds. The tick survives either way; 8.2 ms is well
+inside one 54.9 ms period.
+
+**Decided: interrupts off during the data phase.** A dropped keystroke during a floppy
+read is a visible nuisance; a data overrun is a silently corrupt sector, and that failure
+would present as bad media rather than bad timing — the worst kind to chase.
+
+`fdc_pio_in` in `monitor.asm` implements it, and the shape is worth recording because the
+obvious version is wrong. **Only the burst runs with interrupts off, not the wait before
+it.** After the READ command is accepted the controller sits through the rotational
+latency until the wanted sector comes round, and that is up to a full revolution — 200ms
+at 300 rpm. Interrupts off for that long would cost the 18.2hz tick several counts, since
+a latched IRQ0 collapses however many periods it was held through into a single interrupt,
+and the clock would lose time on every sector read.
+
+So the first byte is waited for with interrupts as the caller left them, and `CLI` happens
+only once that byte is sitting in the data register. That leaves one narrow exposure — an
+interrupt taken between seeing RQM and executing CLI — and the 16 microseconds of slack
+before the next byte arrives is enough to absorb even an IRQ4 there.
+
+### `FDREAD` — the rung above `FDID`
+
+Everything `FDID` proved is reused: the reset pulse, the drained interrupt queue, SPECIFY,
+RECALIBRATE. What is new is the part reading an ID could not exercise — 512 bytes through
+the data register with nothing allowed to interrupt, then TC out of latch bit 0 to end the
+command.
+
+It is a monitor command rather than a driver because a transfer loop that is subtly wrong
+looks exactly like bad media, and debugging that through DOS and INT 13h simultaneously is
+three unknowns at once. Here the sector arrives or it does not, and seven result bytes say
+why. **ST1 is where a transfer explains itself**: bit 4 is overrun — the loop was too slow
+and a byte went past uncollected, which is precisely what disabling interrupts is meant to
+prevent — bit 5 is a CRC error in the data field, and bit 2 is no data, meaning the sector
+asked for is not on the track.
+
+### A sector, off a real disk
+
+Confirmed 2026-09-19, `FDREAD 82` against a DOS 6 boot floppy:
+
+```
+transfer complete;  ST0 00 ST1 00 ST2 00   C1 H0 R1 N2   MSR 80
+FDREAD: sector read.  First 16 bytes:
+        EB 3C 90 4D 53 44 4F 53 35 2E 30 00 02 01 01 00
+        bytes 1FE-1FF are 55 AA -- a boot signature
+```
+
+The short jump, `MSDOS5.0` in the OEM field — DOS 6 still writes the 5.0 string — then
+`00 02` for 512 bytes a sector and `01` sector a cluster, and the boot signature in the
+last two bytes of the sector. Not merely present but correctly ordered, which a transfer
+that dropped or duplicated a byte would not manage.
+
+**`ST1 00` is the line that matters most.** Bit 4 is overrun, and it is clear: 512 bytes
+moved through the data register with interrupts disabled and not one of them missed. The
+decision to hold interrupts off through the burst was the right one, and this is evidence
+rather than an assumption. `C1` in the result is the 765 doing what it should — having
+finished the last sector of the track it names the next cylinder.
+
+**Both data rates work.** `FDREAD 86` — the same latch with MINI set — reads a 720Kb disk
+just as cleanly:
+
+```
+transfer complete;  ST0 00 ST1 00 ST2 00   C1 H0 R1 N2   MSR 80
+        EB 3C 90 4D 53 44 4F 53 35 2E 30 00 02 02 01 00
+        bytes 1FE-1FF are 55 AA -- a boot signature
+```
+
+The BPB proves it is a genuinely different format rather than a lucky read: `00 02 02 01`
+against the 1.44Mb disk's `00 02 01 01` — two sectors a cluster instead of one, which is
+what 720Kb uses. Read at the wrong rate, the same disk gives `ST0 40 ST1 01`, a missing
+address mark, because the head is looking twice as fast as the data is going past.
+
+So **MINI clear is 500 kbps and MINI set is 250 kbps**, confirmed against media at both
+rates, and all four configured drive types are reachable. The one combination still out of
+reach is 360Kb media in a 1.2Mb drive, which needs the 300 kbps this hardware has no way
+to produce.
+
+**The floppy hardware is fully bring-up complete.** Reset, drive select, motor, seek,
+track 0, data separator, both data rates, and a byte-perfect 512-byte PIO transfer.
+Everything below the driver is proven against real media, **in both directions**:
+
+```
+MON>FDWRITE 86 1 0 5
+FDWRITE: latch 86, C1 H0 S5 -- overwriting
+         write complete;  ST0 00 ST1 00 ST2 00
+FDWRITE: written and read back, 512 bytes agree
+```
+
+Written at 250 kbps, after a SEEK to cylinder 1, and read back byte for byte. The pattern
+written depends on the sector address, so a write landing on the wrong sector could not
+have passed by looking plausible, and the buffer is cleared before the read-back so a read
+that quietly did nothing could not pass either. That care is not paranoia: the IDE write
+path in this same tree carried a documented-versus-actual segment mismatch for years, and
+only a read-back would ever have caught it.
+
+### Reading the data in the wrong place
+
+The first `FDREAD` runs against a DOS 6 boot disk failed, and the failure was worth more
+than a success would have been, because of what the "status" bytes contained:
+
+```
+transfer cut short;  ST0 EB ST1 4D ST2 44   C53 H48 R2 N0   MSR F0
+transfer cut short;  ST0 3C ST1 53 ST2 4F   C53 H0 R1 N2   MSR F0
+```
+
+`EB`, `3C`, `4D`, `53`, `44`, `4F` are not status. They are the opening bytes of a DOS
+boot sector — the short jump, and the `MSDOS` signature. **The controller was reading the
+disk correctly all along**; the whole analogue path and the transfer itself were working.
+What was broken was where the bytes were being put.
+
+Two bugs, both mine, and they compound into exactly that symptom.
+
+**Mistaking the command phase for a finished one.** `fdc_pio_in` waited for the first data
+byte and gave up if EXEC was clear, on the reasoning that a cleared EXEC means the
+execution phase has ended. It also means the execution phase has not begun. After the
+ninth command byte is accepted, MSR briefly reads `80` — RQM set, DIO out, EXEC clear —
+which is the controller still in the command phase, and the routine read that as "it wants
+no more bytes" and bailed before collecting a single one. Testing EXEC alone cannot tell
+"not started" from "finished"; the result phase is `C0` specifically, and that is what to
+compare against.
+
+**Reading status out of the data stream.** `fdc_get` waited for `(MSR & C0) == C0`. During
+a non-DMA execution phase MSR reads `F0`, and `F0 & C0` is `C0` — so the moment the first
+bug left 512 bytes sitting unread, the seven "result phase" reads pulled sector data out of
+the data register and printed it as ST0, ST1, ST2 and the CHRN. The mask is now `E0`, so a
+result-phase read cannot touch an execution phase at all.
+
+`MSR F0` on every line was the tell: the controller still had data to give after the
+command was supposedly over.
+
+### Three timing mistakes, all mine
+
+The first `FDID` run failed at READ ID and the failure was in the probe, not the board.
+
+**Polling the wrong bit.** After RECALIBRATE the code waited for the drive-busy bits in
+MSR to clear. They are not set yet when the last command byte goes in, so the loop fell
+straight through and the SENSE INTERRUPT STATUS that followed questioned a controller
+still working on the seek — which answered `80h`, "nothing has finished". The fix is to
+ask for the result and keep asking until it is something other than `80h`. That is what
+waiting for an interrupt would have achieved, done by polling.
+
+**Counting iterations instead of time.** `fdc_get` span 30000 port reads before giving up,
+which at seven wait states is about 75 ms. READ ID gives up only after two index pulses,
+and at 300 rpm that is 400 ms. The probe was never waiting long enough, and reported a
+wedged controller that was simply still working. Both helpers now run on an 18.2 Hz tick
+deadline of about two seconds — longer than any single 765 operation, short enough to stay
+a diagnostic. The house idiom in `diskide.asm` already did it this way; this should have
+from the start.
+
+**Reading a result byte that was never sent.** SENSE INTERRUPT STATUS answers with two
+bytes, ST0 and PCN — unless it has nothing to report, when it answers `80h` and stops. The
+polling loop read a PCN regardless, so on its first pass it waited out the entire two
+second deadline for a byte the controller was never going to send, then gave up before the
+seek had a chance to finish. The seek itself was fine. It completed a few milliseconds
+later and sat there uncollected, and an uncollected seek is exactly why MSR still read
+`81` with the drive busy bit set. The loop now reads PCN only when ST0 is something other
+than `80h`.
+
+Two things that reading should **not** be taken to mean. The command says "answering at
+436" only because 436 is the last alias it tests; all four are the same register, so this
+never determined the jumpering. And `DIR = FF` may mean the disk-change readout is absent
+rather than idle — the schematic marks U10 and C10, which implement it, as optional
+components.
+
+### The next rung — `FDID`
+
+READ ID is the smallest operation that needs everything real at once: a drive selected, a
+motor turning, a head on a track, the data separator locked to the bit stream, and the
+data rate right. What it does not need is a transfer loop or any TC handling, so it
+isolates the analogue half of the problem from the driver half. Its result phase hands
+back the C/H/R/N of whatever sector header passed under the head — the media describing
+its own geometry, rather than the BIOS asserting one.
+
+The latch value is an argument rather than a constant, precisely because two of its fields
+are still unknown. `82` is motor on at 500 kbps, for 1.44Mb and 1.2Mb media; `86` is motor
+on at 250 kbps, for 720Kb and 360Kb; P2/P1/P0 add `08`/`10`/`20` and DENSEL adds `40`.
+Sweeping it is how both remaining questions get answered without guessing at either.
+
+ST0 is what to read first. Bits 7:6 clear mean the ID was found. `40` is abnormal
+termination, and then ST1 bit 0 — missing address mark — is the signature of a head
+reading nothing it recognises: wrong data rate, wrong drive, no disk, or a motor that
+never span.
 
 ---
 

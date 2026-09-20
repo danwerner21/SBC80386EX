@@ -39,7 +39,7 @@ CC = wcl -c
 # N.B.:  Watcom 1.9 mishandles SWITCH statements with the '-os' option
 #COPT = -q -mc -zdp -zu -s -zp1 -oi -ox -3 -fpi87 -DSBC386=1
 #COPT = -q -mc -zdp -zu -s -zp1 -ox -3 -fpi87 -DSBC386=1
-COPT = -q -mc -zdp -zu -s -zp1 -oxs -3 -fpi87 -DSBC386=1
+COPT = -q -mc -zdp -zu -s -zp1 -oxs -3 -fpi87 -DSBC386=1 -DMONITOR=$(MONITOR)
 
 CLIST = wdis -l -s $@
 SIZE = -DROM=$(ROM) -DCHIP=$(CHIP) $(RED)
@@ -49,7 +49,7 @@ SIZE = -DROM=$(ROM) -DCHIP=$(CHIP) $(RED)
 NASM = nasm
 ASM = $(NASM) -fobj
 #
-NOPT = -O9 -dROM=$(ROM)
+NOPT = -O9 -dROM=$(ROM) -dMONITOR=$(MONITOR)
 LINK = wcl
 #LINK = wlink
 # Open Watcom linker options:
@@ -96,9 +96,32 @@ CINCL = mytypes.h cprintf.h bda.h getline.h ascii.h serial.h nvram.h \
 OBJECTS = start.o sizer.o crc16.o diskide.o errno.o \
 	11h_12h.o 13h_disk.o 14h_sio0.o 15h_misc.o 1Ah_time.o \
 	main.o signon.o getline.o set1302.o icu.o \
-	strtobcd.o strtoint.o testmain.o stub.o debugmon.o monitor.o hdinit.o \
+	strtobcd.o testmain.o stub.o hdinit.o \
 	19h_boot.o 17h_prn.o 10h_video.o 16h_kbd.o \
 	fdcpio.o diskfdc.o 40h_flop.o
+
+# The debug monitor costs about 25K of the 64K window.  debugmon.o is the
+# largest module in the ROM by a factor of seven, and its help text and
+# printf formats account for two thirds of every string constant in the
+# tree.  Affordable today, and it will not stay affordable: a display
+# buffer and scan-code translation are still to come.
+#
+# So it is a switch rather than a decision.  MONITOR=1 builds it in;
+# MONITOR=0 leaves debugmon.o, monitor.o and strtoint.o out and reclaims
+# the space.  Both halves of the ROM have to agree about which was built,
+# so the value goes to the C compiler and to NASM as well as deciding what
+# gets linked -- SETUP drops its menu entry and INT 18h stops offering a
+# monitor it has not got.
+#
+# Leave it ON unless the space is genuinely needed.  Every defect found in
+# Phase 6 was found through this monitor, and the work that comes next --
+# new video and keyboard hardware, with no drivers and nothing on screen --
+# is exactly the kind that needs it.
+MONITOR = 1
+
+ifeq ($(MONITOR),1)
+OBJECTS += debugmon.o monitor.o strtoint.o
+endif
 
 TEST = test.o cprintf.o
 
@@ -141,11 +164,6 @@ test.exe:  test.o $(TEST)
 start.exe:	$(OBJECTS) $(LIBS)
 	$(LINK) -fm=start.map  $(OBJECTS) $(LIBS)
 
-zero.h:	zero.inc zero.rul
-	$(COPT18) $(H2INC) -f zero.inc -o zero.h zero.rul
-
-zero.o:	zero.inc
-	$(NASM) -fobj -O1+ -dXXX -lzero.lst -ozero.o zero.inc
 disktab.inc:	disktab.h bda.rul
 	$(COPT18) $(H2INC) -f disktab.h -o disktab.inc bda.rul
 disktab.o:	disktab.inc
@@ -250,7 +268,6 @@ tidy:
 
 clean:	tidy
 	$(RM) bda.inc disktab.inc stack.inc error.inc date.inc
-	$(RM) zero.h
 	$(RM) *.tmp
 	$(RM) *.o
 	$(RM) *.exe

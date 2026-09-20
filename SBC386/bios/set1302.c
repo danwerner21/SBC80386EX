@@ -34,7 +34,9 @@
 #include "nvram.h"
 #include "getline.h"
 #include "disk.h"
+#if MONITOR
 #include "debugmon.h"
+#endif
 #include "hdinit.h"	/* HD_GEO_NVRAM */
 
 void testmain(void);	/* the POST self test, in testmain.c */
@@ -156,7 +158,9 @@ T_STR top_name[] = {
 	"Floppy Disks"		,
 	"RS-232 Serial"		,
 	"Date/Time/Battery"	,
+#if MONITOR
 	"Debug Monitor"		,
+#endif
 	"Self test"
 };
 
@@ -185,10 +189,14 @@ VOID set_top(int modified)
 			case 4:
 				set_clock();
 				break;
+#if MONITOR
 			case 5:
 				debugmon();
 				break;
 			case 6:
+#else
+			case 5:
+#endif
 				testmain();
 				break;
 		}

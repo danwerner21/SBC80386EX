@@ -16,11 +16,13 @@ was found on the way, and what is left.**
 
 ## The short version
 
-**The board boots MS-DOS 6 to a `C:\>` prompt over the serial console, and the keyboard
-works.** Phases 0 through 3 are complete and verified on hardware. Phase 4 — the INT 15h
-calls DOS's standard drivers want — is written and **assembles clean**, but it has **never
-been run**. Not one of those four calls has executed on the board. Section 06a is the
-sequence for taking it to hardware.
+**The board boots MS-DOS 6 to a prompt over the serial console, from the fixed disk or
+from a floppy, and formats its own disks.** Phases 0 through 4 and 6 are complete and
+verified on hardware, and so is Phase 5 — reset, shadowing, the watchdog and the second
+IDE device, recorded in 06b, 06c and 06d. Phase 3 is complete except for VT100 escape
+translation, which is deliberately parked until the video card and keyboard land, since
+both will change what the console has to translate. What is left after that is small and
+listed in section 09.
 
 The original assessment held up: nothing was architecturally wrong, and the work went in
 the predicted order. What it could not predict was the hardware, and most of the time
@@ -30,13 +32,37 @@ comments and the datasheet-derived guesses said.
 
 | Metric | Then | Now | |
 |---|---:|---:|---|
-| ROM image | 12,896 B | 34,448 B | of 65,536 — 47% free |
+| ROM image | 12,896 B | 49,648 B | of 65,536 — 24% free |
 | Writable data segment | 0 B | 0 B | `_DATA` + `_BSS` still empty, as required |
-| INT vectors that work | 4 | 13 | 10h, 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h, 19h, 1Ah, 1Eh*, IRQ0, IRQ4 |
-| Blocking defects | 11 | 0 | all eleven fixed and confirmed on hardware |
+| INT vectors that work | 4 | 14 | 10h, 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h, 19h, 1Ah, 1Eh*, 40h, IRQ0, IRQ4 |
+| Blocking defects | 11 | 0 | all fixed and confirmed on hardware |
 
 \* INT 1Eh is a data vector, not a handler — it now points at a real diskette parameter
-table instead of an `IRET`.
+table instead of an `IRET`, chosen by the configured type of drive A. It is listed but not
+counted.
+
+Measured from `start.map` after Phase 6, 2026-09-20: `_TEXT` `83EB` + `CONST` `3970` +
+`CONST2` `48E`, DGROUP `C1F0` in total. The growth from 34,448 is ROM shadowing, the floppy
+driver and INT 40h. **Free space is the number to watch from here**: 15,888 bytes is still
+comfortable, but item 12 adds a display buffer and scan-code translation, and section 07
+names the 64K window as a hard ceiling.
+
+**There is a reserve, and it is now a switch.** The debug monitor is `debugmon.o` at 13,969
+bytes of code — the largest module in the ROM by a factor of seven — plus roughly 10,360
+bytes of string constants, its help text and `printf` formats being two thirds of every
+literal in the tree. With `monitor.o` and `strtoint.o` that is about **25,140 bytes**, or
+free space rising from 24% to roughly 75%.
+
+`MONITOR` in the makefile, default 1, decides it. At 0 the three objects leave `OBJECTS`,
+SETUP drops its menu entry, and INT 18h waits for a key instead of offering a monitor it
+has not got; the value reaches the C compiler and NASM as well as the link, because both
+halves of the ROM have to agree about which was built. `getline.c` is deliberately outside
+the switch — SETUP uses it too.
+
+It is a switch rather than a deletion on purpose. Every defect in Phase 6 was found through
+that monitor, and the work in item 12 — unfamiliar hardware, no drivers, nothing on the
+screen — is exactly the kind that needs one. The space should be spent when it is needed
+and not before.
 
 ---
 
@@ -411,7 +437,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **plumbing** — Point `VIDEO_putchar_` in `stub.asm` at INT 10h so POST messages and DOS
   output share one path. Set the video bits (4:5) and floppy bits in `equip_flag`.
 
-### Phase 4 · INT 15h and the parameter tables — **WRITTEN, NOT YET BUILT**
+### Phase 4 · INT 15h and the parameter tables — **DONE**
 
 > The remaining calls DOS and its standard drivers make. None are needed for a bare boot;
 > all are needed before the system feels finished.
@@ -474,7 +500,7 @@ trick depends on; both far jumps took the `EA` form with the right selector and 
   07h (ECC burst length), `max_lba` across 0Ah–0Dh (the XT timeouts and the landing zone)
   and `disk_flags` at 0Fh (reserved).
 
-### Phase 5 · Hardening — **not started**
+### Phase 5 · Hardening — **DONE**, see 06b, 06c and 06d
 
 > After DOS boots. None of this blocks the milestone.
 
@@ -581,7 +607,7 @@ trick depends on; both far jumps took the `EA` form with the right selector and 
 
   The SD-card slots in `read_tab`/`write_tab` remain reserved and empty.
 
-### Phase 6 · Floppy — **starting**
+### Phase 6 · Floppy — **DONE**
 
 > The first hardware added to this board since the BIOS began. Everything before this
 > phase worked with what was already soldered down.
@@ -827,6 +853,151 @@ why: *"the C helpers address through DGROUP"*. A new assembly-to-C boundary was 
 without following the convention the file next door had already established. It is also
 why `FDREAD` worked throughout: the monitor is C, so DS is DGROUP the whole way down, and
 the driver only broke when reached from assembly that arrived from outside.
+
+### Booting from it, and three defects of another kind
+
+Boot from A: with fallback to C:, `FORMAT A:` on both 1.44Mb and 720Kb media, 2026-09-20.
+Phase 6 closed.
+
+The four bugs above were all about the controller -- a command not issued, an interrupt
+taken from the wrong drive, a segment register not set. The three that followed were not
+about the 765 at all, and none of them was visible to any instrument built to watch it.
+
+| | what it was | how it looked |
+|---|---|---|
+| 5 | `rw_common` handed back the caller's `ES:BX` walked forward | boot from A: died just after "Starting MS-DOS..." |
+| 6 | `fd_reset()` wiped the discovered data rate | 720Kb media unreadable in a 1.44Mb drive, for ever |
+| 7 | verify read into the caller's pointer | `FORMAT A:` killed the machine where it stood |
+
+**Five.** INT 13h hands back the registers it was called with; only AH, AL and the Carry
+say anything. `rw_common` used the caller's saved `ES:BX` as its loop cursor and never put
+it back. Because the advance happens *between* sectors rather than after the last one, it
+returned the pointer moved on by exactly `(count-1)*512`, and DOS then added the full
+`count*512` of its own. The pointer gained a sector for every sector transferred:
+
+| entry `BX` | count | we returned | DOS added | next request | observed |
+|---|---|---|---|---|---|
+| `0000` | 13 | `1800` | `1A00` | `3200` | `3200` |
+| `3200` | 18 | `5400` | `2400` | `7800` | `7800` |
+| `7800` | 18 | `9A00` | `2400` | `BE00` | `BE00` |
+| `BE00` | 18 | `E000` | `2400` | `10400` -> `0400` | `0400` |
+
+Four for four, which is what turned a theory into a diagnosis. The fifth read landed back
+at the bottom of the same segment, on top of live DOS, because the offset had carried past
+`FFFF`.
+
+The fixed disk never had this. `13h_disk.asm` copies the caller's pointer into `lcl_off`
+and `lcl_seg` and walks those. Same DOS, same assumption, one driver honouring it and one
+not -- which is exactly why booting from C: always worked and booting from A: never did,
+and why the difference looked for a long time like a floppy problem.
+
+**Six.** `fd_reset()` assigned `seek_status = 0x0F`. Bits 4 and 5 hold the discovered data
+rate, and every retry path resets first: DOS's own retry, the bootstrap's two attempts,
+INT 13h function 00h. So the driver learned the right rate from each failure and threw it
+away before the retry that was meant to use it. It relearned and forgot the same fact
+indefinitely, and a 720Kb disk in a 1.44Mb drive was tried at 500 kbps every time.
+
+**Seven.** DOS passes `ES:BX = 0000:0000` to function 04h. That is deliberate: on a PC,
+verify confirms the sectors read back and never moves a byte into memory, so the pointer
+means nothing and is not required to point anywhere. This driver did a real read into it.
+FORMAT's verify pass asks for eighteen sectors at once, so the entire interrupt vector
+table went under disk data, and the next timer tick jumped into whatever had landed at
+`0000:0020`. `13h_disk.asm` had been redirecting verify into `_SecBuffer` all along.
+
+**What the three have in common.** Not one concerns the 765, the latch, or the media. All
+three are about what the INT 13h *interface* promises -- which registers come back
+unchanged, which pointer means anything, what state a reset is entitled to destroy.
+
+And all three were invisible to every monitor command, `FD13` included. The monitor
+supplies a real buffer and discards the registers afterwards, so a returned pointer being
+wrong cannot be observed, and a pointer that should not have been used works perfectly
+because the monitor's pointer is valid. `FDFMT`, written later, has the same blind spot by
+construction: it proved the FORMAT TRACK command sequence and said nothing whatever about
+function 04h.
+
+That sharpens the lesson recorded above rather than repeating it. **`FD13` was the right
+instrument for a driver that talks to a controller, and the wrong one for a driver that
+talks to DOS.** A test that only checks the data arriving in the buffer cannot see an
+interface defect.
+
+### Instrumenting a machine with no interrupts left
+
+Defect 7 is worth keeping for how it was found, because the first two attempts narrowed the
+problem without naming it and the reason is general.
+
+1. **A character per INT 13h call**, entry and exit, on both the floppy and the fixed disk.
+   This showed every call completing -- each entry had its terminator -- and the trace
+   simply stopping. So neither driver was hanging and the fault was outside both. A useful
+   elimination, and the end of what outcomes could tell us.
+2. **A heartbeat from the timer tick**, sounded on either side of the `INT 1Ch` hook so a
+   hung user timer could be told from a dead tick. It stopped. Ctrl-^ rides IRQ4, a
+   different line, and was dead too, so this was not a selective mask or a stopped counter:
+   the CPU was halted or running with IF clear. That ruled out a whole family of
+   explanations, including the tempting one that DOS was alive at a prompt and writing to
+   video memory this board does not have.
+3. **The full request printed on entry** -- cylinder, head, sector, count and the caller's
+   buffer. Defect 5 fell out of the buffer column in a single boot, and defect 7 out of the
+   one line `4[00 00 01 12 0000:0000]` with no terminator after it.
+
+The first two instruments printed *outcomes*; only the third printed *arguments*. All three
+of these defects were in what was asked for rather than in what came back, so no amount of
+watching results was ever going to name one. Worth remembering before building a fourth
+instrument that reports status bytes.
+
+The heartbeat earns its own note. A hung machine and a halted one look identical down a
+serial line, and the difference decides everything that follows -- whether there is a
+software loop to find, or nothing left running to find it with. Nothing polled can tell
+them apart, because polling is exactly what stops working. Sixteen ticks to a tilde,
+through the polled INT 14h path, answered it in one boot. It is `TICK_BEAT` in
+`1Ah_time.asm`, and it belongs at 0 in any ROM anyone relies on.
+
+### Formatting
+
+`AH=05h` is FORMAT TRACK, command `4Dh`. The execution phase is `nsec*4` bytes and not
+`nsec*512`: the host supplies only a C/H/R/N identifier per sector, and the controller lays
+down the address marks, the gaps, and a data field of the filler byte between them. The
+identifier table comes from the caller's `ES:BX`, so interleave and numbering are DOS's
+business and none of this driver's.
+
+`AH=18h`, set media type for format, is what DOS 5 and later ask first; a drive that
+answers "invalid command" is one DOS will not format. It matches the requested geometry
+against what the configured drive can physically write -- a 1.44Mb drive accepts 1.44Mb and
+720Kb, a 1.2Mb drive accepts 1.2Mb and 360Kb, and the double density drives accept only
+their own -- and hands back the matching INT 1Eh table in `ES:DI`.
+
+Two things were decided rather than inherited:
+
+- **The data rate follows the sector count asked for**, not the drive type and not the rate
+  discovered by an earlier read. Formatting defines the medium instead of reading one that
+  already exists, so inheriting the alternate-rate bit would have quietly written the wrong
+  format on the first disk formatted after any 720Kb read in a 1.44Mb drive.
+- **The gap and filler come from the table INT 1Eh points at**, not from the built-in one,
+  because that is where a FORMAT patches them when it wants a layout other than the
+  standard one. The vector points at drive A's table, which is the PC's limitation too, and
+  is the first place to look if formatting in a drive B of another type misbehaves.
+
+The 1.44Mb table had its format gap at `54h` where 18 sectors want `6Ch`. That byte is read
+only when formatting, which is why nothing had touched it since Phase 4.
+
+**One cost, recorded rather than fixed.** The data phase runs with interrupts off, which
+for a sector is 8ms and for a whole track is a revolution -- around 200ms. The tick is lost
+for the duration, so a full format drifts the clock by a few seconds. The alternative is a
+rewrite of the transfer loop the read path now depends on, so it stands; but it is a cost,
+not an absence of one.
+
+### What Phase 6 delivers
+
+`int_40h` with functions 00, 01, 02, 03, 04, 05, 08, 15 and 18; all four drive types
+configurable through SETUP and held inside the NVRAM checksum; four INT 1Eh parameter
+tables chosen by configured type; read, write, verify and format proven from DOS on 1.44Mb
+and 720Kb media; and INT 19h trying A: before C:, so a bad fixed disk no longer means
+reflashing the BIOS to get anywhere.
+
+The monitor commands stay, and are worth keeping for what they are: `FDC`, `FDID`,
+`FDREAD`, `FDWRITE`, `FD13` and `FDFMT` reach the controller without DOS in the way, so a
+DOS operation that fails while the matching monitor command succeeds puts the fault in
+`40h_flop.asm` and nowhere below it. That split separated driver from interface three times
+in this phase, and it is the reason the phase closed.
 
 ### The driver
 
@@ -1378,17 +1549,17 @@ was determined from the makefile's `OBJECTS` list cross-checked against the modu
 `start.map`, so "linked" means the object is genuinely in the ROM image, not merely that a
 rule exists for it.
 
-**40 of the 93 source files never reach the ROM.** Thirty-eight are not compiled at all;
+**Every source file in this directory now reaches the ROM.** It was 40 of 93 that did not; Thirty-eight are not compiled at all;
 two more are compiled into `sbc386.lib` but the linker never pulls them in. Almost all of
 it is either SBC-188 heritage, prototype-era experiments, or the author's own numbered
 backup snapshots.
 
 | Metric | Count | |
 |---|---:|---|
-| Source files | 93 | 86 in root, 7 in `lib/` |
-| Linked into the ROM | 22 | 19 asm/C + 3 from lib |
-| Includes & build inputs | 27 | 7 of them generated |
-| Not in the build | 40 | safe to remove after Phase 0 |
+| Source files | 58 | in root, plus `lib/` |
+| Linked into the ROM | 29 | asm and C, plus `lib/uart_det.asm` |
+| Includes & build inputs | 29 | 5 of them generated |
+| Not in the build | 0 | 30 removed 2026-09-20, see E |
 
 ### A · Assembly modules in the ROM
 
@@ -1452,29 +1623,35 @@ backup snapshots.
 | `disk.h` | included | Disk driver signatures and the device-number enum. Included by set1302.c. |
 | `mytypes.h`, `cprintf.h`, `getline.h`, `ascii.h`, `serial.h`, `strtobcd.h` | included | Small C headers — base types, the printf and line-editor prototypes, ASCII names, serial config struct, BCD parser prototype. |
 
-### E · Not in the build — the dust
+### E · Not in the build — **removed 2026-09-20**
 
-| File | State | What it is, and whether to keep it |
-|---|---|---|
-| `alloc.asm` | unused | EBDA / UMB allocator. `main.c` declares `ebda_alloc()` but never calls it. **Keep** — Phase 4 may want it. |
-| `baseio.asm` | **broken** | Dual-SD-card board I/O. It `%include`s `sdcard.inc`, which does not exist anywhere in the tree, so it cannot assemble even if you added it to the makefile. |
-| `microsd.c` | unused | On-board micro-SD driver skeleton. The matching slots in `read_tab`/`write_tab` in 13h_disk.asm are null pointers. |
-| `ds1302.asm` | superseded | Earlier standalone RTC driver. The live version lives inside 1Ah_time.asm. |
-| `dsreg.asm` | superseded | DS1302 register definitions in *MASM* syntax (`TITLE`, `PAGE`, `.xlist`) — wrong assembler for this build entirely. |
-| `muldiv.asm` | unused | Its entire body is wrapped in `%if 0`. |
-| `notice.asm` | unused | A boilerplate copyright block meant for inclusion everywhere. Nothing includes it. |
-| `equates.asm` | unused | SBC-188 equates. |
-| `sbc188.h`, `libc.h` | unused | SBC-188 leftovers. Both are still listed in the makefile's `CINCL` variable but included by nothing. |
-| `pm_sio.asm`, `pm_test.asm`, `rm_test.asm` | unused | Prototype-era protected-mode serial and memory-test experiments. `sizer.asm` is the survivor of this line of work. |
-| `startup.asm` | superseded | The old monolithic TEST1 ROM. The makefile still carries a rule for it, explicitly labelled "obsolete". |
-| `seg.c`, `seg_at.asm`, `make.seg` | unused | A self-contained three-file experiment proving `SEGMENT AT 40h` addressing of the BDA. Its conclusion is already baked into bda.inc. |
-| `zero.asm`, `zero.inc`, `zero.h`, `zero.rul` | unused | A BDA-zeroing helper, fully wired into the makefile — `zero.inc` is even listed in `INCLUDES` — but `%include`d by nothing. The corresponding zeroing code in start.asm is inside a `%if 0`. |
-| `disk.inc` | unused | A copt-generated copy of disk.h that no module includes. |
-| `remover.h` | unused | Three `#define` tricks that let one file serve as both a `.inc` and a `.h`. Nothing uses it, but it documents the technique — **keep the comment** if you delete the file. |
-| `test.c`, `tcrc.c`, `testide.c` (root) | unused | Scratch and host-side test programs. The root `testide.c` is a duplicate of `lib/testide.c`; check which is newer before deleting either. |
-| `start.lkk` | unused | An old wlink response file. The makefile line that used it (`WLINK @start.lkk`) is commented out. |
-| `makefile.188`, `makefile.abs` | unused | The SBC-188 makefile and an absolute-address build variant. |
-| `1Ah_time.as0`, `diskide.as0`, `start.as1`, `startup.as0`, `uart_det.as0/.as1/.as2`, `main.c7` | backups | The author's own numbered snapshots of files that still exist in current form. `main.c7` is a Microsoft C7 variant of main.c. **Delete these only after Phase 0 puts the tree under git** — they are the sole record of some earlier revisions. |
+They are gone. Thirty files: twenty-seven that had been quarantined in `unused/` plus three
+stragglers left duplicated in the root (`sbc188.h`, `zero.inc`, `zero.rul`, all byte
+identical to the copies already in `unused/`). The dead `zero.h` and `zero.o` rules came out
+of the makefile with them, along with the `$(RM) zero.h` in `clean`.
+
+Membership was decided by closure rather than by this list: start from the modules
+`start.map` says are in the ROM, follow every `%include` and `#include` transitively, add
+the `.h` each generated `.inc` is built from, and remove what is left over. Re-running that
+afterwards reports **zero** source files outside the closure, which is the check that
+matters -- the makefile still carried rules for things that had not been in the build for
+years, so being named there was never evidence of anything.
+
+Nothing is lost; git has all of it. What follows is the only part that was worth carrying
+forward in readable form.
+
+**`remover.h`, the one idea worth keeping.** It let a single file serve as both a NASM
+`.inc` and a C `.h`, by defining away the pseudo-ops:
+
+```c
+#define defb #define
+#define defw #define
+#define equ
+```
+
+The tree solved the same problem differently in the end -- `bda.rul` and `copt` generate
+the `.inc` from the `.h` -- which is why the file was never used. Recorded because the
+trick is neat and the file no longer exists to be read.
 
 ### F · Documentation
 

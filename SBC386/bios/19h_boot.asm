@@ -248,7 +248,9 @@ boot_msg:
 ;
 ; Leaving the monitor retries the boot.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%if MONITOR
 	extern	debugmon_
+%endif
 
 int_18h:
 	cli
@@ -262,6 +264,7 @@ int_18h:
 	mov	si,msg_nodisk
 	call	boot_msg
 
+%if MONITOR
 	mov	ax,DGROUP		; the C code addresses through DGROUP
 	mov	ds,ax
 	cnop
@@ -269,6 +272,18 @@ int_18h:
 	cnop
 
 	call	debugmon_
+%else
+; No monitor in this build, so there is nothing to drop into and
+; nothing useful to do except let the operator change something.
+; Waiting is the point: INT 19h below would arrive back here inside a
+; second, and a message that repeats for ever is worse than one that
+; waits to be answered.  A key press means a card has been swapped, or
+; a disk put in, and the boot is worth trying again.
+	mov	si,msg_anykey
+	call	boot_msg
+	xor	ax,ax			; INT 16h function 00h: wait for a key
+	int	0x16
+%endif
 
 ; The operator has left the monitor.  Try the disk again -- a card may
 ; have been changed, or SETUP used, in the meantime.
@@ -295,8 +310,15 @@ msg_nosig:
 msg_nodisk:
 	db	ASCII_CR,ASCII_LF
 	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
+%if MONITOR
 	db	"Dropping into the debug monitor -- EXIT retries the boot."
 	db	ASCII_CR,ASCII_LF,0
+%else
+	db	0
+msg_anykey:
+	db	"Change the disk and press any key to try again."
+	db	ASCII_CR,ASCII_LF,0
+%endif
 msg_retry:
 	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
 

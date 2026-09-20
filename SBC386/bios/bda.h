@@ -156,7 +156,8 @@ typedef struct _BDA {
 							/* starts with 2 bytes of SIO0 params */
 	byte	floppy_tab[2];		/* floppy disk driver table */
 	byte	disk_tab[8];  		/* hard disk driver table */
-	byte	nvram_unused[17];
+	byte	boot_order;		/* which device INT 19h tries, and in what order */
+	byte	nvram_unused[16];
 	word	nvram_checksum;	/* 31st byte of the NVRAM info */
  /* end of 31 bytes of NVRAM information */
 /* */

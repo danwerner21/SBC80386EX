@@ -158,6 +158,7 @@ T_STR top_name[] = {
 	"Floppy Disks"		,
 	"RS-232 Serial"		,
 	"Date/Time/Battery"	,
+	"Boot Order"		,
 #if MONITOR
 	"Debug Monitor"		,
 #endif
@@ -189,13 +190,16 @@ VOID set_top(int modified)
 			case 4:
 				set_clock();
 				break;
-#if MONITOR
 			case 5:
+				modified |= set_boot();
+				break;
+#if MONITOR
+			case 6:
 				debugmon();
 				break;
-			case 6:
+			case 7:
 #else
-			case 5:
+			case 6:
 #endif
 				testmain();
 				break;
@@ -319,6 +323,55 @@ T_STR floppy_types[] = {
 	"720Kb   3.5 inch,  80 track",
 	"1.44Mb  3.5 inch,  80 track",
 	};
+
+T_STR boot_orders[] = {
+	"Floppy, then fixed disk",
+	"Fixed disk, then floppy",
+	"Floppy only",
+	"Fixed disk only",
+	};
+
+/*
+ * Which device INT 19h tries, and in what order.
+ *
+ * The stored value is deliberately arranged so that zero is the order the
+ * board used before this setting existed -- the byte comes out of
+ * nvram_unused, which every NVRAM written by an earlier BIOS carries as
+ * zero.  An upgraded board keeps booting the way it did without anyone
+ * having to come here first.
+ *
+ * "Floppy only" and "Fixed disk only" are worth having rather than being
+ * tidy-mindedness.  Trying a device costs real time when nothing is in it:
+ * a floppy that is empty spins up and steps before it can say so, and a
+ * fixed disk that is absent waits out its own timeout.  A board that always
+ * boots from one of them should not pay for the other on every start.
+ */
+int set_boot(void)
+{
+	int	opt;
+	byte	cur;
+
+	cur = bda.boot_order;
+	if( cur >= BOOT_END )	cur = BOOT_AC;
+
+	printf("\nBoot order\n");
+	printf("\nCurrently %s\n", boot_orders[cur]);
+
+	if( bda.floppy_tab[0] == FD_NONE )
+		printf("\nNote: SETUP says there is no drive A, so the"
+		       " floppy is skipped\n      whatever is chosen here.\n");
+
+	opt = option_get( "Boot order", boot_orders, nelem(boot_orders) );
+
+	if( opt >= 1  &&  opt <= nelem(boot_orders) ) {
+		bda.boot_order = (byte)(opt - 1);
+		printf("\nStored.  The new setting takes effect at the next"
+		       " boot.\n");
+		return 1;
+	}
+
+	return 0;
+}
 
 
 /*

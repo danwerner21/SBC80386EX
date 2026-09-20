@@ -1026,151 +1026,173 @@
    248                                  ;
    249                                  ; Leaving the monitor retries the boot.
    250                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   251                                  	extern	debugmon_
-   252                                  
-   253                                  int_18h:
-   254 000000C4 FA                      	cli
-   255 000000C5 31C0                    	xor	ax,ax
-   256 000000C7 8ED0                    	mov	ss,ax			; a stack of our own: whatever called
-   257                                  	cnop				;  us may have moved SS:SP somewhere
-   258 000000C9 BC007C                  	mov	sp,BOOT_OFF		;  unhelpful, and a boot sector that
-   259 000000CC FB                      	sti				;  failed is not to be trusted with it
-   260 000000CD FC                      	cld
-   261                                  
-   262 000000CE BE[9601]                	mov	si,msg_nodisk
-   263 000000D1 E8D7FF                  	call	boot_msg
-   264                                  
-   265 000000D4 B8[ssss]                	mov	ax,DGROUP		; the C code addresses through DGROUP
-   266 000000D7 8ED8                    	mov	ds,ax
-   267                                  	cnop
-   268 000000D9 8EC0                    	mov	es,ax
-   269                                  	cnop
-   270                                  
-   271 000000DB E8(0000)                	call	debugmon_
-   272                                  
-   273                                  ; The operator has left the monitor.  Try the disk again -- a card may
-   274                                  ; have been changed, or SETUP used, in the meantime.
-   275 000000DE BE[F201]                	mov	si,msg_retry
-   276 000000E1 E8C7FF                  	call	boot_msg
-   277 000000E4 CD19                    	int	0x19
-   278                                  
-   279                                  ; INT 19h does not return.  If its vector were wrong we would arrive
-   280                                  ; here rather than running off into memory.
-   281                                  .hang:
-   282 000000E6 F4                      	hlt
-   283 000000E7 EBFD                    	jmp	.hang
-   284                                  
-   285                                  msg_try_a:
-   286 000000E9 0D0A547279696E6720-     	db	ASCII_CR,ASCII_LF,"Trying drive A: ...",ASCII_CR,ASCII_LF,0
-   286 000000F2 647269766520413A20-
-   286 000000FB 2E2E2E0D0A00       
-   287                                  msg_try_c:
-   288 00000101 547279696E67206472-     	db	"Trying drive C: ...",ASCII_CR,ASCII_LF,0
-   288 0000010A 69766520433A202E2E-
-   288 00000113 2E0D0A00           
-   289                                  msg_booting:
-   290 00000117 426F6F742073656374-     	db	"Boot sector loaded, entering it ...",ASCII_CR,ASCII_LF,0
-   290 00000120 6F72206C6F61646564-
-   290 00000129 2C20656E746572696E-
-   290 00000132 67206974202E2E2E0D-
-   290 0000013B 0A00               
-   291                                  msg_noread:
-   292 0000013D 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
-   292 00000146 3A2063616E6E6F7420-
-   292 0000014F 726561642074686520-
-   292 00000158 626F6F742073656374-
-   292 00000161 6F720D0A00         
-   293                                  msg_nosig:
-   294 00000166 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: no AA55h signature -- not bootable",ASCII_CR,ASCII_LF,0
-   294 0000016F 3A206E6F2041413535-
-   294 00000178 68207369676E617475-
-   294 00000181 7265202D2D206E6F74-
-   294 0000018A 20626F6F7461626C65-
-   294 00000193 0D0A00             
-   295                                  msg_nodisk:
-   296 00000196 0D0A                    	db	ASCII_CR,ASCII_LF
-   297 00000198 494E54203138683A20-     	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
-   297 000001A1 6E6F20626F6F746162-
-   297 000001AA 6C6520646576696365-
-   297 000001B3 2E0D0A             
-   298 000001B6 44726F7070696E6720-     	db	"Dropping into the debug monitor -- EXIT retries the boot."
-   298 000001BF 696E746F2074686520-
-   298 000001C8 6465627567206D6F6E-
-   298 000001D1 69746F72202D2D2045-
-   298 000001DA 584954207265747269-
-   298 000001E3 65732074686520626F-
-   298 000001EC 6F742E             
-   299 000001EF 0D0A00                  	db	ASCII_CR,ASCII_LF,0
-   300                                  msg_retry:
-   301 000001F2 0D0A5265747279696E-     	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
-   301 000001FB 672074686520626F6F-
-   301 00000204 74202E2E2E0D0A00   
-   302                                  
-   303                                  
-   304                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   305                                  ; reboot -- restart the board through the ROM's own reset entry
-   306                                  ;
-   307                                  ;	void reboot(void);
-   308                                  ;
-   309                                  ; Does not return.
-   310                                  ;
-   311                                  ; FFFF:0000 is where the processor begins after a reset and where
-   312                                  ; 'bootstrap' in boot.asm sits: a five-byte far jump to F000:0000.  Going
-   313                                  ; through it rather than straight to F000:0000 means a warm start takes
-   314                                  ; exactly the path a cold one does, including anything that ever gets added
-   315                                  ; to that stub.
-   316                                  ;
-   317                                  ; This is not a hardware reset -- the peripherals keep whatever state they
-   318                                  ; are in -- but start.asm is written to survive being re-entered.  The
-   319                                  ; expanded I/O unlock opens with a read of REMAPCFGH precisely to put that
-   320                                  ; state machine back to a known state from wherever it was, and every port
-   321                                  ; the BIOS depends on is written from wtab1/btab1 rather than assumed.  What
-   322                                  ; it does not do is reset the IDE drive, so the first thing POST does to the
-   323                                  ; card is the soft reset in hd_reset(), which is what that is for.
-   324                                  ;
-   325                                  ; SETUP is the caller: it used to print "Reboot required!" and then call
-   326                                  ; exit(15), which lands in exit_ and powers the board down.  Telling someone
-   327                                  ; a reboot is required and then making the machine unresponsive is the
-   328                                  ; wrong pair of actions, and it is the reason this exists.
-   329                                  ;
-   330                                  ; The console is drained first.  The last line of output is still sitting
-   331                                  ; in the UART when the chip selects are reprogrammed, and without the wait
-   332                                  ; the user sees a truncated message and reads it as a crash.  The port comes
-   333                                  ; from bda.serial_dev[0] rather than a constant, since the console may be
-   334                                  ; the on-chip SIO0 at 3F8h or the MF/PIC at 448h.
-   335                                  ;
-   336                                  ; DX has to be loaded before the jump, and this is the whole reason the
-   337                                  ; first version of this routine did not work.  The very first thing POST
-   338                                  ; does is 'cmp dx,DEVICE_ID' -- DX carries the 386EX component identifier
-   339                                  ; out of a hardware reset, and start.asm checks it before anything else.
-   340                                  ; Arriving without it fails that test and lands in error_halt, which is a
-   341                                  ; cli/hlt loop: the board simply stops, with no output to say why.  A
-   342                                  ; software restart has to present the register state a reset would have.
-   343                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   344                                  	global	reboot_
-   345                                  reboot_:
-   346 0000020C FA                      	cli
-   347                                  
-   348 0000020D 6A401F                  	get_bda	DS
-   349                                  
-   350                                  ; Tell POST this is a warm start, so it can skip the memory march.  The
-   351                                  ; test of segment 0 during POST zeroes the BDA, which is what puts this
-   352                                  ; back to zero again -- the next start after this one is a cold one unless
-   353                                  ; something asks otherwise.
-   354 00000210 C70672003412            	mov	word [reset_flag],WARM_BOOT
-   355                                  
-   356 00000216 8B160000                	mov	dx,[serial_dev]		; console base, 0 if none was installed
-   357 0000021A 09D2                    	or	dx,dx
-   358 0000021C 740D                    	jz	.2
-   359                                  
-   360 0000021E 83C205                  	add	dx,LSR0-TBR0		; the line status register
-   361 00000221 B90000                  	mov	cx,0			; 65536 reads is far longer than a
-   362                                  					;  character takes at any rate we use
-   363                                  .1:
-   364 00000224 EC                      	in	al,dx
-   365 00000225 A840                    	test	al,LSR_TE		; transmitter completely empty?
-   366 00000227 7502                    	jnz	.2
-   367 00000229 E2F9                    	loop	.1
-   368                                  .2:
-   369 0000022B BA0923                  	mov	dx,DEVICE_ID		; what a hardware reset would have left
-   370 0000022E EA0000FFFF              	jmp	0xFFFF:0x0000		; the reset entry, into boot.asm
+   251                                  %if MONITOR
+   252                                  	extern	debugmon_
+   253                                  %endif
+   254                                  
+   255                                  int_18h:
+   256 000000C4 FA                      	cli
+   257 000000C5 31C0                    	xor	ax,ax
+   258 000000C7 8ED0                    	mov	ss,ax			; a stack of our own: whatever called
+   259                                  	cnop				;  us may have moved SS:SP somewhere
+   260 000000C9 BC007C                  	mov	sp,BOOT_OFF		;  unhelpful, and a boot sector that
+   261 000000CC FB                      	sti				;  failed is not to be trusted with it
+   262 000000CD FC                      	cld
+   263                                  
+   264 000000CE BE[9601]                	mov	si,msg_nodisk
+   265 000000D1 E8D7FF                  	call	boot_msg
+   266                                  
+   267                                  %if MONITOR
+   268 000000D4 B8[ssss]                	mov	ax,DGROUP		; the C code addresses through DGROUP
+   269 000000D7 8ED8                    	mov	ds,ax
+   270                                  	cnop
+   271 000000D9 8EC0                    	mov	es,ax
+   272                                  	cnop
+   273                                  
+   274 000000DB E8(0000)                	call	debugmon_
+   275                                  %else
+   276                                  ; No monitor in this build, so there is nothing to drop into and
+   277                                  ; nothing useful to do except let the operator change something.
+   278                                  ; Waiting is the point: INT 19h below would arrive back here inside a
+   279                                  ; second, and a message that repeats for ever is worse than one that
+   280                                  ; waits to be answered.  A key press means a card has been swapped, or
+   281                                  ; a disk put in, and the boot is worth trying again.
+   282                                  	mov	si,msg_anykey
+   283                                  	call	boot_msg
+   284                                  	xor	ax,ax			; INT 16h function 00h: wait for a key
+   285                                  	int	0x16
+   286                                  %endif
+   287                                  
+   288                                  ; The operator has left the monitor.  Try the disk again -- a card may
+   289                                  ; have been changed, or SETUP used, in the meantime.
+   290 000000DE BE[F201]                	mov	si,msg_retry
+   291 000000E1 E8C7FF                  	call	boot_msg
+   292 000000E4 CD19                    	int	0x19
+   293                                  
+   294                                  ; INT 19h does not return.  If its vector were wrong we would arrive
+   295                                  ; here rather than running off into memory.
+   296                                  .hang:
+   297 000000E6 F4                      	hlt
+   298 000000E7 EBFD                    	jmp	.hang
+   299                                  
+   300                                  msg_try_a:
+   301 000000E9 0D0A547279696E6720-     	db	ASCII_CR,ASCII_LF,"Trying drive A: ...",ASCII_CR,ASCII_LF,0
+   301 000000F2 647269766520413A20-
+   301 000000FB 2E2E2E0D0A00       
+   302                                  msg_try_c:
+   303 00000101 547279696E67206472-     	db	"Trying drive C: ...",ASCII_CR,ASCII_LF,0
+   303 0000010A 69766520433A202E2E-
+   303 00000113 2E0D0A00           
+   304                                  msg_booting:
+   305 00000117 426F6F742073656374-     	db	"Boot sector loaded, entering it ...",ASCII_CR,ASCII_LF,0
+   305 00000120 6F72206C6F61646564-
+   305 00000129 2C20656E746572696E-
+   305 00000132 67206974202E2E2E0D-
+   305 0000013B 0A00               
+   306                                  msg_noread:
+   307 0000013D 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
+   307 00000146 3A2063616E6E6F7420-
+   307 0000014F 726561642074686520-
+   307 00000158 626F6F742073656374-
+   307 00000161 6F720D0A00         
+   308                                  msg_nosig:
+   309 00000166 0D0A494E5420313968-     	db	ASCII_CR,ASCII_LF,"INT 19h: no AA55h signature -- not bootable",ASCII_CR,ASCII_LF,0
+   309 0000016F 3A206E6F2041413535-
+   309 00000178 68207369676E617475-
+   309 00000181 7265202D2D206E6F74-
+   309 0000018A 20626F6F7461626C65-
+   309 00000193 0D0A00             
+   310                                  msg_nodisk:
+   311 00000196 0D0A                    	db	ASCII_CR,ASCII_LF
+   312 00000198 494E54203138683A20-     	db	"INT 18h: no bootable device.",ASCII_CR,ASCII_LF
+   312 000001A1 6E6F20626F6F746162-
+   312 000001AA 6C6520646576696365-
+   312 000001B3 2E0D0A             
+   313                                  %if MONITOR
+   314 000001B6 44726F7070696E6720-     	db	"Dropping into the debug monitor -- EXIT retries the boot."
+   314 000001BF 696E746F2074686520-
+   314 000001C8 6465627567206D6F6E-
+   314 000001D1 69746F72202D2D2045-
+   314 000001DA 584954207265747269-
+   314 000001E3 65732074686520626F-
+   314 000001EC 6F742E             
+   315 000001EF 0D0A00                  	db	ASCII_CR,ASCII_LF,0
+   316                                  %else
+   317                                  	db	0
+   318                                  msg_anykey:
+   319                                  	db	"Change the disk and press any key to try again."
+   320                                  	db	ASCII_CR,ASCII_LF,0
+   321                                  %endif
+   322                                  msg_retry:
+   323 000001F2 0D0A5265747279696E-     	db	ASCII_CR,ASCII_LF,"Retrying the boot ...",ASCII_CR,ASCII_LF,0
+   323 000001FB 672074686520626F6F-
+   323 00000204 74202E2E2E0D0A00   
+   324                                  
+   325                                  
+   326                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   327                                  ; reboot -- restart the board through the ROM's own reset entry
+   328                                  ;
+   329                                  ;	void reboot(void);
+   330                                  ;
+   331                                  ; Does not return.
+   332                                  ;
+   333                                  ; FFFF:0000 is where the processor begins after a reset and where
+   334                                  ; 'bootstrap' in boot.asm sits: a five-byte far jump to F000:0000.  Going
+   335                                  ; through it rather than straight to F000:0000 means a warm start takes
+   336                                  ; exactly the path a cold one does, including anything that ever gets added
+   337                                  ; to that stub.
+   338                                  ;
+   339                                  ; This is not a hardware reset -- the peripherals keep whatever state they
+   340                                  ; are in -- but start.asm is written to survive being re-entered.  The
+   341                                  ; expanded I/O unlock opens with a read of REMAPCFGH precisely to put that
+   342                                  ; state machine back to a known state from wherever it was, and every port
+   343                                  ; the BIOS depends on is written from wtab1/btab1 rather than assumed.  What
+   344                                  ; it does not do is reset the IDE drive, so the first thing POST does to the
+   345                                  ; card is the soft reset in hd_reset(), which is what that is for.
+   346                                  ;
+   347                                  ; SETUP is the caller: it used to print "Reboot required!" and then call
+   348                                  ; exit(15), which lands in exit_ and powers the board down.  Telling someone
+   349                                  ; a reboot is required and then making the machine unresponsive is the
+   350                                  ; wrong pair of actions, and it is the reason this exists.
+   351                                  ;
+   352                                  ; The console is drained first.  The last line of output is still sitting
+   353                                  ; in the UART when the chip selects are reprogrammed, and without the wait
+   354                                  ; the user sees a truncated message and reads it as a crash.  The port comes
+   355                                  ; from bda.serial_dev[0] rather than a constant, since the console may be
+   356                                  ; the on-chip SIO0 at 3F8h or the MF/PIC at 448h.
+   357                                  ;
+   358                                  ; DX has to be loaded before the jump, and this is the whole reason the
+   359                                  ; first version of this routine did not work.  The very first thing POST
+   360                                  ; does is 'cmp dx,DEVICE_ID' -- DX carries the 386EX component identifier
+   361                                  ; out of a hardware reset, and start.asm checks it before anything else.
+   362                                  ; Arriving without it fails that test and lands in error_halt, which is a
+   363                                  ; cli/hlt loop: the board simply stops, with no output to say why.  A
+   364                                  ; software restart has to present the register state a reset would have.
+   365                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   366                                  	global	reboot_
+   367                                  reboot_:
+   368 0000020C FA                      	cli
+   369                                  
+   370 0000020D 6A401F                  	get_bda	DS
+   371                                  
+   372                                  ; Tell POST this is a warm start, so it can skip the memory march.  The
+   373                                  ; test of segment 0 during POST zeroes the BDA, which is what puts this
+   374                                  ; back to zero again -- the next start after this one is a cold one unless
+   375                                  ; something asks otherwise.
+   376 00000210 C70672003412            	mov	word [reset_flag],WARM_BOOT
+   377                                  
+   378 00000216 8B160000                	mov	dx,[serial_dev]		; console base, 0 if none was installed
+   379 0000021A 09D2                    	or	dx,dx
+   380 0000021C 740D                    	jz	.2
+   381                                  
+   382 0000021E 83C205                  	add	dx,LSR0-TBR0		; the line status register
+   383 00000221 B90000                  	mov	cx,0			; 65536 reads is far longer than a
+   384                                  					;  character takes at any rate we use
+   385                                  .1:
+   386 00000224 EC                      	in	al,dx
+   387 00000225 A840                    	test	al,LSR_TE		; transmitter completely empty?
+   388 00000227 7502                    	jnz	.2
+   389 00000229 E2F9                    	loop	.1
+   390                                  .2:
+   391 0000022B BA0923                  	mov	dx,DEVICE_ID		; what a hardware reset would have left
+   392 0000022E EA0000FFFF              	jmp	0xFFFF:0x0000		; the reset entry, into boot.asm

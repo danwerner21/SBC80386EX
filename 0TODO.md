@@ -49,26 +49,54 @@ protecting against.
 
 ## Next — the functional gaps
 
-None of these has an observed failure behind it. They are calls a program is entitled to
-make that this BIOS does not yet answer, listed in section 09 of `0BRINGUP.md`.
+**1 · `INT 15h 89h`, enter protected mode. Recommend deferring — see below.** The only one
+of these with real code behind it, and the only one that can leave the board unrecoverable
+if it is wrong.
 
-**1 · `INT 15h 89h`** — enter protected mode. Reports unsupported. `AH=87h` already builds
-and uses a 16-bit protected-mode context, so the machinery is largely present.
+**2 · `INT 15h C1h`, get EBDA. Closed 2026-09-20: already correct.** It returns `AH=86h`
+with carry set, and feature byte 1 bit 2 reports no EBDA, so nothing is misled. Answering
+it properly would mean *allocating* an EBDA — a kilobyte off the top of conventional memory
+to hold data nothing on this board produces. The PS/2 pointing device is what an EBDA is
+usually for, and there is no pointing device. Reporting one we do not keep would be a lie
+software could act on. Reopen this if a real EBDA ever gets allocated, not before.
 
-**2 · `INT 15h C1h`** — get EBDA. Reports unsupported, and feature byte 1 bit 2 correctly
-says so, which means nothing is currently misled by it.
+**3 · `INT 13h 4Eh`, set hardware configuration. Closed 2026-09-20: already correct.** It
+reaches `ret_invalid_command` through a real slot in `packet_call_tab`, not by falling off
+the end of a table. The call is PS/2 ESDI-specific — it is not part of the EDD set, which
+is `41h`-`48h` — and rejecting it is what a non-PS/2 BIOS is supposed to do.
 
-**3 · `INT 13h 4Eh`** — set hardware configuration. Returns invalid-command, which is what
-a great many real BIOSes did.
+**4 · Boot-device byte in NVRAM. Done 2026-09-20.** See Done, below.
 
-**4 · Boot-device byte in NVRAM.** Phase 2 called for one and it never arrived. `set_fixed()`
-stores geometry and there is room in the table already; what is missing is a way to say
-which device to try first. INT 19h currently hard-codes A: then C:, which is the right
-default but should not be the only option.
+**5 · `INT 10h 08h` cannot report screen contents. Genuinely blocked on item 12**, not
+merely waiting for attention: it needs a display buffer, and whether there is one depends
+on what the video hardware turns out to be. Carried into item 12 rather than left here.
 
-**5 · `INT 10h 08h` cannot report screen contents.** There is no display buffer to read
-back. This one is genuinely blocked on item 12 rather than merely waiting for attention —
-see below.
+### Why item 1 should wait
+
+Not because it is hard. The machinery mostly exists — `AH=87h` already builds descriptors,
+loads `GDTR`, sets `PE` and far-jumps, so the shape is known and much of it is reusable.
+
+Because **it cannot be tested, and nothing calls it.**
+
+- There is no software on this board that issues `AH=89h`. Testing it means writing a
+  protected-mode program with its own eight-descriptor GDT, which is a larger exercise than
+  the function.
+- `89h` enters protected mode and *stays* there. A defect does not return an error; it
+  leaves the board in protected mode with a bad descriptor and no way out but the reset
+  button. Every other call in this BIOS can be wrong and still be debugged.
+- The software that historically used it — OS/2 1.x, a few early extenders — is not what
+  this board runs. DOS extenders switch modes themselves. Coherent will switch modes
+  itself. Nothing in item 13 wants it.
+- It costs ROM in a window that is 24% free, immediately before item 12 spends more.
+
+Every defect found in Phase 6 was in code that looked right and had not been exercised.
+Adding two hundred bytes of unexercisable code that nothing calls, in a ROM about to get
+tighter, is the same bet again with nothing to win.
+
+**If it is wanted, build the test with it** — a monitor command that constructs the GDT,
+calls `89h`, checks `CR0.PE` and the loaded selectors, and returns to real mode the way
+`AH=87h` already does. That makes it a rung on the ladder rather than an article of faith,
+and it is the condition on which this should be done at all.
 
 ---
 
@@ -136,6 +164,20 @@ will exercise paths DOS never touches.
   `zero.*` makefile rules. Membership decided by closure from `start.map` rather than from
   the old list, because the makefile still carried rules for things that had not been built
   in years. Re-running the closure afterwards reports zero files outside it.
+
+- **4 · Boot-device byte in NVRAM.** 2026-09-20. `bda.boot_order`, taken from the first
+  byte of `nvram_unused` and so inside the existing checksum. Four orders: floppy then
+  fixed, fixed then floppy, floppy only, fixed only. SETUP gains a "Boot Order" entry, and
+  INT 19h honours it through `try_floppy`/`try_fixed` rather than the hard-coded pair.
+
+  **Zero means floppy-then-fixed on purpose.** That byte reads zero in every NVRAM written
+  before the field existed, so a board upgraded to this BIOS boots exactly as it did with
+  nobody having to visit SETUP. It is also the right default on its own merits: it is what
+  a PC has always done, and it is the order that lets a bad fixed disk be repaired instead
+  of merely reported — which is the whole reason the floppy work happened.
+
+- **2, 3 · `INT 15h C1h` and `INT 13h 4Eh`.** 2026-09-20. Closed as already correct; see
+  above. No code changed.
 
 - **10 · Repartition the CF and fix the BPB totals.** 2026-09-20. The blocker that started
   the floppy work: the partition table was oversized and there was no bootable medium to

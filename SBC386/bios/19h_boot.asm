@@ -47,6 +47,13 @@ BOOT_FD_TRIES	equ	2		; fewer for the floppy: an empty drive
 					;  is the ordinary case, and every
 					;  attempt costs a motor spin-up
 
+; bda.boot_order, numbered as the enum in "nvram.h" does.  Named here
+; because a bare 1 in a comparison says nothing about what it means.
+BOOT_AC		equ	0		; floppy, then the fixed disk
+BOOT_CA		equ	1		; fixed disk, then the floppy
+BOOT_A		equ	2		; floppy only
+BOOT_C		equ	3		; fixed disk only
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; INT 19h -- Bootstrap Loader
@@ -87,29 +94,47 @@ int_19h:
 	sti
 	cld
 
-; The floppy first, but only if SETUP says one is there.
+; In whatever order SETUP asked for.  An unrecognised value falls
+; through to the floppy-then-fixed order, which is also what a zero
+; means -- and zero is what every NVRAM written before this byte
+; existed carries, so a board upgraded to this BIOS boots the way it
+; always did without being configured first.
 	push	ds
 	get_bda	DS
-	mov	al,[floppy_tab]
+	mov	al,[boot_order]
 	pop	ds
-	or	al,al
-	jz	.fixed
 
-	mov	si,msg_try_a
-	call	boot_msg
-	mov	dx,BOOT_FLOPPY
-	mov	cx,BOOT_FD_TRIES
-	call	boot_try
+	cmp	al,BOOT_CA
+	je	.c_then_a
+	cmp	al,BOOT_A
+	je	.a_only
+	cmp	al,BOOT_C
+	je	.c_only
+
+.a_then_c:
+	call	try_floppy
+	jnc	.enter
+	call	try_fixed
+	jnc	.enter
+	jmp	short .none
+
+.c_then_a:
+	call	try_fixed
+	jnc	.enter
+	call	try_floppy
+	jnc	.enter
+	jmp	short .none
+
+.a_only:
+	call	try_floppy
+	jnc	.enter
+	jmp	short .none
+
+.c_only:
+	call	try_fixed
 	jnc	.enter
 
-.fixed:
-	mov	si,msg_try_c
-	call	boot_msg
-	mov	dx,BOOT_DRIVE
-	mov	cx,BOOT_RETRIES
-	call	boot_try
-	jnc	.enter
-
+.none:
 	mov	si,msg_noread
 	call	boot_msg
 ; INT 18h is where the PC/AT went when nothing would boot.  Here it
@@ -131,6 +156,42 @@ int_19h:
 	mov	es,ax
 	cnop
 	jmp	BOOT_SEG:BOOT_OFF
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; try_floppy, try_fixed -- one device each, announced and attempted
+;
+; Carry clear if a boot sector was loaded, and SI naming the drive for
+; the sector to be told about.  Split out so the order above can be a
+; list of calls rather than four copies of the same code.
+;
+; The floppy asks the BDA whether a drive is configured before it says
+; anything.  There is no way to ask the hardware, and announcing an
+; attempt on a drive nobody has fitted, then waiting out its timeout,
+; is worse than silence.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+try_floppy:
+	push	ds
+	get_bda	DS
+	mov	al,[floppy_tab]
+	pop	ds
+	or	al,al
+	jz	.nodrive
+	mov	si,msg_try_a
+	call	boot_msg
+	mov	dx,BOOT_FLOPPY
+	mov	cx,BOOT_FD_TRIES
+	jmp	boot_try		; its RET returns for us, carry and all
+.nodrive:
+	stc
+	ret
+
+try_fixed:
+	mov	si,msg_try_c
+	call	boot_msg
+	mov	dx,BOOT_DRIVE
+	mov	cx,BOOT_RETRIES
+	jmp	boot_try
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -300,7 +361,7 @@ int_18h:
 msg_try_a:
 	db	ASCII_CR,ASCII_LF,"Trying drive A: ...",ASCII_CR,ASCII_LF,0
 msg_try_c:
-	db	"Trying drive C: ...",ASCII_CR,ASCII_LF,0
+	db	ASCII_CR,ASCII_LF,"Trying drive C: ...",ASCII_CR,ASCII_LF,0
 msg_booting:
 	db	"Boot sector loaded, entering it ...",ASCII_CR,ASCII_LF,0
 msg_noread:

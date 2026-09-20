@@ -46,6 +46,27 @@ enum {	FD_NONE,	/* 0				*/
 #define NFLOPPY nelem(bda.floppy_tab)
 
 
+/* Boot order, in bda.boot_order and inside the NVRAM checksum.
+ *
+ * Zero has to mean the order the board already used, because that is what
+ * every NVRAM written before this field existed carries -- the byte comes
+ * out of nvram_unused, which has always been zero.  A board upgraded to
+ * this BIOS therefore keeps behaving as it did, without anyone having to
+ * visit SETUP first.
+ *
+ * Floppy-then-fixed is also the right default on its own merits: it is what
+ * a PC has always done, and it is the order that lets a bad fixed disk be
+ * repaired rather than merely reported.
+ */
+enum {	BOOT_AC,	/* 0  floppy, then the fixed disk -- the PC's order */
+	BOOT_CA,	/* 1  fixed disk, then the floppy                    */
+	BOOT_A,		/* 2  floppy only                                    */
+	BOOT_C,		/* 3  fixed disk only                                */
+
+	BOOT_END
+	};
+
+
 typedef
 struct _NVRAM {
 	T_CONFIG_SERIAL sio0;
@@ -76,6 +97,7 @@ VOID set_top(int modified);
 int set_fixed(void);
 int set_floppy(void);
 int set_serial(void);
+int set_boot(void);
 VOID set_clock(void);
 VOID set_time(void);
 VOID set_date(void);

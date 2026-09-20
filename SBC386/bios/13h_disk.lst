@@ -599,18 +599,19 @@
    159                              <1> ; starts with 2 bytes of SIO0 params */
    160 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
    161 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   162 000000ED <res 11h>           <1> nvram_unused	resb	17
-   163 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   164                              <1> ; end of 31 bytes of NVRAM information */
-   165                              <1> ; */
-   166 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   167                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   168 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   169                              <1> ; */
-   170                              <1> ; Extentsion to BDA during BIOS startup */
-   171                              <1> ; */
-   172                              <1> endstruc
-   172          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   162 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   163 000000EE <res 10h>           <1> nvram_unused	resb	16
+   164 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   165                              <1> ; end of 31 bytes of NVRAM information */
+   166                              <1> ; */
+   167 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   168                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   169 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   170                              <1> ; */
+   171                              <1> ; Extentsion to BDA during BIOS startup */
+   172                              <1> ; */
+   173                              <1> endstruc
+   173          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     32                                  %include "macro.inc"
     33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     34                              <1> ;

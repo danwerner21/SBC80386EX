@@ -889,18 +889,19 @@
    190                              <1> ; starts with 2 bytes of SIO0 params */
    191 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
    192 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   193 000000ED <res 11h>           <1> nvram_unused	resb	17
-   194 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   195                              <1> ; end of 31 bytes of NVRAM information */
-   196                              <1> ; */
-   197 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   198                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   199 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   200                              <1> ; */
-   201                              <1> ; Extentsion to BDA during BIOS startup */
-   202                              <1> ; */
-   203                              <1> endstruc
-   203          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   193 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   194 000000EE <res 10h>           <1> nvram_unused	resb	16
+   195 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   196                              <1> ; end of 31 bytes of NVRAM information */
+   197                              <1> ; */
+   198 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   199                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   200 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   201                              <1> ; */
+   202                              <1> ; Extentsion to BDA during BIOS startup */
+   203                              <1> ; */
+   204                              <1> endstruc
+   204          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     63                                  %undef XXX
     64                                  
     65                                  NL      equ     ASCII_NL

@@ -1512,6 +1512,98 @@ There is five orders of magnitude of slack between the slowest real access and t
 reload, so a much shorter timeout would still be a safe bus-hang backstop while making a
 failed probe cost microseconds instead of a fifth of a second.
 
+### Measured, 2026-09-20 — the arithmetic above was right
+
+**An undecoded read costs 209.7 ms.** The figure derived at the top of this section, from
+`3FFFFF` counts at the 20 MHz CPU clock, is what the board actually does. So the open
+question is answered and answered in the affirmative: unclaimed cycles do run to the
+watchdog, and anything that probes absent hardware pays a fifth of a second per probe.
+
+Getting there took three instruments and two wrong answers, both of them mine, and the way
+they were wrong is worth more than the number.
+
+```
+IOTIME  64 10    16 ticks for 16 reads        -> 54925 usec each
+IOTIME1 64 4     52638 usec, tick moved 4     -> 13160 usec each
+IOWALL  64 100   wall 53 sec for 256 reads    -> 207031 usec each
+```
+
+Three clocks, three answers, spanning sixteen to one. Only the last is right.
+
+**The tick loses interrupts.** A 209.7 ms stall spans about 3.8 tick periods, but the 8259
+latches one pending IRQ0 and discards the rest, so exactly one tick is booked per read
+however long the stall. That is why every timer-0 measurement returned precisely one tick
+per read — through two ports, four burst sizes and an eight-to-one span of watchdog
+reloads. It was not measuring time at all; it was counting reads. `IOWALL` shows it
+directly: 256 reads across 53 wall seconds should have booked about 965 ticks and booked
+256, a rate of 4 per second against a true 18.2.
+
+**Counter 1 wraps.** It runs at 1 MHz in a 16-bit counter, so it turns over every 65,536
+µs and 209,715 µs wraps three times. The residue is 13,107 µs; the command read 13,169.
+Within half a percent — which makes it, in hindsight, the strongest confirmation of the
+209.7 ms figure available, and it was printed as a refutation of it. The wrap was named in
+that command's own help text and then ignored in reading its output.
+
+**The DS1302 is the only clock here that is neither.** Separate part, separate crystal, no
+relationship to either PIT counter or to the interrupt that might not arrive.
+
+#### What was actually wrong
+
+Not the arithmetic. **Every instrument was built on the clock nearest to hand, and each was
+disqualified by the very thing it was pointed at.** Timer 0 cannot time an event that
+suppresses timer 0's interrupt. Timer 1 cannot time an event four times its own range. Both
+failures are obvious stated plainly, and neither was noticed while the numbers still looked
+like data.
+
+Worse, each wrong answer arrived with a supporting argument. 55 ms "could not be" the
+watchdog because it did not match 209 ms — so the clock was assumed right and the mechanism
+wrong. The `WDTSET` sweep then appeared to exonerate the watchdog, because a reload change
+cannot move a figure that was never a duration. Two independent-looking confirmations, both
+downstream of the same broken clock.
+
+The rule this earns: **before believing a measurement, ask what the thing being measured
+does to the instrument.** A stall that blocks interrupts and a clock driven by interrupts
+are not independent, and no amount of repetition across ports and burst sizes will reveal
+it. Only a clock with no shared mechanism will.
+
+#### Two consequences
+
+**The reload is not programmable in this mode, so item 9 cannot be done as written.**
+`WDTSET` wrote `WDTRLDH`/`WDTRLDL` across an eight-to-one range, sent the reload sequence,
+read the values back correctly — and the timeout stayed at 209.7 ms throughout. Since the
+duration matches `3FFFFF` counts at the CPU clock exactly, the bus monitor appears to use a
+fixed 2^22 timeout rather than the programmable reload. Shortening a probe would mean
+changing the watchdog's mode, not its reload, and that changes what happens on a genuine
+bus hang. Datasheet work, not a value to pick.
+
+**Undecoded reads make the board lose time.** Not gain — lose. Three ticks in four are
+discarded during each stall, so the clock falls behind by about 155 ms per read. The single
+`IOWALL` run above dropped roughly 39 seconds. The HIMEM lockup recorded in section 09,
+spinning on port `64h`, was doing this the whole time it spun. Nothing can be done about it
+in software — a lost interrupt is lost — but anything that reads the time of day across a
+long probe should be understood to be reading a clock that has stopped for part of it.
+
+### A defect found by writing the instrument
+
+`IOWALL` hung on its first run, in the loop that waits for the RTC seconds to change. The
+cause was not in the loop.
+
+**`int_1Ah` preserved only SI.** It answers in AX, CX, DX and the Carry, and nothing in its
+dispatch returns BX, DI, BP, DS or ES — but it did not save them either, so a handler that
+happened to use DS or BP handed the caller back a corrupted one. Calling it once, as
+`signon.c` does, survives that. Calling it in a tight loop from C does not.
+
+`get_date` is the one that does it: it holds the month and day in BH and BL before moving
+them to DX. Scratch, not a return — which is why preserving BX is safe, and why the bug
+sat there unnoticed.
+
+This matters well beyond the monitor. **DOS reads the tick through `AH=00h` constantly.**
+It is the same family as the INT 13h defects in Phase 6 — what the interface promises about
+registers rather than what the hardware does — and it is the fourth of them. The pattern is
+worth naming: on this board, the bugs that survive testing are the ones about the contract,
+because every test written so far supplies its own registers and never looks at what comes
+back.
+
 ---
 
 ## 07 · Risks worth naming now

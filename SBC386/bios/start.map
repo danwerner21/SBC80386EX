@@ -1,6 +1,6 @@
 Open Watcom Linker Version 1.9
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/09/20 17:37:57
+Created on:       26/09/20 19:46:12
 Executable Image: start.exe
 creating a DOS executable
 
@@ -12,7 +12,7 @@ creating a DOS executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          0000:0000            0000c200
+DGROUP                          0000:0000            0000cde0
 
 
 
@@ -23,12 +23,12 @@ DGROUP                          0000:0000            0000c200
 Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
-_TEXT                  CODE           DGROUP         0000:0000       000083fb
-CONST                  DATA           DGROUP         0840:0000       00003970
-CONST2                 DATA           DGROUP         0bd7:0000       0000048e
-_DATA                  DATA           DGROUP         0c20:0000       00000000
-_BSS                   DATA           DGROUP         0c20:0000       00000000
-BOOT                   BOOT           AUTO           0c20:0000       00000030
+_TEXT                  CODE           DGROUP         0000:0000       0000877b
+CONST                  DATA           DGROUP         0878:0000       000041b0
+CONST2                 DATA           DGROUP         0c93:0000       000004a2
+_DATA                  DATA           DGROUP         0cde:0000       00000000
+_BSS                   DATA           DGROUP         0cde:0000       00000000
+BOOT                   BOOT           AUTO           0cde:0000       00000030
 
 
                         +----------------+
@@ -56,13 +56,13 @@ Module: start.o(start.asm)
 0000:0364*     nout
 0000:0388      get_nvram_crc_
 0000:03b1      put_nvram_info_
-0000:85fd      _bda_ptr
-0000:85fd*     bda_ptr
-0000:8620      _SecBuffer
+0000:897d      _bda_ptr
+0000:897d*     bda_ptr
+0000:89a0      _SecBuffer
 Module: sizer.o(sizer.asm)
 0000:03e0      ext_mem_size
 0000:0444      _pm_read
-0000:8630*     gdt0
+0000:89b0*     gdt0
 Module: crc16.o(crc.asm)
 0000:04c0      crc16
 Module: diskide.o(diskide.asm)
@@ -90,208 +90,210 @@ Module: 15h_misc.o(15h_misc.asm)
 0000:0f00      int_15h
 Module: 1Ah_time.o(1Ah_time.asm)
 0000:1110      int_1Ah
-0000:1158      ds_read_reg_
-0000:118a      int_irq0
-0000:11e3      start_timer0_
-0000:1206      get_time
-0000:1238*     set_time
-0000:1269*     get_date
-0000:129f*     set_date
-0000:12e2*     ds_read
-0000:134c*     ds_write
-0000:13a1      ds_get_charge
-0000:13ba      ds_reset_on
-0000:13cb*     ds_reset_off
-0000:140a      bcd2int_
-0000:1414      day_of_week_
-0000:142c*     dow_
+0000:1162      ds_read_reg_
+0000:1194      int_irq0
+0000:11ed      start_timer0_
+0000:1210      get_time
+0000:1242*     set_time
+0000:1273*     get_date
+0000:12a9*     set_date
+0000:12ec*     ds_read
+0000:1356*     ds_write
+0000:13ab      ds_get_charge
+0000:13c4      ds_reset_on
+0000:13d5*     ds_reset_off
+0000:1414      bcd2int_
+0000:141e      day_of_week_
+0000:1436*     dow_
 Module: main.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/main.c)
-0000:1470+     install_serial_console_
-0000:14ce*     _serial_port_status
-0000:14e7+     delay_
-0000:150f      _main__
+0000:147a+     install_serial_console_
+0000:14d8*     _serial_port_status
+0000:14f1+     delay_
+0000:1519      _main__
 Module: signon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/signon.c)
-0000:172f      pr_lic_
+0000:1739      pr_lic_
 Module: getline.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/getline.c)
-0000:17bd      is_print_
-0000:17ce+     putline_
-0000:1806      getline_
+0000:17c7      is_print_
+0000:17d8+     putline_
+0000:1810      getline_
 Module: set1302.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/set1302.c)
-0000:18eb+     option_get_
-0000:19b4+     SET_CHG
-0000:1a4a      SET_TOP
-0000:1b22+     set_fixed_
-0000:1c01+     set_floppy_
-0000:1cb1+     SET_CLOCK
-0000:1ce5+     SET_DATE
-0000:1e9c+     SET_TIME
-0000:1f9e+     set_line_speed_
-0000:2053+     set_stop_bits_
-0000:20b7+     set_char_format_
-0000:2180+     set_serial_
-0000:c082+     _name
-0000:c08e+     _value
-0000:c091+     _top_name
-0000:c0a9*     _fixed_disks
-0000:c0c1+     _floppy_types
-0000:c0d5+     _clock_name
-0000:c0e1+     _Day
-0000:c0fd+     _speeds
-0000:c135+     _stop_bits
-0000:c13d+     _char_char
-0000:c149+     _serial
+0000:18f5+     option_get_
+0000:19be+     SET_CHG
+0000:1a56      SET_TOP
+0000:1b33+     set_fixed_
+0000:1c12+     set_boot_
+0000:1ca2+     set_floppy_
+0000:1d52+     SET_CLOCK
+0000:1d86+     SET_DATE
+0000:1f3d+     SET_TIME
+0000:203f+     set_line_speed_
+0000:20f4+     set_stop_bits_
+0000:2158+     set_char_format_
+0000:2221+     set_serial_
+0000:cc42+     _name
+0000:cc4e+     _value
+0000:cc51+     _top_name
+0000:cc6d*     _fixed_disks
+0000:cc85+     _floppy_types
+0000:cc99+     _boot_orders
+0000:cca9+     _clock_name
+0000:ccb5+     _Day
+0000:ccd1+     _speeds
+0000:cd09+     _stop_bits
+0000:cd11+     _char_char
+0000:cd1d+     _serial
 Module: icu.o(icu.asm)
-0000:21e0*     mask_interrupt_
-0000:21fe      unmask_interrupt_
-0000:21fe*     unmask_interrupt
+0000:2290*     mask_interrupt_
+0000:22ae      unmask_interrupt_
+0000:22ae*     unmask_interrupt
 Module: strtobcd.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/strtobcd.c)
-0000:222c      strtobcd_
+0000:22dc      strtobcd_
 Module: testmain.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/testmain.c)
-0000:2347+     cvdu_get_
-0000:236f+     cvdu_put_
-0000:239c+     test_cvdu_
-0000:23f1+     vga_get_
-0000:241f+     vga_put_
-0000:2458+     test_vga_
-0000:24ad+     test_vga_mem_
-0000:24e3+     test_4uart_
-0000:250d+     _equip_flag
-0000:2520+     _conv_mem
-0000:252e*     _set_tick_count
-0000:2547*     _get_time
-0000:2561      testmain_
-0000:c156+     _bitrev
+0000:23f7+     cvdu_get_
+0000:241f+     cvdu_put_
+0000:244c+     test_cvdu_
+0000:24a1+     vga_get_
+0000:24cf+     vga_put_
+0000:2508+     test_vga_
+0000:255d+     test_vga_mem_
+0000:2593+     test_4uart_
+0000:25bd+     _equip_flag
+0000:25d0+     _conv_mem
+0000:25de*     _set_tick_count
+0000:25f7*     _get_time
+0000:2611      testmain_
+0000:cd2a+     _bitrev
 Module: stub.o(stub.asm)
-0000:2770      int_zero_divide
-0000:2770      int_single_step
-0000:2770      int_NMI_interrupt
-0000:2770      int_breakpoint
-0000:2770      int_overflow
-0000:2770      int_bounds_check
-0000:2770      int_invalid_opcode
-0000:2770      int_FPU_escape
-0000:2770      int_nop
-0000:2771      int_irq1
-0000:2771      int_irq2
-0000:2771      int_irq3
-0000:2771      int_irq5
-0000:2771      int_irq6
-0000:2771      int_irq7
-0000:2771      clear_irq0
-0000:2771*     clear_irq1
-0000:2771*     clear_irq3
-0000:2771*     clear_irq4
-0000:2771*     clear_irq5
-0000:2771*     clear_irq6
-0000:2771*     clear_irq7
-0000:2778      int_1Bh
-0000:2770      int_1Ch
-0000:2778      int_1Dh
-0000:2778*     int_1Eh
-0000:2778      int_1Fh
-0000:2778      int_EMM
-0000:2778      int_msdos
-0000:277f      param_hd0
-0000:277f      int_42h
-0000:277f      param_VGA
-0000:277f      param_font
-0000:277f      param_hd1
-0000:277f      int_4Ah
-0000:2780      int_irq8
-0000:2780      int_irq9
-0000:2780      int_irq10
-0000:2780      int_irq11
-0000:2780      int_irq12
-0000:2780      int_irq13
-0000:2780      int_irq14
-0000:2780      int_irq15
-0000:2780*     clear_irq8
-0000:2780*     clear_irq9
-0000:2780*     clear_irq10
-0000:2780*     clear_irq11
-0000:2780*     clear_irq12
-0000:2780*     clear_irq13
-0000:2780*     clear_irq14
-0000:2780*     clear_irq15
-0000:2787*     clear_irq2
-0000:278e      _small_code_
-0000:2790      VIDEO_putchar_
-0000:2790*     @VIDEO_putchar
-0000:2790*     @CVDU_putchar
-0000:2799      KBD_getchar_
-0000:2799*     @KBD_getchar
+0000:2820      int_zero_divide
+0000:2820      int_single_step
+0000:2820      int_NMI_interrupt
+0000:2820      int_breakpoint
+0000:2820      int_overflow
+0000:2820      int_bounds_check
+0000:2820      int_invalid_opcode
+0000:2820      int_FPU_escape
+0000:2820      int_nop
+0000:2821      int_irq1
+0000:2821      int_irq2
+0000:2821      int_irq3
+0000:2821      int_irq5
+0000:2821      int_irq6
+0000:2821      int_irq7
+0000:2821      clear_irq0
+0000:2821*     clear_irq1
+0000:2821*     clear_irq3
+0000:2821*     clear_irq4
+0000:2821*     clear_irq5
+0000:2821*     clear_irq6
+0000:2821*     clear_irq7
+0000:2828      int_1Bh
+0000:2820      int_1Ch
+0000:2828      int_1Dh
+0000:2828*     int_1Eh
+0000:2828      int_1Fh
+0000:2828      int_EMM
+0000:2828      int_msdos
+0000:282f      param_hd0
+0000:282f      int_42h
+0000:282f      param_VGA
+0000:282f      param_font
+0000:282f      param_hd1
+0000:282f      int_4Ah
+0000:2830      int_irq8
+0000:2830      int_irq9
+0000:2830      int_irq10
+0000:2830      int_irq11
+0000:2830      int_irq12
+0000:2830      int_irq13
+0000:2830      int_irq14
+0000:2830      int_irq15
+0000:2830*     clear_irq8
+0000:2830*     clear_irq9
+0000:2830*     clear_irq10
+0000:2830*     clear_irq11
+0000:2830*     clear_irq12
+0000:2830*     clear_irq13
+0000:2830*     clear_irq14
+0000:2830*     clear_irq15
+0000:2837*     clear_irq2
+0000:283e      _small_code_
+0000:2840      VIDEO_putchar_
+0000:2840*     @VIDEO_putchar
+0000:2840*     @CVDU_putchar
+0000:2849      KBD_getchar_
+0000:2849*     @KBD_getchar
 Module: hdinit.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/hdinit.c)
-0000:2838      id_word_
-0000:284d      id_dword_
-0000:2872      hd_reset_
-0000:28b5      hd_set_8bit_
-0000:28f4+     hd_present_
-0000:2955+     hd_probe_
-0000:2b01+     hd_identify_
-0000:2c1c      hdinit_
-0000:2d17      hd_report_
-0000:2e81      hd_enumerate_
+0000:28e8      id_word_
+0000:28fd      id_dword_
+0000:2922      hd_reset_
+0000:2965      hd_set_8bit_
+0000:29a4+     hd_present_
+0000:2a05+     hd_probe_
+0000:2bb1+     hd_identify_
+0000:2ccc      hdinit_
+0000:2dc7      hd_report_
+0000:2f31      hd_enumerate_
 Module: 19h_boot.o(19h_boot.asm)
-0000:2f50      int_19h
-0000:3014      int_18h
-0000:315c      reboot_
+0000:3000      int_19h
+0000:30f8      int_18h
+0000:3242      reboot_
 Module: 17h_prn.o(17h_prn.asm)
-0000:3190      int_17h
+0000:3270      int_17h
 Module: 10h_video.o(10h_video.asm)
-0000:31b0      int_10h
+0000:3290      int_10h
 Module: 16h_kbd.o(16h_kbd.asm)
-0000:3470      kbd_init_
-0000:34ad      int_irq4
-0000:352f      int_16h
+0000:3550      kbd_init_
+0000:358d      int_irq4
+0000:360f      int_16h
 Module: fdcpio.o(fdcpio.asm)
-0000:3620      _fdc_pio_in
-0000:369f      _fdc_pio_out
-0000:371e      FDC_stop_motor
-0000:371e*     FDC_stop_motor_
+0000:3700      _fdc_pio_in
+0000:377f      _fdc_pio_out
+0000:37fe      FDC_stop_motor
+0000:37fe*     FDC_stop_motor_
 Module: diskfdc.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/diskfdc.c)
-0000:3869      _fd_reset
-0000:391e+     _fd_rate
-0000:39dc+     _fd_seek
-0000:3b78      _fd_rw
-0000:3cf8      _fd_format
+0000:3949      _fd_reset
+0000:39fe+     _fd_rate
+0000:3abc+     _fd_seek
+0000:3c58      _fd_rw
+0000:3dd8      _fd_format
 Module: 40h_flop.o(40h_flop.asm)
-0000:3e80*     fd_param_table
-0000:3e8a      disk_base_1440
-0000:3e95*     disk_base_1200
-0000:3ea0*     disk_base_720
-0000:3eab*     disk_base_360
-0000:3ee6      int_40h
-0000:4212      fd_set_1E_
+0000:3f60*     fd_param_table
+0000:3f6a      disk_base_1440
+0000:3f75*     disk_base_1200
+0000:3f80*     disk_base_720
+0000:3f8b*     disk_base_360
+0000:3fc6      int_40h
+0000:42f2      fd_set_1E_
 Module: debugmon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/debugmon.c)
-0000:c178+     _disk_short
-0000:4613+     DumpMemory_
-0000:4772+     DumpBDA_
-0000:4b62+     DumpIdentify_
-0000:4d20+     DumpSector_
-0000:4db8      debugmon_
+0000:cd4c+     _disk_short
+0000:4742+     DumpMemory_
+0000:48a1+     DumpBDA_
+0000:4c91+     DumpIdentify_
+0000:4e4f+     DumpSector_
+0000:4ee7      debugmon_
 Module: monitor.o(monitor.asm)
-0000:7ca0      _go_call
-0000:7d22      _int15_call
-0000:7d91      _int13_call
+0000:8020      _go_call
+0000:80a2      _int15_call
+0000:8111      _int13_call
 Module: strtoint.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/strtoint.c)
-0000:7e24      strtoint_
+0000:81a4      strtoint_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/cprintf.c)
-0000:7f37*     @nstring
-0000:7f5b      _cprintf
+0000:82b7*     @nstring
+0000:82db      _cprintf
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4m)
-0000:824e*     __I4M
-0000:824e      __U4M
+0000:85ce*     __I4M
+0000:85ce      __U4M
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4d)
-0000:8266*     __I4D
-0000:82af      __U4D
+0000:85e6*     __I4D
+0000:862f      __U4D
 Module: /opt/openwatcom/lib286/dos/clibc.lib(outp.c)
-0000:8333      outp_
+0000:86b3      outp_
 Module: /opt/openwatcom/lib286/dos/clibc.lib(inp.c)
-0000:833d      inp_
+0000:86bd      inp_
 Module: lib/sbc386.lib(uart_det.asm)
-0000:8350      uart_det_
+0000:86d0      uart_det_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/strlen.c)
-0000:83e8      strlen_
+0000:8768      strlen_
 Warning! W1014: stack segment not found
 Warning! W1023: no starting address found, using 0000:0000
 
@@ -309,6 +311,6 @@ lib/sbc386.lib
                         +-----------------------+
 
 Stack size:  1000 (4096.)
-Memory size:  c230 (49712.)
+Memory size:  ce10 (52752.)
 Entry point address: 0000:0000
-Link time: 00:00.35
+Link time: 00:00.17

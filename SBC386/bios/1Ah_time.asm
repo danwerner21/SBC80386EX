@@ -59,7 +59,22 @@ segment	_TEXT
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 int_1Ah:
 	sti			;turn on interrupts
-	pushm	si
+;
+; Everything that is not a documented return value.  INT 1Ah answers in
+; AX, CX, DX and the Carry -- nothing in this dispatch returns BX, DI,
+; BP, DS or ES -- so a caller is entitled to get them back untouched,
+; and until now only SI was saved.
+;
+; That is not a theoretical tidiness.  DOS reads the tick through
+; AH=00h constantly, and a C caller reaches the clock the same way;
+; a handler here that happens to use DS or BP corrupts whatever the
+; caller was holding in them.  It was found by writing exactly such a
+; caller -- a loop reading the seconds -- and watching it hang.
+;
+; Same family as the INT 13h defect in Phase 6: what the interface
+; promises about registers, rather than what the hardware does.
+;
+	pushm	bx,si,di,bp,ds,es
 
 	mov	si,ax		; can't use BX for certain calls
 	shr	si,8		; zero fill high bits
@@ -76,7 +91,8 @@ fn_not_defined:
 	mov	ah,0x86		;function not defined
 	stc
 exit:	
-	popm	si
+	popm	bx,si,di,bp,ds,es	; POP does not disturb the Carry the
+					;  handlers set
 	retf	2		;return from call
 
 low_dispatch2:

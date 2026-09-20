@@ -128,7 +128,8 @@ nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
 ; starts with 2 bytes of SIO0 params */
 floppy_tab	resb	2		; floppy disk driver table */
 disk_tab	resb	8  		; hard disk driver table */
-nvram_unused	resb	17
+boot_order	resb	1		; which device INT 19h tries, and in what order */
+nvram_unused	resb	16
 nvram_checksum	resw	1	; 31st byte of the NVRAM info */
 ; end of 31 bytes of NVRAM information */
 ; */

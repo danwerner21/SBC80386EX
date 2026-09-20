@@ -818,18 +818,19 @@
    182                              <1> ; starts with 2 bytes of SIO0 params */
    183 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
    184 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   185 000000ED <res 11h>           <1> nvram_unused	resb	17
-   186 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   187                              <1> ; end of 31 bytes of NVRAM information */
-   188                              <1> ; */
-   189 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   190                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   191 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   192                              <1> ; */
-   193                              <1> ; Extentsion to BDA during BIOS startup */
-   194                              <1> ; */
-   195                              <1> endstruc
-   195          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   185 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   186 000000EE <res 10h>           <1> nvram_unused	resb	16
+   187 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   188                              <1> ; end of 31 bytes of NVRAM information */
+   189                              <1> ; */
+   190 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   191                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   192 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   193                              <1> ; */
+   194                              <1> ; Extentsion to BDA during BIOS startup */
+   195                              <1> ; */
+   196                              <1> endstruc
+   196          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     55                                  %include "stack.inc"
     56                              <1> XXX
     57                              <1> ; stack.h -- format of the stack formed by				*/

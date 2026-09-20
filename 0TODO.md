@@ -13,45 +13,20 @@ nothing on this list blocks anything else on it.
 
 ## Now — housekeeping
 
-**9 · Shorten the watchdog reload. Blocked on one measurement, and possibly not worth
-doing at all.**
+**9 · Shorten the watchdog reload. Closed 2026-09-20: cannot be done as written.**
 
-Section 06d established the arithmetic: the bus-monitor timeout is about 209ms against a
-slowest legitimate access of roughly 450ns, five orders of magnitude of slack. It cannot
-trip during real I/O, which was the question being asked at the time. What it also means is
-that a probe of an address nothing answers *might* cost a fifth of a second — and that
-matters for a Unix, which walks lists of candidate addresses looking for hardware, far more
-than for DOS, which probes almost nothing.
+An undecoded read costs **209.7 ms**, confirmed against the DS1302 — which is exactly `3FFFFF` counts at the 20 MHz CPU clock, the figure 06d derived in the first place.
 
-**"Might" is the whole of it.** 06d says plainly that whether an undecoded cycle reaches the
-watchdog at all is not yet known. One run settles it:
+`WDTSET` wrote reloads across an eight-to-one range, sent the reload sequence, and read the values back correctly. The timeout did not move. Since the duration matches 2^22 counts exactly, the bus monitor appears to use a fixed timeout rather than the programmable reload, so there is no value to pick. Shortening a probe would mean changing the watchdog's *mode*, which changes what happens on a real bus hang — datasheet work with a silent-bad-data failure mode, for a cost only a future Unix pays.
 
-```
-IOTIME 64 10        undecoded -- nothing claims port 64h
-IOTIME 1F7 10       decoded -- the IDE status register
-```
-
-If the undecoded read already returns inside a tick, there is nothing to reclaim, and the
-right outcome is to strike this item and record the answer in 06d rather than to do the
-work. If it does cost 209ms, the fix is to write `WDTRLDH`/`WDTRLDL` at init — registers
-this BIOS has never written, so the reload in use is whatever reset left there.
-
-That second path wants the datasheet open. The reload registers may need a `WDTCLR`
-sequence before a new value takes effect, and `PWRCON` already reads back `1C` where POST
-writes `0C`, which 06d flags as unexplained. Getting it wrong terminates a live bus cycle
-early with whatever happened to be on the bus — silent bad data, which is the hardest
-class of fault to find on this board and precisely what the watchdog is otherwise
-protecting against.
-
-*(Items 7 and 8 were here and are done — see Done, below.)*
+Two things came out of it that matter more than the item did. **Undecoded reads make the board lose time** — three IRQ0s in four are dropped during each stall, about 39 seconds lost in a single 256-read test. And **`int_1Ah` preserved only SI**, which DOS has been relying on not to matter every time it reads the tick. Both are written up in 06d.
 
 ---
 
-## Next — the functional gaps
+## Resolved — the functional gaps
 
-**1 · `INT 15h 89h`, enter protected mode. Recommend deferring — see below.** The only one
-of these with real code behind it, and the only one that can leave the board unrecoverable
-if it is wrong.
+**1 · `INT 15h 89h`, enter protected mode. Deferred 2026-09-20, by decision rather than
+by omission.** It reports unsupported and will keep reporting unsupported.
 
 **2 · `INT 15h C1h`, get EBDA. Closed 2026-09-20: already correct.** It returns `AH=86h`
 with carry set, and feature byte 1 bit 2 reports no EBDA, so nothing is misled. Answering
@@ -71,7 +46,7 @@ is `41h`-`48h` — and rejecting it is what a non-PS/2 BIOS is supposed to do.
 merely waiting for attention: it needs a display buffer, and whether there is one depends
 on what the video hardware turns out to be. Carried into item 12 rather than left here.
 
-### Why item 1 should wait
+### Why item 1 is deferred
 
 Not because it is hard. The machinery mostly exists — `AH=87h` already builds descriptors,
 loads `GDTR`, sets `PE` and far-jumps, so the shape is known and much of it is reusable.
@@ -93,10 +68,15 @@ Every defect found in Phase 6 was in code that looked right and had not been exe
 Adding two hundred bytes of unexercisable code that nothing calls, in a ROM about to get
 tighter, is the same bet again with nothing to win.
 
-**If it is wanted, build the test with it** — a monitor command that constructs the GDT,
-calls `89h`, checks `CR0.PE` and the loaded selectors, and returns to real mode the way
-`AH=87h` already does. That makes it a rung on the ladder rather than an article of faith,
-and it is the condition on which this should be done at all.
+**And the software that would use it is software this board will not run.** That is the
+owner's call and it is settled: this machine will never have the video hardware for OS/2,
+and the early DOS extenders are not of interest. There is no third user of `AH=89h`.
+
+So it is deferred on purpose, not left undone. If that ever changes, the condition for
+building it is that the test gets built with it — a monitor command that constructs the
+GDT, calls `89h`, checks `CR0.PE` and the loaded selectors, and returns to real mode the
+way `AH=87h` already does. A rung on the ladder rather than an article of faith. Without
+that it should stay unsupported, because unsupported is at least honest.
 
 ---
 

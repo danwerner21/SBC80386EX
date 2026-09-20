@@ -171,6 +171,45 @@ static int is_cmd( char **pp, const char *kw )
  * registers (the chip select, refresh, watchdog and SSIO blocks) that
  * must not be reached a byte at a time.
  */
+/* Counter 1, latched and read low-then-high, exactly as t1_read in
+   "15h_misc.asm" does it.  Counts down at 1mhz. */
+/* Seconds off the DS1302, as BCD in DH from INT 1Ah function 02h.
+   The only clock on this board that owes nothing to timer 0 or to
+   timer 1, which is the entire reason for using it. */
+static word rtc_sec( void )
+{
+	word	v;
+
+	ASM {
+		mov	ah,2
+		int	0x1A
+		mov	al,dh
+		xor	ah,ah
+		mov	[v],ax
+	}
+	return( (word)(((v >> 4) & 0x0F) * 10 + (v & 0x0F)) );
+}
+
+
+static word t1_sample( void )
+{
+	word	v;
+
+	ASM {
+		mov	al,0x40		; counter 1, latch
+		mov	dx,TMRCON
+		out	dx,al
+		mov	dx,TMR1
+		in	al,dx
+		mov	ah,al
+		in	al,dx
+		xchg	al,ah
+		mov	[v],ax
+	}
+	return( v );
+}
+
+
 static word io_read( word port, int wide )
 {
 	word	v;
@@ -1975,6 +2014,238 @@ void debugmon(void)
  * Reads only.  Writing to an address at random is a different kind of
  * experiment.
  */
+/*
+ * WDTSET -- change the bus-monitor watchdog reload, at runtime.
+ *
+ * Section 06d worked out that the watchdog cannot trip during real I/O
+ * and was right about that, but it put the timeout at 209ms by assuming
+ * the counter runs at the CPU clock.  IOTIME then measured an undecoded
+ * read at about 55ms, which is the same reload at roughly four times
+ * that rate.  Neither figure can be had from the datasheet alone, and
+ * the counter cannot be watched: reading it takes a bus cycle, and a bus
+ * cycle is what reloads it in this mode.
+ *
+ * So change the reload and measure the effect.  If an undecoded read
+ * gets shorter in proportion, the watchdog is what ends the cycle and
+ * the write protocol works.  If nothing moves, one or the other is
+ * false.  Two commands answer that; no amount of reading does.
+ *
+ * Runtime only, deliberately.  Nothing here touches POST, so a value
+ * that turns out too short costs a power cycle rather than a reflash --
+ * and too short is a real risk.  The watchdog supplies READY to a cycle
+ * that has not finished, so a reload below the slowest legitimate access
+ * ends real transfers early with whatever is on the bus.  Silent bad
+ * data, which is the worst failure this board can produce.
+ */
+		if( is_cmd(&cp,"WDTSET") )
+		{
+			dword	v, back;
+
+			if( !parse_val(&cp,&v) ) {
+				printf("usage: WDTSET <reload>\n"
+				       "       hex, 32-bit.  The power-on default is 3FFFFF.\n"
+				       "       Measure with IOTIME 64 10 before and after.\n");
+				continue;
+			}
+
+			io_write(WDTRLDH,(word)(v >> 16),1);
+			io_write(WDTRLDL,(word)v,1);
+
+			/* The reload registers took the value and nothing changed,
+			   which says the counter is not fed from them by the act of
+			   writing.  On the 386EX the counter is loaded on a reload
+			   event, and the event is this pair of writes to WDTCLR --
+			   9999h then 6666h, the sequence that pets the dog in
+			   software watchdog mode.  Whether it also latches a new
+			   reload in bus monitor mode is exactly what this is for.
+			   Tried, not assumed: if the timing still does not follow,
+			   the watchdog is not what ends an unclaimed cycle and the
+			   55ms belongs to something else on this board. */
+			io_write(WDTCLR,0x9999,1);
+			io_write(WDTCLR,0x6666,1);
+
+			back  = (dword)io_read(WDTRLDH,1) << 16;
+			back |= (dword)io_read(WDTRLDL,1);
+
+			printf("WDTSET: wrote %04X%04X, reads back %04X%04X\n",
+				(word)(v >> 16), (word)v,
+				(word)(back >> 16), (word)back);
+
+			if( back != v )
+				printf("        It did not take.  The reload registers may want a\n"
+				       "        WDTCLR sequence first -- a datasheet question, not a guess.\n");
+			else
+				printf("        Reload sequence sent.  Run IOTIME 64 10 again.\n"
+				       "        Try a LONGER reload too (WDTSET 7FFFFF): if neither\n"
+				       "        direction moves the figure, the watchdog is not what\n"
+				       "        ends the cycle.\n");
+			continue;
+		}
+
+/*
+ * IOTIME1 -- time one I/O read against counter 1, not against the tick.
+ *
+ * Every measurement of the 55ms undecoded read so far has used the 18.2hz
+ * tick as its clock, and the answer keeps coming back as exactly one tick
+ * per read: 16 reads / 16 ticks, 32 reads / 32 ticks, on two different
+ * undecoded ports, unchanged across an eight-to-one span of watchdog
+ * reloads.  Perfect linearity on the very quantum the instrument counts in
+ * is not what a hardware bus timeout looks like.  It is what a measurement
+ * artifact looks like.
+ *
+ * So measure it with a different clock.  Counter 1 runs at 1mhz and wraps
+ * every 65.5ms, which is awkward for a 55ms event and perfectly adequate
+ * for telling 55000 microseconds from 5.  Those are the two answers on
+ * offer, and they mean opposite things:
+ *
+ *	about 55000	the stall is real, the tick was telling the truth,
+ *			 and something on this board supplies READY late
+ *	a handful	the read is fast and the tick measurement is wrong;
+ *			 the cost is somewhere else in that loop entirely
+ *
+ * A wrap reads as a small number too, so the tick count across the same
+ * read is printed beside it: 55ms cannot pass without the tick moving,
+ * and microseconds cannot pass with it moving.  The two together say
+ * which of the small numbers is which.
+ */
+/*
+ * IOWALL -- time a burst of I/O reads against the wall clock.
+ *
+ * The tiebreaker.  Timer 0 says an undecoded read costs 54925 usec and
+ * timer 1 says 13160, a ratio of 4.17 that holds across ports, burst
+ * sizes and watchdog reloads.  One of them is lying, and they cannot
+ * settle it between themselves -- INT 15h 86h has already shown the two
+ * agreeing to within 1% when no undecoded read is involved, so whichever
+ * is wrong is wrong only here.
+ *
+ * The DS1302 owes nothing to either.  It is a separate part with its own
+ * crystal, read over a bit-banged interface, and it keeps the time this
+ * board would still be keeping if both PIT counters stopped.  Against a
+ * measured wall second:
+ *
+ *	timer 0 right	N reads take N*54925 usec, and the RTC agrees
+ *	timer 1 right	N reads take N*13160 usec, and the RTC agrees
+ *
+ * The tick count is reported beside it either way.  If the tick advances
+ * further than the wall clock allows, the tick is being incremented by
+ * something other than the passage of time -- which would explain why it
+ * has read exactly one per read all along, whatever else changed.
+ */
+		if( is_cmd(&cp,"IOWALL") )
+		{
+			word	port, i, n, s0, s1, tk0, tk1, secs, ticks;
+
+			if( !parse_word(&cp,&port) ) {
+				printf("usage: IOWALL <port> [<reads>]\n"
+				       "       hex.  Times reads against the DS1302, default 40h.\n"
+				       "       Give it enough reads to span a few seconds.\n");
+				continue;
+			}
+			n = 0x40;
+			parse_word(&cp,&n);
+			if( n == 0 )	n = 0x40;
+
+			printf("IOWALL: %u reads of port %04X, timed by the RTC ...\n", n, port);
+
+			/* Start on a second boundary, so the count is whole
+			   seconds and not a fraction either side. */
+			s0 = rtc_sec();
+			while( rtc_sec() == s0 )
+				continue;
+
+			s0  = rtc_sec();
+			tk0 = bda.timer_count_low;
+
+			for( i = 0; i < n; i++ )
+				(void)io_read(port,0);
+
+			tk1 = bda.timer_count_low;
+			s1  = rtc_sec();
+
+			secs  = (word)((s1 + 60 - s0) % 60);
+			ticks = (word)(tk1 - tk0);
+
+			printf("        wall %u sec,  tick moved %u  (%u ticks/sec)\n",
+				secs, ticks, secs ? (word)(ticks / secs) : 0);
+
+			if( secs )
+				printf("        so each read cost about %lu usec by the wall clock\n",
+					((dword)secs * 1000000UL) / (dword)n);
+
+			printf("        A healthy tick is 18 a second.  Far below that means the\n"
+			       "        stalls are losing IRQ0s, so timer 0 undercounts and the\n"
+			       "        board loses time while it probes.\n"
+			       "        This is the clock to trust: the DS1302 shares nothing\n"
+			       "        with either PIT counter.\n");
+			continue;
+		}
+
+		if( is_cmd(&cp,"IOTIME1") )
+		{
+			word	port, i, j, n, t0, t1, tk0, tk1;
+
+			if( !parse_word(&cp,&port) ) {
+				printf("usage: IOTIME1 <port> [<burst>]\n"
+				       "       hex.  Times a burst of back-to-back reads against\n"
+				       "       counter 1.  Default burst 1.  Keep it under 4 for an\n"
+				       "       undecoded port: counter 1 wraps at 65536 usec.\n");
+				continue;
+			}
+
+			/* Counter 1's gate, opened the way short_delay does it --
+			   the same write carries counter 0's gate bit, so the
+			   18.2hz tick is not disturbed. */
+			n = 1;
+			parse_word(&cp,&n);
+			if( n == 0 )	n = 1;
+
+			io_write(TMRCFG,0x4B,0);
+
+			printf("IOTIME1: bursts of %u read(s) of port %04X, counter 1 at 1mhz\n",
+				n, port);
+
+			for( i = 0; i < 4; i++ ) {
+				/* Interrupts stay ON.  The tick is half the
+				   measurement -- it is what tells a counter 1
+				   wrap from a genuinely fast read -- and a tick
+				   cannot move with them off.  The cost is that
+				   an IRQ0 landing mid-sample adds its handler to
+				   the figure, which is tens of microseconds
+				   against the tens of thousands in question.
+				   Four samples are taken so one spoiled by an
+				   interrupt is visible as the odd one out. */
+				tk0 = bda.timer_count_low;
+				/* The whole burst inside one pair of samples.
+				   A single read measured this way is bracketed
+				   by t1_sample, which is itself three bus
+				   cycles to a decoded peripheral -- so what it
+				   really times is a read that follows other bus
+				   traffic.  A burst times reads that follow one
+				   another, which is what IOTIME does and what
+				   real probing code does.  If the per-read cost
+				   differs between the two, it depends on what
+				   was on the bus beforehand, and that is the
+				   whole answer. */
+				t0  = t1_sample();
+				for( j = 0; j < n; j++ )
+					(void)io_read(port,0);
+				t1  = t1_sample();
+				tk1 = bda.timer_count_low;
+
+				printf("         %5u usec total,  %5u each,   tick moved %u\n",
+					(word)(t0 - t1),
+					(word)((word)(t0 - t1) / n),
+					(word)(tk1 - tk0));
+			}
+
+			printf("         Counter 1 wraps every 65536 usec.  Past that these are\n"
+			       "         RESIDUES, not durations, and a residue reads like a fast\n"
+			       "         access.  An undecoded read is 209715 usec and shows here\n"
+			       "         as 13107.  Confirm anything above a few hundred usec\n"
+			       "         with IOWALL before believing it.\n");
+			continue;
+		}
+
 		if( is_cmd(&cp,"IOTIME") )
 		{
 			word	port, reps, i, t0, t1, ticks;
@@ -2016,12 +2287,22 @@ void debugmon(void)
 			       " = about %lu usec each\n",
 				ticks, reps, us_each);
 
-			if( us_each > 100000UL )
-				printf("        That is the watchdog: nothing"
-				       " claims this cycle, and WDTRDY ends it"
-				       " at ~209ms.\n");
-			else
-				printf("        Slow, but not the watchdog.\n");
+			/* Do not name a cause from a threshold.  The 209ms this
+			   used to test against came from assuming the watchdog
+			   counts at the CPU clock, and measurement says otherwise:
+			   an undecoded read costs about 55ms, which is this same
+			   reload at roughly four times that rate.  A verdict built
+			   on the wrong constant reported "not the watchdog" about a
+			   number that fits the watchdog perfectly well.
+
+			   WDTSET settles it: shorten the reload, measure again, and
+			   see whether this figure follows.  Nothing else on this
+			   board terminates an unclaimed cycle. */
+			printf("        %lu usec a read BY THE TICK -- which undercounts.\n",
+				us_each);
+			printf("        A stall long enough to measure is long enough to lose\n"
+			       "        IRQ0s: the 8259 latches one and drops the rest, so this\n"
+			       "        counts reads, not time.  Use IOWALL for the real figure.\n");
 			continue;
 		}
 

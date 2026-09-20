@@ -70,6 +70,18 @@
  * source without enabling it first.
  */
 #define TICKS_PER_SEC	18
+/*
+ * IDE_TRACE -- say what each stage of detection saw.
+ *
+ * "No drives found" names the outcome and not the cause, and there are
+ * three quite different ways to reach it: the reset not completing, the
+ * probe rejecting the signature, or the register-holding test failing.
+ * Each wants a different fix, and the raw bytes separate them at once.
+ *
+ * Debugging aid: belongs at 0 once the interface is understood.
+ */
+#define IDE_TRACE 0
+
 #define RESET_TICKS	(6*TICKS_PER_SEC)
 #define SELECT_TICKS	(1*TICKS_PER_SEC)
 
@@ -188,6 +200,57 @@ dword id_dword( byte *b, int n )
  * nIEN is held asserted throughout: this driver polls, and the ICU has
  * no handler wired for the IDE interrupt.
  */
+#if IDE_TRACE
+/*
+ * What the interface looks like when a drive will not come ready.
+ *
+ * STTS and ALTS are the same status register reached through two
+ * decodes, so they must agree.  If they do not, the fault is in the
+ * addressing rather than in the drive -- worth ruling out before
+ * blaming hardware, because ALTS is at HF_PORT+14 on this board and
+ * not the PC/AT 3F6h, and it is the one everything here depends on:
+ * hd_reset both writes SRST to it and polls it.
+ *
+ * Sampled more than once because a stuck value and a changing one mean
+ * different things: BSY that never moves is a drive holding the bus or
+ * a register that is not really there, while BSY that flickers is a
+ * drive answering and merely slow.
+ */
+static void hd_snap( char *who )
+{
+	byte	a, b, c, d, e;
+	int	i;
+
+	a = pin(IDEALTS);  b = pin(IDESTTS);  c = pin(IDEERR);
+	d = pin(IDELBAM);  e = pin(IDELBAH);
+
+	printf("IDE: %s not ready.  ALTS/STTS/ERR/SIG:", who);
+	for( i = 0; i < 3; i++ ) {
+		printf(" %02X/%02X/%02X/%02X%02X",
+			(word)pin(IDEALTS), (word)pin(IDESTTS),
+			(word)pin(IDEERR),
+			(word)pin(IDELBAM), (word)pin(IDELBAH));
+		short_delay(1000);
+	}
+	printf("\n");
+
+	/* Five unrelated registers holding one value is worth saying
+	   out loud, but it does not by itself name the fault, and it
+	   should not be read as doing so.  Nothing driving the bus
+	   gives this, and so does a device holding BSY: register
+	   contents are indeterminate while BSY is asserted, so a drive
+	   jumpered "master with slave present" and waiting out the
+	   device 1 handshake looks identical from here.  The two want
+	   opposite responses -- one is a dead interface, the other a
+	   jumper and a timeout too short -- so report the symptom and
+	   leave the conclusion to someone who can see the cable. */
+	if( a == b && b == c && c == d && d == e )
+		printf("IDE: every register reads %02X alike -- either"
+		       " nothing is on the cable, or a drive is holding BSY\n",
+			(word)a);
+}
+#endif
+
 int hd_reset( void )
 {
 	pout( IDEALTS, DC_SRST | DC_nIEN );
@@ -196,7 +259,36 @@ int hd_reset( void )
 	short_delay(40);
 
 	select_drive(0);
-	return( wait_not_busy(RESET_TICKS) );
+	if( wait_not_busy(RESET_TICKS) == 0 ) {
+#if IDE_TRACE
+		printf("IDE: reset -- device 0 ready, ALTS %02X\n",
+			(word)pin(IDEALTS));
+#endif
+		return( 0 );
+	}
+#if IDE_TRACE
+	hd_snap("device 0");
+#endif
+
+	/* Device 0 never came ready, which is not the same as a dead
+	   interface.  A cable carrying only a device 1 leaves the device 0
+	   registers undriven, and an undriven read is FFh -- which has BSY
+	   set and will never clear, so an absent master is indistinguishable
+	   here from one that is wedged.  Give device 1 its own chance before
+	   writing off the whole cable: SRST reset both of them, so device 1
+	   is as entitled to be asked as device 0 was. */
+	select_drive(1);
+	if( wait_not_busy(RESET_TICKS) == 0 ) {
+#if IDE_TRACE
+		printf("IDE: reset -- device 1 ready, ALTS %02X\n",
+			(word)pin(IDEALTS));
+#endif
+		return( 0 );
+	}
+#if IDE_TRACE
+	hd_snap("device 1");
+#endif
+	return( -1 );
 }
 
 
@@ -270,6 +362,11 @@ int hd_present( int drive )
 	pout( IDESECC, 0x55 );
 	pout( IDELBAL, 0xAA );
 
+#if IDE_TRACE
+	printf("IDE %s: registers hold %02X/%02X (want 55/AA)\n",
+		drive ? "slave " : "master",
+		(word)pin(IDESECC), (word)pin(IDELBAL));
+#endif
 	return( pin(IDESECC) == 0x55 && pin(IDELBAL) == 0xAA );
 }
 
@@ -285,20 +382,36 @@ int hd_probe( int drive )
 {
 	byte	sts, lm, lh;
 
+	int	kind;
+
 	select_drive(drive);
-	if( wait_not_busy(SELECT_TICKS) )
+	if( wait_not_busy(SELECT_TICKS) ) {
+#if IDE_TRACE
+		printf("IDE %s: probe -- busy, ALTS %02X\n",
+			drive ? "slave " : "master", (word)pin(IDEALTS));
+#endif
 		return( HD_ABSENT );
+	}
 
 	sts = pin(IDEALTS);
+	lm  = pin(IDELBAM);
+	lh  = pin(IDELBAH);
+
 	if( sts == 0x00 || sts == 0xFF )	/* nothing driving the bus */
-		return( HD_ABSENT );
+		kind = HD_ABSENT;
+	else if( lm == 0x00 && lh == 0x00 )	kind = HD_ATA;
+	else if( lm == 0x14 && lh == 0xEB )	kind = HD_ATAPI;
+	else					kind = HD_UNKNOWN;
 
-	lm = pin(IDELBAM);
-	lh = pin(IDELBAH);
-
-	if( lm == 0x00 && lh == 0x00 )	return( HD_ATA );
-	if( lm == 0x14 && lh == 0xEB )	return( HD_ATAPI );
-	return( HD_UNKNOWN );
+#if IDE_TRACE
+	printf("IDE %s: probe ALTS %02X  sig %02X/%02X -> %s\n",
+		drive ? "slave " : "master",
+		(word)sts, (word)lm, (word)lh,
+		kind == HD_ABSENT  ? "absent"  :
+		kind == HD_ATA     ? "ATA"     :
+		kind == HD_ATAPI   ? "ATAPI"   : "unknown");
+#endif
+	return( kind );
 }
 
 

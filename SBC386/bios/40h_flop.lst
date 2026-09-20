@@ -919,455 +919,878 @@
     61                                  	global	disk_base_720
     62                                  	global	disk_base_1440
     63                                  	global	fd_param_table
-    64                                  
-    65                                  	extern	_fd_reset
-    66                                  	extern	_fd_rw
-    67                                  
-    68                                  segment	_TEXT
+    64                                  	global	fd_set_1E_
+    65                                  
+    66                                  	extern	_fd_reset
+    67                                  	extern	_fd_rw
+    68                                  	extern	_fd_format
     69                                  
-    70                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    71                                  ; Geometry, by the drive type in bda.floppy_tab[].  The order matches the
-    72                                  ; FD_ enum in "nvram.h", which is the PC/AT CMOS numbering: 1 is 360Kb,
-    73                                  ; 2 is 1.2Mb, 3 is 720Kb, 4 is 1.44Mb.  Those numbers are what INT 13h
-    74                                  ; function 15h hands back, and software has recognised them since 1984.
-    75                                  ;
-    76                                  ;	cylinders, heads, sectors per track
-    77                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    78                                  	align	2
-    79                                  fd_geom:
-    80 00000000 000000                  	db	0,  0,  0		; FD_NONE
-    81 00000003 280209                  	db	40, 2,  9		; FD_360
-    82 00000006 50020F                  	db	80, 2, 15		; FD_1200
-    83 00000009 500209                  	db	80, 2,  9		; FD_720
-    84 0000000C 500212                  	db	80, 2, 18		; FD_1440
-    85                                  FD_TYPES	equ	($-fd_geom)/3
-    86                                  
-    87                                  ;
-    88                                  ; The INT 1Eh disk base tables, one per type.  They differ in the places
-    89                                  ; that matter to a reader: sectors per track, the gap lengths, and the
-    90                                  ; motor start time.  INT 13h function 08h hands back the one that belongs
-    91                                  ; to the drive being asked about.
-    92                                  ;
-    93 0000000F 90                      	align	2
-    94                                  fd_param_table:
-    95 00000010 [1A00]                  	dw	disk_base_none
-    96 00000012 [3B00]                  	dw	disk_base_360
-    97 00000014 [2500]                  	dw	disk_base_1200
-    98 00000016 [3000]                  	dw	disk_base_720
-    99 00000018 [1A00]                  	dw	disk_base_1440
-   100                                  
-   101                                  disk_base_none:
-   102                                  disk_base_1440:
-   103 0000001A DF                      	db	0xDF		; step rate 0Dh, head unload time Fh
-   104 0000001B 02                      	db	0x02		; head load time 1, DMA used
-   105 0000001C 25                      	db	0x25		; ticks before the motor stops
-   106 0000001D 02                      	db	0x02		; bytes per sector, 2 = 512
-   107 0000001E 12                      	db	18		; sectors per track
-   108 0000001F 1B                      	db	0x1B		; gap length between sectors
-   109 00000020 FF                      	db	0xFF		; data length
-   110 00000021 54                      	db	0x54		; gap length when formatting
-   111 00000022 F6                      	db	0xF6		; fill byte for formatting
-   112 00000023 0F                      	db	0x0F		; head settle time, milliseconds
-   113 00000024 08                      	db	0x08		; motor start time, eighths of a second
-   114                                  
-   115                                  disk_base_1200:
-   116 00000025 DF022502                	db	0xDF, 0x02, 0x25, 0x02
-   117 00000029 0F                      	db	15
-   118 0000002A 1BFF54F60F08            	db	0x1B, 0xFF, 0x54, 0xF6, 0x0F, 0x08
-   119                                  
-   120                                  disk_base_720:
-   121 00000030 DF022502                	db	0xDF, 0x02, 0x25, 0x02
-   122 00000034 09                      	db	9
-   123 00000035 2AFF50F60F08            	db	0x2A, 0xFF, 0x50, 0xF6, 0x0F, 0x08
-   124                                  
-   125                                  disk_base_360:
-   126 0000003B DF022502                	db	0xDF, 0x02, 0x25, 0x02
-   127 0000003F 09                      	db	9
-   128 00000040 2AFF50F60F08            	db	0x2A, 0xFF, 0x50, 0xF6, 0x0F, 0x08
-   129                                  
+    70                                  segment	_TEXT
+    71                                  
+    72                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    73                                  ; Geometry, by the drive type in bda.floppy_tab[].  The order matches the
+    74                                  ; FD_ enum in "nvram.h", which is the PC/AT CMOS numbering: 1 is 360Kb,
+    75                                  ; 2 is 1.2Mb, 3 is 720Kb, 4 is 1.44Mb.  Those numbers are what INT 13h
+    76                                  ; function 15h hands back, and software has recognised them since 1984.
+    77                                  ;
+    78                                  ;	cylinders, heads, sectors per track
+    79                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    80                                  	align	2
+    81                                  fd_geom:
+    82 00000000 000000                  	db	0,  0,  0		; FD_NONE
+    83 00000003 280209                  	db	40, 2,  9		; FD_360
+    84 00000006 50020F                  	db	80, 2, 15		; FD_1200
+    85 00000009 500209                  	db	80, 2,  9		; FD_720
+    86 0000000C 500212                  	db	80, 2, 18		; FD_1440
+    87                                  FD_TYPES	equ	($-fd_geom)/3
+    88                                  
+    89                                  ; The same numbering as the enum in "nvram.h", which is the PC/AT CMOS
+    90                                  ; coding.  Named here because the tables below are lists of types
+    91                                  ; rather than a row per type, and a bare 4 in such a list says nothing.
+    92                                  FD_NONE		equ	0
+    93                                  FD_360		equ	1
+    94                                  FD_1200		equ	2
+    95                                  FD_720		equ	3
+    96                                  FD_1440		equ	4
+    97                                  
+    98                                  ;
+    99                                  ; The INT 1Eh disk base tables, one per type.  They differ in the places
+   100                                  ; that matter to a reader: sectors per track, the gap lengths, and the
+   101                                  ; motor start time.  INT 13h function 08h hands back the one that belongs
+   102                                  ; to the drive being asked about.
+   103                                  ;
+   104 0000000F 90                      	align	2
+   105                                  fd_param_table:
+   106 00000010 [1A00]                  	dw	disk_base_none
+   107 00000012 [3B00]                  	dw	disk_base_360
+   108 00000014 [2500]                  	dw	disk_base_1200
+   109 00000016 [3000]                  	dw	disk_base_720
+   110 00000018 [1A00]                  	dw	disk_base_1440
+   111                                  
+   112                                  disk_base_none:
+   113                                  disk_base_1440:
+   114 0000001A DF                      	db	0xDF		; step rate 0Dh, head unload time Fh
+   115 0000001B 02                      	db	0x02		; head load time 1, DMA used
+   116 0000001C 25                      	db	0x25		; ticks before the motor stops
+   117 0000001D 02                      	db	0x02		; bytes per sector, 2 = 512
+   118 0000001E 12                      	db	18		; sectors per track
+   119 0000001F 1B                      	db	0x1B		; gap length between sectors
+   120 00000020 FF                      	db	0xFF		; data length
+   121 00000021 6C                      	db	0x6C		; gap length when formatting
+   122 00000022 F6                      	db	0xF6		; fill byte for formatting
+   123 00000023 0F                      	db	0x0F		; head settle time, milliseconds
+   124 00000024 08                      	db	0x08		; motor start time, eighths of a second
+   125                                  
+   126                                  disk_base_1200:
+   127 00000025 DF022502                	db	0xDF, 0x02, 0x25, 0x02
+   128 00000029 0F                      	db	15
+   129 0000002A 1BFF54F60F08            	db	0x1B, 0xFF, 0x54, 0xF6, 0x0F, 0x08
    130                                  
-   131                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   132                                  ; fd_type -- the configured type of the drive in DL
-   133                                  ;
-   134                                  ;    Exit with:
-   135                                  ;	AL	the FD_ type, 0 if the drive is not configured or not there
-   136                                  ;	SI	its entry in fd_geom
-   137                                  ;	Carry set if there is no such drive
-   138                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   139                                  ; The drive comes from the saved frame, not from the live DL.  rw_common
-   140                                  ; uses DX as its sectors-completed counter, so by the time fd_next asks for
-   141                                  ; the geometry mid-transfer the live DL is a count, not a drive -- which
-   142                                  ; fetched the wrong track layout, stepped the head and cylinder wrongly, and
-   143                                  ; seeked somewhere that was not there.  The first sector always worked,
-   144                                  ; which is why a DIR of a root directory inside one track never showed it.
-   145                                  fd_type:
-   146 00000046 53                      	push	bx
-   147 00000047 1E                      	push	ds
-   148 00000048 6A401F                  	get_bda	DS
-   149                                  
-   150 0000004B 0FB65E0A                	movzx	bx,byte [bp+offset_dx]	; BP is SS-relative, so this reads the
-   151                                  					;  caller's DL whatever DS now is
-   152 0000004F 80FB02                  	cmp	bl,2			; two drives is all a PC cable has
-   153 00000052 731D                    	jnb	.bad
-   154 00000054 8A87E300                	mov	al,[bx+floppy_tab]
-   155 00000058 3C05                    	cmp	al,FD_TYPES
-   156 0000005A 7315                    	jnb	.bad
-   157 0000005C 08C0                    	or	al,al
-   158 0000005E 7411                    	jz	.bad
-   159                                  
-   160 00000060 0FB6F0                  	movzx	si,al			; AL * 3 into the geometry table
-   161 00000063 89F3                    	mov	bx,si			; BX is already saved
-   162 00000065 01F6                    	add	si,si
-   163 00000067 01DE                    	add	si,bx			;  -- and AX may have rubbish in AH,
-   164 00000069 81C6[0000]              	add	si,fd_geom		;     which is why BX does the adding
-   165 0000006D F8                      	clc
-   166                                  .9:
-   167 0000006E 1F                      	pop	ds
-   168 0000006F 5B                      	pop	bx
-   169 00000070 C3                      	ret
-   170                                  .bad:
-   171 00000071 30C0                    	xor	al,al
-   172 00000073 F9                      	stc
-   173 00000074 EBF8                    	jmp	short .9
-   174                                  
-   175                                  
-   176                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   177                                  ; INT 40h
-   178                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   179                                  ; This was neutralised for a while behind a FLOPPY_INT13 define, bisecting a
-   180                                  ; boot failure that turned out to be a corrupt CF image -- the card would not
-   181                                  ; boot on another PC either.  The switch is gone; it was chasing a fault that
-   182                                  ; was never in this file.
-   183                                  int_40h:
-   184 00000076 FB                      	sti
-   185 00000077 061E60                  	pushm	all,ds,es
-   186 0000007A 89E5                    	mov	bp,sp
-   187 0000007C FC                      	cld
-   188                                  
-   189 0000007D 80FC00                  	cmp	ah,0x00
-   190 00000080 744C                    	je	fn00_reset
-   191 00000082 80FC01                  	cmp	ah,0x01
-   192 00000085 745B                    	je	fn01_status
-   193 00000087 80FC02                  	cmp	ah,0x02
-   194 0000008A 7472                    	je	fn02_read
-   195 0000008C 80FC03                  	cmp	ah,0x03
-   196 0000008F 7468                    	je	fn03_write
-   197 00000091 80FC04                  	cmp	ah,0x04
-   198 00000094 745F                    	je	fn04_verify
-   199 00000096 80FC08                  	cmp	ah,0x08
-   200 00000099 0F844A01                	je	fn08_params
-   201 0000009D 80FC15                  	cmp	ah,0x15
-   202 000000A0 0F849601                	je	fn15_type
-   203                                  
-   204 000000A4 B401                    	mov	ah,INVALID_COMMAND
-   205                                  ; fall through
-   206                                  
-   207                                  ;
-   208                                  ; Return paths.  AH carries the status and the Carry says whether it is an
-   209                                  ; error, which is what floppy_call propagates when it does its RETF 2.
-   210                                  ;
-   211                                  fd_error:
-   212 000000A6 88660F                  	mov	[bp+offset_ax+1],ah
-   213 000000A9 1E                      	push	ds
-   214 000000AA 6A401F                  	get_bda	DS
-   215 000000AD 88264100                	mov	[fd_status],ah
-   216 000000B1 1F                      	pop	ds
-   217 000000B2 611F07                  	popm	all,ds,es
-   218 000000B5 F9                      	stc
-   219 000000B6 CA0200                  	retf	2
+   131                                  disk_base_720:
+   132 00000030 DF022502                	db	0xDF, 0x02, 0x25, 0x02
+   133 00000034 09                      	db	9
+   134 00000035 2AFF50F60F08            	db	0x2A, 0xFF, 0x50, 0xF6, 0x0F, 0x08
+   135                                  
+   136                                  disk_base_360:
+   137 0000003B DF022502                	db	0xDF, 0x02, 0x25, 0x02
+   138 0000003F 09                      	db	9
+   139 00000040 2AFF50F60F08            	db	0x2A, 0xFF, 0x50, 0xF6, 0x0F, 0x08
+   140                                  
+   141                                  
+   142                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   143                                  ; fd_type -- the configured type of the drive in DL
+   144                                  ;
+   145                                  ;    Exit with:
+   146                                  ;	AL	the FD_ type, 0 if the drive is not configured or not there
+   147                                  ;	SI	its entry in fd_geom
+   148                                  ;	Carry set if there is no such drive
+   149                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   150                                  ; The drive comes from the saved frame, not from the live DL.  rw_common
+   151                                  ; uses DX as its sectors-completed counter, so by the time fd_next asks for
+   152                                  ; the geometry mid-transfer the live DL is a count, not a drive -- which
+   153                                  ; fetched the wrong track layout, stepped the head and cylinder wrongly, and
+   154                                  ; seeked somewhere that was not there.  The first sector always worked,
+   155                                  ; which is why a DIR of a root directory inside one track never showed it.
+   156                                  fd_type:
+   157 00000046 53                      	push	bx
+   158 00000047 1E                      	push	ds
+   159 00000048 6A401F                  	get_bda	DS
+   160                                  
+   161 0000004B 0FB65E0A                	movzx	bx,byte [bp+offset_dx]	; BP is SS-relative, so this reads the
+   162                                  					;  caller's DL whatever DS now is
+   163 0000004F 80FB02                  	cmp	bl,2			; two drives is all a PC cable has
+   164 00000052 731D                    	jnb	.bad
+   165 00000054 8A87E300                	mov	al,[bx+floppy_tab]
+   166 00000058 3C05                    	cmp	al,FD_TYPES
+   167 0000005A 7315                    	jnb	.bad
+   168 0000005C 08C0                    	or	al,al
+   169 0000005E 7411                    	jz	.bad
+   170                                  
+   171 00000060 0FB6F0                  	movzx	si,al			; AL * 3 into the geometry table
+   172 00000063 89F3                    	mov	bx,si			; BX is already saved
+   173 00000065 01F6                    	add	si,si
+   174 00000067 01DE                    	add	si,bx			;  -- and AX may have rubbish in AH,
+   175 00000069 81C6[0000]              	add	si,fd_geom		;     which is why BX does the adding
+   176 0000006D F8                      	clc
+   177                                  .9:
+   178 0000006E 1F                      	pop	ds
+   179 0000006F 5B                      	pop	bx
+   180 00000070 C3                      	ret
+   181                                  .bad:
+   182 00000071 30C0                    	xor	al,al
+   183 00000073 F9                      	stc
+   184 00000074 EBF8                    	jmp	short .9
+   185                                  
+   186                                  
+   187                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   188                                  ; INT 40h
+   189                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   190                                  ; This was neutralised for a while behind a FLOPPY_INT13 define, bisecting a
+   191                                  ; boot failure that turned out to be a corrupt CF image -- the card would not
+   192                                  ; boot on another PC either.  The switch is gone; it was chasing a fault that
+   193                                  ; was never in this file.
+   194                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   195                                  ; A trace, for watching a boot that hangs with no console left.
+   196                                  ;
+   197                                  ; INT 14h transmit is polled rather than interrupt driven, so this still
+   198                                  ; writes when a hang has taken the interrupts with it -- which is exactly
+   199                                  ; the case it is for.  One character in on each call, naming the function,
+   200                                  ; and one out saying how it went:
+   201                                  ;
+   202                                  ;	0 1 2 3 4 8 E	the function: 00, 01, 02, 03, 04, 08, 15h
+   203                                  ;	.		returned with no error
+   204                                  ;	!		returned an error
+   205                                  ;	?		an unsupported function
+   206                                  ;
+   207                                  ; So a working read is "2." and a drive retrying one for ever is
+   208                                  ; "2!2!2!2!..." for as long as you care to watch it.
+   209                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   210                                  %define FD_TRACE 0
+   211                                  
+   212                                  %if FD_TRACE
+   213                                  fd_trace:				; AL = the character to send
+   214                                  	pushm	ax,bx,cx,dx
+   215                                  	mov	ah,1			; INT 14h write, polled
+   216                                  	xor	dx,dx			; COM1
+   217                                  	int	0x14
+   218                                  	popm	ax,bx,cx,dx
+   219                                  	ret
    220                                  
-   221                                  fd_good:
-   222 000000B9 C6460F00                	mov	byte [bp+offset_ax+1],0
-   223 000000BD 1E                      	push	ds
-   224 000000BE 6A401F                  	get_bda	DS
-   225 000000C1 C606410000              	mov	byte [fd_status],0
-   226 000000C6 1F                      	pop	ds
-   227 000000C7 611F07                  	popm	all,ds,es
-   228 000000CA F8                      	clc
-   229 000000CB CA0200                  	retf	2
-   230                                  
-   231                                  
-   232                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   233                                  ; 00h -- reset.  Pulses the controller's reset line and re-specifies it.
-   234                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   235                                  fn00_reset:
-   236 000000CE 1E                      	push	ds
-   237 000000CF B8[ssss]                	mov	ax,DGROUP		; the driver in diskfdc.c reaches the
-   238 000000D2 8ED8                    	mov	ds,ax			;  BDA through bda_ptr, which lives in
-   239 000000D4 E8(0000)                	call	_fd_reset		;  DGROUP -- and INT 40h arrives with
-   240 000000D7 1F                      	pop	ds			;  whatever DS the caller had
-   241 000000D8 08C0                    	or	al,al
-   242 000000DA 7502                    	jnz	.1
-   243 000000DC EBDB                    	jmp	fd_good
-   244 000000DE 88C4                    .1:	mov	ah,al
-   245 000000E0 EBC4                    	jmp	fd_error
-   246                                  
-   247                                  
-   248                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   249                                  ; 01h -- the status of the last operation.  DOS reads this after a failure.
-   250                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   251                                  fn01_status:
-   252 000000E2 1E                      	push	ds
-   253 000000E3 6A401F                  	get_bda	DS
-   254 000000E6 8A264100                	mov	ah,[fd_status]
-   255 000000EA 1F                      	pop	ds
-   256 000000EB 88660F                  	mov	[bp+offset_ax+1],ah
-   257 000000EE 611F07                  	popm	all,ds,es
-   258 000000F1 F8                      	clc
-   259 000000F2 CA0200                  	retf	2
-   260                                  
+   221                                  
+   222                                  ;
+   223                                  ; The request, as "[cc hh ss nn ssss:bbbb]" -- cylinder, head, sector (with
+   224                                  ; the two high cylinder bits still in its top bits, as INT 13h passes them),
+   225                                  ; count, and the caller's buffer.
+   226                                  ;
+   227                                  ; Entered at the top of int_40h with CX and DX still as the caller set them,
+   228                                  ; and BP framing the pushed registers.  Every helper below preserves BX, CX
+   229                                  ; and DX so the live request survives being printed a piece at a time.
+   230                                  ;
+   231                                  fd_trace_rw:
+   232                                  	pushm	ax,bx,cx,dx
+   233                                  	mov	al,'['
+   234                                  	call	fd_trace
+   235                                  	mov	al,ch			; cylinder, low eight bits
+   236                                  	call	fd_trace_hex
+   237                                  	mov	al,' '
+   238                                  	call	fd_trace
+   239                                  	mov	al,dh			; head
+   240                                  	call	fd_trace_hex
+   241                                  	mov	al,' '
+   242                                  	call	fd_trace
+   243                                  	mov	al,cl			; sector, plus the high cylinder bits
+   244                                  	call	fd_trace_hex
+   245                                  	mov	al,' '
+   246                                  	call	fd_trace
+   247                                  	mov	al,[bp+offset_ax]	; sector count, as it came in
+   248                                  	call	fd_trace_hex
+   249                                  	mov	al,' '
+   250                                  	call	fd_trace
+   251                                  	mov	ax,[bp+offset_es]
+   252                                  	call	fd_trace_hex16
+   253                                  	mov	al,':'
+   254                                  	call	fd_trace
+   255                                  	mov	ax,[bp+offset_bx]
+   256                                  	call	fd_trace_hex16
+   257                                  	mov	al,']'
+   258                                  	call	fd_trace
+   259                                  	popm	ax,bx,cx,dx
+   260                                  	ret
    261                                  
-   262                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   263                                  ; 02h / 03h / 04h -- read, write, verify
-   264                                  ;
-   265                                  ;  Enter with:
-   266                                  ;	AL	sectors to transfer
-   267                                  ;	CH	cylinder, CL bits 5:0 sector, bits 7:6 cylinder high
-   268                                  ;	DH	head
-   269                                  ;	DL	drive
-   270                                  ;	ES:BX	buffer
-   271                                  ;
-   272                                  ;  Exit with:
-   273                                  ;	AL	sectors actually transferred
-   274                                  ;
-   275                                  ; One sector per driver call, stepping the address on afterwards.  Verify
-   276                                  ; reads into the same buffer over and over and throws the data away: proving
-   277                                  ; the sectors read back is the whole of what verify is for.
-   278                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   279                                  fn04_verify:
-   280 000000F5 31FF                    	xor	di,di			; verify reads; the buffer is not
-   281 000000F7 EB07                    	jmp	short rw_common		;  advanced, which is what makes it
-   282                                  fn03_write:				;  a verify rather than a read
-   283 000000F9 BF0100                  	mov	di,1
-   284 000000FC EB02                    	jmp	short rw_common
-   285                                  fn02_read:
-   286 000000FE 31FF                    	xor	di,di
-   287                                  rw_common:
-   288 00000100 E843FF                  	call	fd_type
-   289 00000103 0F828B00                	jc	.nodrive
-   290 00000107 88C7                    	mov	bh,al			; BH = the FD_ type
+   262                                  fd_trace_hex16:				; AX, as four hex digits
+   263                                  	pushm	ax,bx,cx,dx
+   264                                  	xchg	al,ah
+   265                                  	call	fd_trace_hex
+   266                                  	xchg	al,ah
+   267                                  	call	fd_trace_hex
+   268                                  	popm	ax,bx,cx,dx
+   269                                  	ret
+   270                                  
+   271                                  fd_trace_hex:				; AL, as two hex digits
+   272                                  	pushm	ax,bx,cx,dx
+   273                                  	mov	ah,al
+   274                                  	shr	al,4
+   275                                  	call	fd_trace_nyb
+   276                                  	mov	al,ah
+   277                                  	call	fd_trace_nyb
+   278                                  	popm	ax,bx,cx,dx
+   279                                  	ret
+   280                                  
+   281                                  fd_trace_nyb:
+   282                                  	and	al,0x0F
+   283                                  	add	al,'0'
+   284                                  	cmp	al,'9'
+   285                                  	jbe	.1
+   286                                  	add	al,7			; 'A' through 'F'
+   287                                  .1:
+   288                                  	jmp	fd_trace		; its RET returns for us
+   289                                  %endif
+   290                                  
    291                                  
-   292 00000109 0FB64E0E                	movzx	cx,byte [bp+offset_ax]	; sectors wanted
-   293 0000010D E36D                    	jcxz	.done			; nothing asked for
-   294                                  
-   295 0000010F 89CE                    	mov	si,cx			; SI counts down
-   296 00000111 31D2                    	xor	dx,dx			; DX counts up: how many worked
+   292                                  int_40h:
+   293 00000076 FB                      	sti
+   294 00000077 061E60                  	pushm	all,ds,es
+   295 0000007A 89E5                    	mov	bp,sp
+   296 0000007C FC                      	cld
    297                                  
-   298                                  .loop:
-   299 00000113 53525756                	pushm	si,di,dx,bx
-   300 00000117 1E                      	push	ds			; restored after the call below
-   301                                  
-   302                                  ;
-   303                                  ; fd_rw(write, drive, fdtype, cyl, head, sec, buf) -- __cdecl, so every
-   304                                  ; argument goes on the stack, rightmost first, and the caller takes them
-   305                                  ; off again.  Six words and a far pointer is sixteen bytes.
-   306                                  ;
-   307                                  ; The arguments are read through BP, which is SS-relative, so they can be
-   308                                  ; pushed before DS is changed.  DS has to be DGROUP by the time the call
-   309                                  ; happens and cannot be changed before the pushes -- a saved DS sitting
-   310                                  ; between the arguments and the return address would be read as the first
-   311                                  ; argument.
-   312                                  ;
-   313 00000118 FF7612                  	push	word [bp+offset_es]	; buf: segment first, so the offset
-   314 0000011B FF7608                  	push	word [bp+offset_bx]	;  lands at the lower address
-   315                                  
-   316 0000011E 0FB6460C                	movzx	ax,byte [bp+offset_cx]	; CL: sector in bits 5:0
-   317 00000122 83E03F                  	and	ax,0x3F
-   318 00000125 50                      	push	ax
-   319                                  
-   320 00000126 0FB6460B                	movzx	ax,byte [bp+offset_dx+1]	; DH: head
-   321 0000012A 50                      	push	ax
-   322                                  
-   323 0000012B 8A4E0C                  	mov	cl,[bp+offset_cx]	; the cylinder is split: CH is its
-   324 0000012E 80E1C0                  	and	cl,0xC0			;  low eight bits and CL bits 7:6
-   325 00000131 0FB6C9                  	movzx	cx,cl			;  are bits 9:8
-   326 00000134 C1E102                  	shl	cx,2
-   327 00000137 0FB6460D                	movzx	ax,byte [bp+offset_cx+1]
-   328 0000013B 09C8                    	or	ax,cx
-   329 0000013D 50                      	push	ax
-   330                                  
-   331 0000013E 0FB6C7                  	movzx	ax,bh			; the configured drive type
-   332 00000141 50                      	push	ax
-   333                                  
-   334 00000142 0FB6460A                	movzx	ax,byte [bp+offset_dx]	; DL: drive, 0 or 1
-   335 00000146 83E001                  	and	ax,1
-   336 00000149 50                      	push	ax
+   298                                  %if FD_TRACE
+   299                                  	push	ax
+   300                                  	mov	al,ah
+   301                                  	add	al,'0'			; 0-4 and 8 land on digits, 15h on E
+   302                                  	call	fd_trace
+   303                                  	pop	ax
+   304                                  
+   305                                  ; For the transfer calls, say what was asked for.  Which sectors DOS wants
+   306                                  ; is the whole question once the driver is known to return them correctly:
+   307                                  ; a request that is itself wrong -- a silly count, a cylinder off the end,
+   308                                  ; a buffer in a segment that does not exist -- would be carried out
+   309                                  ; faithfully and still wreck the caller.  The one-character trace cannot
+   310                                  ; show that, and it is the only thing left that it cannot show.
+   311                                  	cmp	ah,0x02
+   312                                  	jb	.notrw
+   313                                  	cmp	ah,0x05			; 05h formats, and wants the same
+   314                                  	ja	.notrw			;  detail as a transfer
+   315                                  	call	fd_trace_rw
+   316                                  .notrw:
+   317                                  %endif
+   318                                  
+   319 0000007D 80FC00                  	cmp	ah,0x00
+   320 00000080 745C                    	je	fn00_reset
+   321 00000082 80FC01                  	cmp	ah,0x01
+   322 00000085 746B                    	je	fn01_status
+   323 00000087 80FC02                  	cmp	ah,0x02
+   324 0000008A 0F848000                	je	fn02_read
+   325 0000008E 80FC03                  	cmp	ah,0x03
+   326 00000091 7476                    	je	fn03_write
+   327 00000093 80FC04                  	cmp	ah,0x04
+   328 00000096 746D                    	je	fn04_verify
+   329 00000098 80FC05                  	cmp	ah,0x05
+   330 0000009B 0F849C01                	je	fn05_format
+   331 0000009F 80FC08                  	cmp	ah,0x08
+   332 000000A2 0F849602                	je	fn08_params
+   333 000000A6 80FC15                  	cmp	ah,0x15
+   334 000000A9 0F84E202                	je	fn15_type
+   335 000000AD 80FC18                  	cmp	ah,0x18
+   336 000000B0 0F841902                	je	fn18_media
    337                                  
-   338 0000014A 57                      	push	di			; write?
-   339                                  
-   340 0000014B B8[ssss]                	mov	ax,DGROUP
-   341 0000014E 8ED8                    	mov	ds,ax
-   342 00000150 E8(0000)                	call	_fd_rw
-   343 00000153 83C410                  	add	sp,16
-   344                                  
-   345 00000156 1F                      	pop	ds
-   346 00000157 5E5F5A5B                	popm	si,di,dx,bx
-   347                                  
-   348 0000015B 09C0                    	or	ax,ax
-   349 0000015D 7523                    	jnz	.failed
-   350                                  
-   351 0000015F 42                      	inc	dx			; one more done
-   352 00000160 4E                      	dec	si
-   353 00000161 7419                    	jz	.done
-   354                                  
-   355                                  	; step to the next sector, wrapping head then cylinder
-   356 00000163 E83500                  	call	fd_next
-   357 00000166 7222                    	jc	.badseek
+   338 000000B4 B401                    	mov	ah,INVALID_COMMAND
+   339                                  ; fall through
+   340                                  
+   341                                  ;
+   342                                  ; Return paths.  AH carries the status and the Carry says whether it is an
+   343                                  ; error, which is what floppy_call propagates when it does its RETF 2.
+   344                                  ;
+   345                                  fd_error:
+   346 000000B6 88660F                  	mov	[bp+offset_ax+1],ah
+   347                                  %if FD_TRACE
+   348                                  	mov	al,'!'
+   349                                  	call	fd_trace
+   350                                  %endif
+   351 000000B9 1E                      	push	ds
+   352 000000BA 6A401F                  	get_bda	DS
+   353 000000BD 88264100                	mov	[fd_status],ah
+   354 000000C1 1F                      	pop	ds
+   355 000000C2 611F07                  	popm	all,ds,es
+   356 000000C5 F9                      	stc
+   357 000000C6 CA0200                  	retf	2
    358                                  
-   359                                  	; A verify has no buffer of its own: it reads each sector over the
-   360                                  	; last one and throws the data away, which is the whole of what
-   361                                  	; verify is.  Everything else advances, carrying across 64K.
-   362 00000168 807E0F04                	cmp	byte [bp+offset_ax+1],4
-   363 0000016C 74A5                    	je	.loop
-   364                                  
-   365 0000016E 8146080002              	add	word [bp+offset_bx],512
-   366 00000173 739E                    	jnc	.loop
-   367 00000175 8146120010              	add	word [bp+offset_es],0x1000
-   368 0000017A EB97                    	jmp	.loop
-   369                                  
-   370                                  .done:
-   371 0000017C 88560E                  	mov	[bp+offset_ax],dl	; sectors transferred
-   372 0000017F E937FF                  	jmp	fd_good
+   359                                  fd_good:
+   360 000000C9 C6460F00                	mov	byte [bp+offset_ax+1],0
+   361                                  %if FD_TRACE
+   362                                  	mov	al,'.'
+   363                                  	call	fd_trace
+   364                                  %endif
+   365 000000CD 1E                      	push	ds
+   366 000000CE 6A401F                  	get_bda	DS
+   367 000000D1 C606410000              	mov	byte [fd_status],0
+   368 000000D6 1F                      	pop	ds
+   369 000000D7 611F07                  	popm	all,ds,es
+   370 000000DA F8                      	clc
+   371 000000DB CA0200                  	retf	2
+   372                                  
    373                                  
-   374                                  .failed:
-   375 00000182 88560E                  	mov	[bp+offset_ax],dl	; how many made it
-   376 00000185 88C4                    	mov	ah,al
-   377 00000187 E91CFF                  	jmp	fd_error
-   378                                  
-   379                                  .badseek:
-   380 0000018A 88560E                  	mov	[bp+offset_ax],dl
-   381 0000018D B404                    	mov	ah,SECTOR_NOT_FOUND
-   382 0000018F E914FF                  	jmp	fd_error
-   383                                  
-   384                                  .nodrive:
-   385 00000192 C6460E00                	mov	byte [bp+offset_ax],0
-   386 00000196 B480                    	mov	ah,TIME_OUT		; nothing configured there
-   387 00000198 E90BFF                  	jmp	fd_error
+   374                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   375                                  ; 00h -- reset.  Pulses the controller's reset line and re-specifies it.
+   376                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   377                                  fn00_reset:
+   378 000000DE 1E                      	push	ds
+   379 000000DF B8[ssss]                	mov	ax,DGROUP		; the driver in diskfdc.c reaches the
+   380 000000E2 8ED8                    	mov	ds,ax			;  BDA through bda_ptr, which lives in
+   381 000000E4 E8(0000)                	call	_fd_reset		;  DGROUP -- and INT 40h arrives with
+   382 000000E7 1F                      	pop	ds			;  whatever DS the caller had
+   383 000000E8 08C0                    	or	al,al
+   384 000000EA 7502                    	jnz	.1
+   385 000000EC EBDB                    	jmp	fd_good
+   386 000000EE 88C4                    .1:	mov	ah,al
+   387 000000F0 EBC4                    	jmp	fd_error
    388                                  
    389                                  
    390                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   391                                  ; fd_next -- step CH/CL/DH on to the next sector
-   392                                  ;
-   393                                  ; Sectors count from 1 to the track's last, then the head flips, then the
-   394                                  ; cylinder steps.  Carry set if that runs off the end of the disk.
-   395                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   396                                  fd_next:
-   397 0000019B 56515350                	pushm	ax,bx,cx,si
-   398 0000019F E8A4FE                  	call	fd_type
-   399 000001A2 7240                    	jc	.bad
-   400                                  
-   401 000001A4 2E8A5C02                    cs	mov	bl,[si+2]		; sectors per track
-   402 000001A8 2E8A7C01                    cs	mov	bh,[si+1]		; heads
-   403 000001AC 2E8A2C                      cs	mov	ch,[si]			; cylinders
-   404                                  
-   405 000001AF 8A460C                  	mov	al,[bp+offset_cx]
-   406 000001B2 88C4                    	mov	ah,al
-   407 000001B4 243F                    	and	al,0x3F			; the sector
-   408 000001B6 FEC0                    	inc	al
-   409 000001B8 38D8                    	cmp	al,bl
-   410 000001BA 761A                    	jbe	.putsec
-   411                                  
-   412 000001BC B001                    	mov	al,1			; wrap to sector 1
-   413 000001BE FE460B                  	inc	byte [bp+offset_dx+1]	; next head
-   414 000001C1 8A4E0B                  	mov	cl,[bp+offset_dx+1]
-   415 000001C4 38F9                    	cmp	cl,bh
-   416 000001C6 720E                    	jb	.putsec
-   417                                  
-   418 000001C8 C6460B00                	mov	byte [bp+offset_dx+1],0	; back to head 0
-   419 000001CC FE460D                  	inc	byte [bp+offset_cx+1]	; next cylinder
-   420 000001CF 8A4E0D                  	mov	cl,[bp+offset_cx+1]
-   421 000001D2 38E9                    	cmp	cl,ch
-   422 000001D4 730E                    	jnb	.bad			; off the end of the disk
-   423                                  .putsec:
-   424 000001D6 80E4C0                  	and	ah,0xC0			; keep the cylinder high bits
-   425 000001D9 08C4                    	or	ah,al
-   426 000001DB 88660C                  	mov	[bp+offset_cx],ah
-   427 000001DE F8                      	clc
-   428                                  .9:
-   429 000001DF 585B595E                	popm	ax,bx,cx,si
-   430 000001E3 C3                      	ret
-   431                                  .bad:
-   432 000001E4 F9                      	stc
-   433 000001E5 EBF8                    	jmp	short .9
-   434                                  
-   435                                  
-   436                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   437                                  ; 08h -- get drive parameters
-   438                                  ;
-   439                                  ;  Exit with:
-   440                                  ;	CH	last cylinder, CL bits 5:0 sectors per track
-   441                                  ;	DH	last head
-   442                                  ;	DL	number of floppy drives configured
-   443                                  ;	BL	the drive type
-   444                                  ;	ES:DI	the disk base table for it
-   445                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   446                                  fn08_params:
-   447 000001E7 E85CFE                  	call	fd_type
-   448 000001EA 7236                    	jc	.nodrive
-   449                                  
-   450 000001EC 884608                  	mov	[bp+offset_bx],al	; BL = the type
-   451 000001EF 0FB6D8                  	movzx	bx,al
-   452                                  
-   453 000001F2 2E8A24                      cs	mov	ah,[si]			; cylinders
-   454 000001F5 FECC                    	dec	ah
-   455 000001F7 88660D                  	mov	[bp+offset_cx+1],ah	; CH = last cylinder
-   456 000001FA 2E8A4402                    cs	mov	al,[si+2]		; sectors per track
-   457 000001FE 88460C                  	mov	[bp+offset_cx],al	; CL, and no cylinder above 255 here
-   458 00000201 2E8A4401                    cs	mov	al,[si+1]		; heads
-   459 00000205 FEC8                    	dec	al
-   460 00000207 88460B                  	mov	[bp+offset_dx+1],al	; DH = last head
-   461                                  
-   462 0000020A 01DB                    	add	bx,bx
-   463 0000020C 2E8BBF[1000]                cs	mov	di,[bx+fd_param_table]
-   464 00000211 897E00                  	mov	[bp+offset_di],di
-   465 00000214 8CC8                    	mov	ax,cs
-   466 00000216 894612                  	mov	[bp+offset_es],ax
-   467                                  
-   468 00000219 E83100                  	call	fd_count
-   469 0000021C 88460A                  	mov	[bp+offset_dx],al
-   470 0000021F E997FE                  	jmp	fd_good
-   471                                  
-   472                                  .nodrive:
-   473 00000222 C7460C0000              	mov	word [bp+offset_cx],0
-   474 00000227 C6460B00                	mov	byte [bp+offset_dx+1],0
-   475 0000022B E81F00                  	call	fd_count
-   476 0000022E 88460A                  	mov	[bp+offset_dx],al
-   477 00000231 C6460800                	mov	byte [bp+offset_bx],0
-   478 00000235 B480                    	mov	ah,TIME_OUT
-   479 00000237 E96CFE                  	jmp	fd_error
-   480                                  
-   481                                  
-   482                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   483                                  ; 15h -- get disk type
-   484                                  ;
-   485                                  ;	AH	0 none, 1 no change line, 2 change line supported
-   486                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   487                                  fn15_type:
-   488 0000023A E809FE                  	call	fd_type
-   489 0000023D B401                    	mov	ah,1			; a drive with no change line
-   490 0000023F 7302                    	jnc	.1
-   491 00000241 30E4                    	xor	ah,ah			; nothing configured there
-   492                                  .1:
-   493 00000243 88660F                  	mov	[bp+offset_ax+1],ah
-   494 00000246 611F07                  	popm	all,ds,es
-   495 00000249 F8                      	clc
-   496 0000024A CA0200                  	retf	2
-   497                                  
+   391                                  ; 01h -- the status of the last operation.  DOS reads this after a failure.
+   392                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   393                                  fn01_status:
+   394 000000F2 1E                      	push	ds
+   395 000000F3 6A401F                  	get_bda	DS
+   396 000000F6 8A264100                	mov	ah,[fd_status]
+   397 000000FA 1F                      	pop	ds
+   398 000000FB 88660F                  	mov	[bp+offset_ax+1],ah
+   399 000000FE 611F07                  	popm	all,ds,es
+   400 00000101 F8                      	clc
+   401 00000102 CA0200                  	retf	2
+   402                                  
+   403                                  
+   404                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   405                                  ; 02h / 03h / 04h -- read, write, verify
+   406                                  ;
+   407                                  ;  Enter with:
+   408                                  ;	AL	sectors to transfer
+   409                                  ;	CH	cylinder, CL bits 5:0 sector, bits 7:6 cylinder high
+   410                                  ;	DH	head
+   411                                  ;	DL	drive
+   412                                  ;	ES:BX	buffer
+   413                                  ;
+   414                                  ;  Exit with:
+   415                                  ;	AL	sectors actually transferred
+   416                                  ;
+   417                                  ; One sector per driver call, stepping the address on afterwards.  Verify
+   418                                  ; reads into the same buffer over and over and throws the data away: proving
+   419                                  ; the sectors read back is the whole of what verify is for.
+   420                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   421                                  fn04_verify:
+   422 00000105 31FF                    	xor	di,di			; verify reads; the buffer is not
+   423 00000107 EB07                    	jmp	short rw_common		;  advanced, which is what makes it
+   424                                  fn03_write:				;  a verify rather than a read
+   425 00000109 BF0100                  	mov	di,1
+   426 0000010C EB02                    	jmp	short rw_common
+   427                                  
+   428                                  ;
+   429                                  ; Put back the caller's cursor registers.  Used at every exit below that
+   430                                  ; can be reached after they have been pushed.
+   431                                  ;
+   432                                  %macro	rw_pop 0
+   433                                  	pop	word [bp+offset_dx]
+   434                                  	pop	word [bp+offset_cx]
+   435                                  	pop	word [bp+offset_bx]
+   436                                  	pop	word [bp+offset_es]
+   437                                  %endmacro
+   438                                  
+   439                                  fn02_read:
+   440 0000010E 31FF                    	xor	di,di
+   441                                  rw_common:
+   442 00000110 E833FF                  	call	fd_type
+   443 00000113 0F82CF00                	jc	.nodrive
+   444 00000117 88C7                    	mov	bh,al			; BH = the FD_ type
+   445                                  
+   446                                  ;
+   447                                  ; The caller's CX, DX and ES:BX are this loop's cursor: fd_next steps the
+   448                                  ; cylinder, head and sector in the frame, and the buffer walks on by 512 a
+   449                                  ; sector.  They have to go back before returning.  INT 13h hands back the
+   450                                  ; registers it was called with -- only AH, AL and the Carry mean anything
+   451                                  ; on return -- and DOS depends on that: it adds the transfer length to its
+   452                                  ; own ES:BX afterwards, so a pointer left walked on gets counted twice.
+   453                                  ;
+   454                                  ; The doubling is not a slow leak.  It gains a sector for every sector
+   455                                  ; transferred, and the moment the offset carries past FFFFh the next read
+   456                                  ; lands back at the bottom of the same segment, on top of whatever is
+   457                                  ; already living there -- which, when the file being loaded is COMMAND.COM,
+   458                                  ; is DOS itself.
+   459                                  ;
+   460 00000119 FF7612                  	push	word [bp+offset_es]
+   461 0000011C FF7608                  	push	word [bp+offset_bx]
+   462 0000011F FF760C                  	push	word [bp+offset_cx]
+   463 00000122 FF760A                  	push	word [bp+offset_dx]
+   464                                  
+   465                                  ;
+   466                                  ; A verify has no buffer of its own, and the pointer handed with one is
+   467                                  ; not required to point anywhere.  DOS passes ES:BX = 0000:0000, because
+   468                                  ; on a PC function 04h confirms the sectors read back and never moves a
+   469                                  ; byte into memory -- there is nothing for a buffer to mean.
+   470                                  ;
+   471                                  ; Reading a sector there writes the disk straight over the interrupt
+   472                                  ; vector table.  FORMAT's verify pass asks for eighteen of them at once,
+   473                                  ; so the whole table goes, every vector with it, and the machine is dead
+   474                                  ; where it stands -- no console, no tick, nothing left to report with.
+   475                                  ;
+   476                                  ; Read into the BIOS scratch buffer instead and throw the data away, the
+   477                                  ; way the fixed disk path has always done it.  Overwriting the frame here
+   478                                  ; is safe because the caller's registers are put back on the way out.
+   479                                  ;
+   480 00000125 807E0F04                	cmp	byte [bp+offset_ax+1],4
+   481 00000129 750E                    	jne	.notverify
+   482                                  	extern	_SecBuffer
+   483 0000012B 2EA1[0000]                  cs	mov	ax,[_SecBuffer]
+   484 0000012F 894608                  	mov	[bp+offset_bx],ax
+   485 00000132 2EA1[0200]                  cs	mov	ax,[_SecBuffer+2]
+   486 00000136 894612                  	mov	[bp+offset_es],ax
+   487                                  .notverify:
+   488                                  
+   489 00000139 31D2                    	xor	dx,dx			; DX counts up: how many worked
+   490 0000013B 0FB64E0E                	movzx	cx,byte [bp+offset_ax]	; sectors wanted
+   491 0000013F E36B                    	jcxz	.done			; nothing asked for
+   492                                  
+   493 00000141 89CE                    	mov	si,cx			; SI counts down
+   494                                  
+   495                                  .loop:
+   496 00000143 53525756                	pushm	si,di,dx,bx
+   497 00000147 1E                      	push	ds			; restored after the call below
    498                                  
-   499                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   500                                  ; fd_count -- how many floppy drives are configured, in AL
-   501                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   502                                  fd_count:
-   503 0000024D 1E                      	push	ds
-   504 0000024E 6A401F                  	get_bda	DS
-   505 00000251 30C0                    	xor	al,al
-   506 00000253 803EE30000              	cmp	byte [floppy_tab],0
-   507 00000258 7402                    	je	.1
-   508 0000025A FEC0                    	inc	al
-   509                                  .1:
-   510 0000025C 803EE40000              	cmp	byte [floppy_tab+1],0
-   511 00000261 7402                    	je	.2
-   512 00000263 FEC0                    	inc	al
-   513                                  .2:
-   514 00000265 1F                      	pop	ds
-   515 00000266 C3                      	ret
+   499                                  ;
+   500                                  ; fd_rw(write, drive, fdtype, cyl, head, sec, buf) -- __cdecl, so every
+   501                                  ; argument goes on the stack, rightmost first, and the caller takes them
+   502                                  ; off again.  Six words and a far pointer is sixteen bytes.
+   503                                  ;
+   504                                  ; The arguments are read through BP, which is SS-relative, so they can be
+   505                                  ; pushed before DS is changed.  DS has to be DGROUP by the time the call
+   506                                  ; happens and cannot be changed before the pushes -- a saved DS sitting
+   507                                  ; between the arguments and the return address would be read as the first
+   508                                  ; argument.
+   509                                  ;
+   510 00000148 FF7612                  	push	word [bp+offset_es]	; buf: segment first, so the offset
+   511 0000014B FF7608                  	push	word [bp+offset_bx]	;  lands at the lower address
+   512                                  
+   513 0000014E 0FB6460C                	movzx	ax,byte [bp+offset_cx]	; CL: sector in bits 5:0
+   514 00000152 83E03F                  	and	ax,0x3F
+   515 00000155 50                      	push	ax
+   516                                  
+   517 00000156 0FB6460B                	movzx	ax,byte [bp+offset_dx+1]	; DH: head
+   518 0000015A 50                      	push	ax
+   519                                  
+   520 0000015B 8A4E0C                  	mov	cl,[bp+offset_cx]	; the cylinder is split: CH is its
+   521 0000015E 80E1C0                  	and	cl,0xC0			;  low eight bits and CL bits 7:6
+   522 00000161 0FB6C9                  	movzx	cx,cl			;  are bits 9:8
+   523 00000164 C1E102                  	shl	cx,2
+   524 00000167 0FB6460D                	movzx	ax,byte [bp+offset_cx+1]
+   525 0000016B 09C8                    	or	ax,cx
+   526 0000016D 50                      	push	ax
+   527                                  
+   528 0000016E 0FB6C7                  	movzx	ax,bh			; the configured drive type
+   529 00000171 50                      	push	ax
+   530                                  
+   531 00000172 0FB6460A                	movzx	ax,byte [bp+offset_dx]	; DL: drive, 0 or 1
+   532 00000176 83E001                  	and	ax,1
+   533 00000179 50                      	push	ax
+   534                                  
+   535 0000017A 57                      	push	di			; write?
+   536                                  
+   537 0000017B B8[ssss]                	mov	ax,DGROUP
+   538 0000017E 8ED8                    	mov	ds,ax
+   539 00000180 E8(0000)                	call	_fd_rw
+   540 00000183 83C410                  	add	sp,16
+   541                                  
+   542 00000186 1F                      	pop	ds
+   543 00000187 5E5F5A5B                	popm	si,di,dx,bx
+   544                                  
+   545 0000018B 09C0                    	or	ax,ax
+   546 0000018D 752F                    	jnz	.failed
+   547                                  
+   548 0000018F 42                      	inc	dx			; one more done
+   549 00000190 4E                      	dec	si
+   550 00000191 7419                    	jz	.done
+   551                                  
+   552                                  	; step to the next sector, wrapping head then cylinder
+   553 00000193 E85900                  	call	fd_next
+   554 00000196 723A                    	jc	.badseek
+   555                                  
+   556                                  	; A verify has no buffer of its own: it reads each sector over the
+   557                                  	; last one and throws the data away, which is the whole of what
+   558                                  	; verify is.  Everything else advances, carrying across 64K.
+   559 00000198 807E0F04                	cmp	byte [bp+offset_ax+1],4
+   560 0000019C 74A5                    	je	.loop
+   561                                  
+   562 0000019E 8146080002              	add	word [bp+offset_bx],512
+   563 000001A3 739E                    	jnc	.loop
+   564 000001A5 8146120010              	add	word [bp+offset_es],0x1000
+   565 000001AA EB97                    	jmp	.loop
+   566                                  
+   567                                  .done:
+   568                                  	rw_pop
+   433 000001AC 8F460A              <1>  pop word [bp+offset_dx]
+   434 000001AF 8F460C              <1>  pop word [bp+offset_cx]
+   435 000001B2 8F4608              <1>  pop word [bp+offset_bx]
+   436 000001B5 8F4612              <1>  pop word [bp+offset_es]
+   569 000001B8 88560E                  	mov	[bp+offset_ax],dl	; sectors transferred
+   570 000001BB E90BFF                  	jmp	fd_good
+   571                                  
+   572                                  .failed:
+   573 000001BE 88C4                    	mov	ah,al			; the status, before AX is needed again
+   574                                  	rw_pop
+   433 000001C0 8F460A              <1>  pop word [bp+offset_dx]
+   434 000001C3 8F460C              <1>  pop word [bp+offset_cx]
+   435 000001C6 8F4608              <1>  pop word [bp+offset_bx]
+   436 000001C9 8F4612              <1>  pop word [bp+offset_es]
+   575 000001CC 88560E                  	mov	[bp+offset_ax],dl	; how many made it
+   576 000001CF E9E4FE                  	jmp	fd_error
+   577                                  
+   578                                  .badseek:
+   579                                  	rw_pop
+   433 000001D2 8F460A              <1>  pop word [bp+offset_dx]
+   434 000001D5 8F460C              <1>  pop word [bp+offset_cx]
+   435 000001D8 8F4608              <1>  pop word [bp+offset_bx]
+   436 000001DB 8F4612              <1>  pop word [bp+offset_es]
+   580 000001DE 88560E                  	mov	[bp+offset_ax],dl
+   581 000001E1 B404                    	mov	ah,SECTOR_NOT_FOUND
+   582 000001E3 E9D0FE                  	jmp	fd_error
+   583                                  
+   584                                  .nodrive:
+   585 000001E6 C6460E00                	mov	byte [bp+offset_ax],0
+   586 000001EA B480                    	mov	ah,TIME_OUT		; nothing configured there
+   587 000001EC E9C7FE                  	jmp	fd_error
+   588                                  
+   589                                  
+   590                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   591                                  ; fd_next -- step CH/CL/DH on to the next sector
+   592                                  ;
+   593                                  ; Sectors count from 1 to the track's last, then the head flips, then the
+   594                                  ; cylinder steps.  Carry set if that runs off the end of the disk.
+   595                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   596                                  fd_next:
+   597 000001EF 56515350                	pushm	ax,bx,cx,si
+   598 000001F3 E850FE                  	call	fd_type
+   599 000001F6 7240                    	jc	.bad
+   600                                  
+   601 000001F8 2E8A5C02                    cs	mov	bl,[si+2]		; sectors per track
+   602 000001FC 2E8A7C01                    cs	mov	bh,[si+1]		; heads
+   603 00000200 2E8A2C                      cs	mov	ch,[si]			; cylinders
+   604                                  
+   605 00000203 8A460C                  	mov	al,[bp+offset_cx]
+   606 00000206 88C4                    	mov	ah,al
+   607 00000208 243F                    	and	al,0x3F			; the sector
+   608 0000020A FEC0                    	inc	al
+   609 0000020C 38D8                    	cmp	al,bl
+   610 0000020E 761A                    	jbe	.putsec
+   611                                  
+   612 00000210 B001                    	mov	al,1			; wrap to sector 1
+   613 00000212 FE460B                  	inc	byte [bp+offset_dx+1]	; next head
+   614 00000215 8A4E0B                  	mov	cl,[bp+offset_dx+1]
+   615 00000218 38F9                    	cmp	cl,bh
+   616 0000021A 720E                    	jb	.putsec
+   617                                  
+   618 0000021C C6460B00                	mov	byte [bp+offset_dx+1],0	; back to head 0
+   619 00000220 FE460D                  	inc	byte [bp+offset_cx+1]	; next cylinder
+   620 00000223 8A4E0D                  	mov	cl,[bp+offset_cx+1]
+   621 00000226 38E9                    	cmp	cl,ch
+   622 00000228 730E                    	jnb	.bad			; off the end of the disk
+   623                                  .putsec:
+   624 0000022A 80E4C0                  	and	ah,0xC0			; keep the cylinder high bits
+   625 0000022D 08C4                    	or	ah,al
+   626 0000022F 88660C                  	mov	[bp+offset_cx],ah
+   627 00000232 F8                      	clc
+   628                                  .9:
+   629 00000233 585B595E                	popm	ax,bx,cx,si
+   630 00000237 C3                      	ret
+   631                                  .bad:
+   632 00000238 F9                      	stc
+   633 00000239 EBF8                    	jmp	short .9
+   634                                  
+   635                                  
+   636                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   637                                  ; 05h -- format a track
+   638                                  ;
+   639                                  ;  Enter with:
+   640                                  ;	AL	sectors per track
+   641                                  ;	CH	cylinder, CL bits 7:6 its high bits
+   642                                  ;	DH	head
+   643                                  ;	DL	drive
+   644                                  ;	ES:BX	the address field table: four bytes a sector, C H R N
+   645                                  ;
+   646                                  ; The gap and the filler byte come from the table INT 1Eh points at, not
+   647                                  ; from anything here.  That is where a FORMAT puts them when it wants a
+   648                                  ; layout other than the standard one, and taking them from the built-in
+   649                                  ; table instead would quietly ignore it.
+   650                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   651                                  fn05_format:
+   652 0000023B E808FE                  	call	fd_type
+   653 0000023E 0F828600                	jc	.nodrive
+   654 00000242 88C7                    	mov	bh,al			; BH = the FD_ type
+   655                                  
+   656 00000244 FF7612                  	push	word [bp+offset_es]	; the care rw_common takes, for the
+   657 00000247 FF7608                  	push	word [bp+offset_bx]	;  same reason: the caller's cursor
+   658 0000024A FF760C                  	push	word [bp+offset_cx]	;  registers have to go back
+   659 0000024D FF760A                  	push	word [bp+offset_dx]
+   660                                  
+   661 00000250 1E                      	push	ds			; restored after the call below
+   662                                  
+   663 00000251 FF7612                  	push	word [bp+offset_es]	; chrn: segment first, so the offset
+   664 00000254 FF7608                  	push	word [bp+offset_bx]	;  lands at the lower address
+   665                                  
+   666                                  ; The format gap and the filler, out of the INT 1Eh table.
+   667 00000257 1E                      	push	ds
+   668 00000258 31C0                    	xor	ax,ax
+   669 0000025A 8ED8                    	mov	ds,ax
+   670                                  	cnop
+   671 0000025C C5367800                	lds	si,[0x1E*4]		; DS:SI -> the disk base table
+   672 00000260 8B7C07                  	mov	di,[si+7]		; low half the gap, high half the filler
+   673 00000263 1F                      	pop	ds
+   674                                  	cnop
+   675                                  
+   676 00000264 89F8                    	mov	ax,di
+   677 00000266 C1E808                  	shr	ax,8
+   678 00000269 50                      	push	ax			; fill
+   679 0000026A 89F8                    	mov	ax,di
+   680 0000026C 30E4                    	xor	ah,ah
+   681 0000026E 50                      	push	ax			; gpl
+   682                                  
+   683 0000026F 0FB6460E                	movzx	ax,byte [bp+offset_ax]	; AL: sectors per track
+   684 00000273 50                      	push	ax
+   685                                  
+   686 00000274 0FB6460B                	movzx	ax,byte [bp+offset_dx+1]	; DH: head
+   687 00000278 50                      	push	ax
+   688                                  
+   689 00000279 8A4E0C                  	mov	cl,[bp+offset_cx]	; the cylinder is split the same way
+   690 0000027C 80E1C0                  	and	cl,0xC0			;  a read splits it
+   691 0000027F 0FB6C9                  	movzx	cx,cl
+   692 00000282 C1E102                  	shl	cx,2
+   693 00000285 0FB6460D                	movzx	ax,byte [bp+offset_cx+1]
+   694 00000289 09C8                    	or	ax,cx
+   695 0000028B 50                      	push	ax
+   696                                  
+   697 0000028C 0FB6C7                  	movzx	ax,bh			; the configured drive type
+   698 0000028F 50                      	push	ax
+   699                                  
+   700 00000290 0FB6460A                	movzx	ax,byte [bp+offset_dx]	; DL: drive, 0 or 1
+   701 00000294 83E001                  	and	ax,1
+   702 00000297 50                      	push	ax
+   703                                  
+   704 00000298 B8[ssss]                	mov	ax,DGROUP
+   705 0000029B 8ED8                    	mov	ds,ax
+   706 0000029D E8(0000)                	call	_fd_format
+   707 000002A0 83C412                  	add	sp,18
+   708                                  
+   709 000002A3 1F                      	pop	ds
+   710                                  
+   711 000002A4 09C0                    	or	ax,ax
+   712 000002A6 750F                    	jnz	.bad
+   713                                  	rw_pop
+   433 000002A8 8F460A              <1>  pop word [bp+offset_dx]
+   434 000002AB 8F460C              <1>  pop word [bp+offset_cx]
+   435 000002AE 8F4608              <1>  pop word [bp+offset_bx]
+   436 000002B1 8F4612              <1>  pop word [bp+offset_es]
+   714 000002B4 E912FE                  	jmp	fd_good
+   715                                  .bad:
+   716 000002B7 88C4                    	mov	ah,al			; the status, before AX is wanted again
+   717                                  	rw_pop
+   433 000002B9 8F460A              <1>  pop word [bp+offset_dx]
+   434 000002BC 8F460C              <1>  pop word [bp+offset_cx]
+   435 000002BF 8F4608              <1>  pop word [bp+offset_bx]
+   436 000002C2 8F4612              <1>  pop word [bp+offset_es]
+   718 000002C5 E9EEFD                  	jmp	fd_error
+   719                                  
+   720                                  .nodrive:
+   721 000002C8 B480                    	mov	ah,TIME_OUT		; nothing configured there
+   722 000002CA E9E9FD                  	jmp	fd_error
+   723                                  
+   724                                  
+   725                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   726                                  ; 18h -- set media type for format
+   727                                  ;
+   728                                  ;  Enter with:
+   729                                  ;	CH	last cylinder, CL bits 7:6 its high bits, bits 5:0 sectors
+   730                                  ;	DL	drive
+   731                                  ;
+   732                                  ;  Exit with:
+   733                                  ;	ES:DI	the parameter table describing that format
+   734                                  ;	AH	0, or 0Ch if this drive cannot be asked for it
+   735                                  ;
+   736                                  ; Nothing is programmed here and nothing needs to be.  DOS asks this
+   737                                  ; before formatting to find out whether a layout is possible at all and
+   738                                  ; to be given the table for it; the rate and the geometry are settled
+   739                                  ; when 05h runs.  Answering it is what lets a FORMAT proceed -- a drive
+   740                                  ; that returns "invalid command" here is one DOS will not format.
+   741                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   742                                  fn18_media:
+   743 000002CD E876FD                  	call	fd_type
+   744 000002D0 7250                    	jc	.nomedia
+   745 000002D2 0FB6D8                  	movzx	bx,al			; the configured drive type
+   746 000002D5 01DB                    	add	bx,bx
+   747 000002D7 2E8BB7[2703]                cs	mov	si,[bx+fd_media_tab]
+   748                                  
+   749                                  ; The geometry being asked for.
+   750 000002DC 8A460C                  	mov	al,[bp+offset_cx]
+   751 000002DF 88C4                    	mov	ah,al
+   752 000002E1 243F                    	and	al,0x3F			; sectors per track
+   753 000002E3 80E4C0                  	and	ah,0xC0
+   754 000002E6 0FB6CC                  	movzx	cx,ah
+   755 000002E9 C1E102                  	shl	cx,2
+   756 000002EC 0FB6560D                	movzx	dx,byte [bp+offset_cx+1]
+   757 000002F0 09CA                    	or	dx,cx
+   758 000002F2 42                      	inc	dx			; cylinders, counted from the last
+   759                                  
+   760                                  .try:
+   761 000002F3 2E0FB61C                    cs	movzx	bx,byte [si]
+   762 000002F7 09DB                    	or	bx,bx
+   763 000002F9 7427                    	jz	.nomedia		; the list ran out
+   764 000002FB 46                      	inc	si
+   765                                  
+   766 000002FC 89DF                    	mov	di,bx			; fd_geom runs three bytes an entry
+   767 000002FE 01FF                    	add	di,di
+   768 00000300 01DF                    	add	di,bx
+   769 00000302 2E3895[0000]                cs	cmp	byte [di+fd_geom],dl	; cylinders
+   770 00000307 75EA                    	jne	.try
+   771 00000309 2E3885[0200]                cs	cmp	byte [di+fd_geom+2],al	; sectors per track
+   772 0000030E 75E3                    	jne	.try
+   773                                  
+   774 00000310 01DB                    	add	bx,bx
+   775 00000312 2E8BBF[1000]                cs	mov	di,[bx+fd_param_table]
+   776 00000317 897E00                  	mov	[bp+offset_di],di
+   777 0000031A 8CC8                    	mov	ax,cs
+   778 0000031C 894612                  	mov	[bp+offset_es],ax
+   779 0000031F E9A7FD                  	jmp	fd_good
+   780                                  
+   781                                  .nomedia:
+   782 00000322 B40C                    	mov	ah,MEDIA_TYPE_NOT_FOUND
+   783 00000324 E98FFD                  	jmp	fd_error
+   784                                  
+   785                                  
+   786                                  ;
+   787                                  ; Which formats a drive of each type may be asked to write, zero ended.
+   788                                  ; A high density drive can also write the double density format of its
+   789                                  ; own size; nothing can write a format its heads cannot reach, and a
+   790                                  ; 720Kb drive asked for 1.44Mb has to be told no rather than left to
+   791                                  ; produce a disk that reads back as noise.
+   792                                  ;
+   793                                  fd_media_tab:
+   794 00000327 [3103]                  	dw	fd_media_none
+   795 00000329 [3203]                  	dw	fd_media_360
+   796 0000032B [3403]                  	dw	fd_media_1200
+   797 0000032D [3703]                  	dw	fd_media_720
+   798 0000032F [3903]                  	dw	fd_media_1440
+   799                                  
+   800 00000331 00                      fd_media_none:	db	0
+   801 00000332 0100                    fd_media_360:	db	FD_360, 0
+   802 00000334 020100                  fd_media_1200:	db	FD_1200, FD_360, 0
+   803 00000337 0300                    fd_media_720:	db	FD_720, 0
+   804 00000339 040300                  fd_media_1440:	db	FD_1440, FD_720, 0
+   805                                  
+   806                                  
+   807                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   808                                  ; 08h -- get drive parameters
+   809                                  ;
+   810                                  ;  Exit with:
+   811                                  ;	CH	last cylinder, CL bits 5:0 sectors per track
+   812                                  ;	DH	last head
+   813                                  ;	DL	number of floppy drives configured
+   814                                  ;	BL	the drive type
+   815                                  ;	ES:DI	the disk base table for it
+   816                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   817                                  fn08_params:
+   818 0000033C E807FD                  	call	fd_type
+   819 0000033F 7236                    	jc	.nodrive
+   820                                  
+   821 00000341 884608                  	mov	[bp+offset_bx],al	; BL = the type
+   822 00000344 0FB6D8                  	movzx	bx,al
+   823                                  
+   824 00000347 2E8A24                      cs	mov	ah,[si]			; cylinders
+   825 0000034A FECC                    	dec	ah
+   826 0000034C 88660D                  	mov	[bp+offset_cx+1],ah	; CH = last cylinder
+   827 0000034F 2E8A4402                    cs	mov	al,[si+2]		; sectors per track
+   828 00000353 88460C                  	mov	[bp+offset_cx],al	; CL, and no cylinder above 255 here
+   829 00000356 2E8A4401                    cs	mov	al,[si+1]		; heads
+   830 0000035A FEC8                    	dec	al
+   831 0000035C 88460B                  	mov	[bp+offset_dx+1],al	; DH = last head
+   832                                  
+   833 0000035F 01DB                    	add	bx,bx
+   834 00000361 2E8BBF[1000]                cs	mov	di,[bx+fd_param_table]
+   835 00000366 897E00                  	mov	[bp+offset_di],di
+   836 00000369 8CC8                    	mov	ax,cs
+   837 0000036B 894612                  	mov	[bp+offset_es],ax
+   838                                  
+   839 0000036E E85B00                  	call	fd_count
+   840 00000371 88460A                  	mov	[bp+offset_dx],al
+   841 00000374 E952FD                  	jmp	fd_good
+   842                                  
+   843                                  .nodrive:
+   844 00000377 C7460C0000              	mov	word [bp+offset_cx],0
+   845 0000037C C6460B00                	mov	byte [bp+offset_dx+1],0
+   846 00000380 E84900                  	call	fd_count
+   847 00000383 88460A                  	mov	[bp+offset_dx],al
+   848 00000386 C6460800                	mov	byte [bp+offset_bx],0
+   849 0000038A B480                    	mov	ah,TIME_OUT
+   850 0000038C E927FD                  	jmp	fd_error
+   851                                  
+   852                                  
+   853                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   854                                  ; 15h -- get disk type
+   855                                  ;
+   856                                  ;	AH	0 none, 1 no change line, 2 change line supported
+   857                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   858                                  fn15_type:
+   859 0000038F E8B4FC                  	call	fd_type
+   860 00000392 B401                    	mov	ah,1			; a drive with no change line
+   861 00000394 7302                    	jnc	.1
+   862 00000396 30E4                    	xor	ah,ah			; nothing configured there
+   863                                  .1:
+   864 00000398 88660F                  	mov	[bp+offset_ax+1],ah
+   865 0000039B 611F07                  	popm	all,ds,es
+   866 0000039E F8                      	clc
+   867 0000039F CA0200                  	retf	2
+   868                                  
+   869                                  
+   870                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   871                                  ; fd_count -- how many floppy drives are configured, in AL
+   872                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   873                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   874                                  ; fd_set_1E -- point INT 1Eh at the table for drive A's configured type
+   875                                  ;
+   876                                  ;	void fd_set_1E(void);
+   877                                  ;
+   878                                  ; POST calls this once the SETUP configuration is known.  The vector is
+   879                                  ; built from page0vectors pointing at the 1.44Mb table, which is the wrong
+   880                                  ; answer for a 720Kb or 360Kb drive: it claims 18 sectors a track where
+   881                                  ; there are 9, and DOS copies the table and works from the copy.
+   882                                  ;
+   883                                  ; Drive A decides it, because there is only one vector and INT 13h function
+   884                                  ; 08h hands out the right table per drive anyway.
+   885                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   886                                  fd_set_1E_:
+   887 000003A2 061E5350                	pushm	ax,bx,ds,es
+   888                                  
+   889 000003A6 6A401F                  	get_bda	DS
+   890 000003A9 0FB61EE300              	movzx	bx,byte [floppy_tab]	; drive A's type
+   891 000003AE 83FB05                  	cmp	bx,FD_TYPES
+   892 000003B1 7314                    	jnb	.9			; nothing sensible configured
+   893 000003B3 01DB                    	add	bx,bx
+   894 000003B5 2E8B87[1000]                cs	mov	ax,[bx+fd_param_table]
+   895                                  
+   896 000003BA 6A0007                  	get_loc0 ES
+   897 000003BD 26A37800                    es	mov	[0x1E*4],ax		; offset
+   898 000003C1 8CC8                    	mov	ax,cs
+   899 000003C3 26A37A00                    es	mov	[0x1E*4+2],ax		; segment
+   900                                  .9:
+   901 000003C7 585B1F07                	popm	ax,bx,ds,es
+   902 000003CB C3                      	ret
+   903                                  
+   904                                  
+   905                                  fd_count:
+   906 000003CC 1E                      	push	ds
+   907 000003CD 6A401F                  	get_bda	DS
+   908 000003D0 30C0                    	xor	al,al
+   909 000003D2 803EE30000              	cmp	byte [floppy_tab],0
+   910 000003D7 7402                    	je	.1
+   911 000003D9 FEC0                    	inc	al
+   912                                  .1:
+   913 000003DB 803EE40000              	cmp	byte [floppy_tab+1],0
+   914 000003E0 7402                    	je	.2
+   915 000003E2 FEC0                    	inc	al
+   916                                  .2:
+   917 000003E4 1F                      	pop	ds
+   918 000003E5 C3                      	ret

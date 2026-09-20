@@ -20,16 +20,16 @@
 ; directory.  If not, see <http://www.gnu.org/licenses/>.
 ;
 ;
-; Modelled on BOOT_STRAP_1 in ATBIOS/ATBIOS/test6.asm, keeping the fixed
-; disk path (H5..H8 there) and dropping the diskette path, which this
-; board has no hardware for.
+; Modelled on BOOT_STRAP_1 in ATBIOS/ATBIOS/test6.asm.  The diskette path
+; was dropped when this was first written, there being no floppy hardware
+; on the board; it is back now that there is, and tried first.
 ;
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 %include "seg_def.inc"
 %include "i386ex.inc"
 %include "macro.inc"
-%include "bda.inc"		; serial_dev, for the console drain in reboot_
+%include "bda.inc"		; floppy_tab, and serial_dev for reboot_
 ; ASCII_CR and ASCII_LF come from i386ex.inc -- "ascii.h" is a C
 ; header and NASM cannot read it
 
@@ -41,14 +41,27 @@ segment	_TEXT
 BOOT_SEG	equ	0x0000		; the boot sector is loaded and entered
 BOOT_OFF	equ	0x7C00		;  at 0000:7C00, by long convention
 BOOT_DRIVE	equ	0x80		; first fixed disk
+BOOT_FLOPPY	equ	0x00		; drive A
 BOOT_RETRIES	equ	4		; as the PC/AT did
+BOOT_FD_TRIES	equ	2		; fewer for the floppy: an empty drive
+					;  is the ordinary case, and every
+					;  attempt costs a motor spin-up
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; INT 19h -- Bootstrap Loader
 ;
-; Read cylinder 0, head 0, sector 1 of drive 80h into 0000:7C00, check
-; that it ends in AA55h, and enter it.
+; Read cylinder 0, head 0, sector 1 into 0000:7C00, check that it ends in
+; AA55h, and enter it.
+;
+; The floppy is tried first and the fixed disk second, which is the order a
+; PC has always used and the reason anyone can repair a machine whose hard
+; disk will not boot.  This one had no such route until the floppy driver
+; worked: a bad CF meant reflashing the BIOS to get anywhere.
+;
+; The floppy is skipped entirely when SETUP says no drive is fitted, since
+; there is no way to ask the hardware -- and an empty drive is the ordinary
+; case anyway, so it gets two attempts rather than four.
 ;
 ; This call does not return.  It replaces the stack it was entered on,
 ; because the boot sector is entitled to assume nothing about whatever
@@ -57,7 +70,7 @@ BOOT_RETRIES	equ	4		; as the PC/AT did
 ;
 ;  Hands control over with:
 ;	CS:IP	0000:7C00
-;	DL	80h, the drive it was read from
+;	DL	the drive it was read from, 00h or 80h
 ;	DS,ES	0000
 ;	SS:SP	0000:7C00, growing down away from the sector
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -74,52 +87,30 @@ int_19h:
 	sti
 	cld
 
-; Clear the boot location first.  A read that fails part way through, or
-; a drive that returns short, must not be able to leave anything
-; executable sitting there from an earlier attempt.
-	mov	di,BOOT_OFF
-	mov	cx,256			; 256 words == one sector
-	rep	stosw			; AX is still zero
+; The floppy first, but only if SETUP says one is there.
+	push	ds
+	get_bda	DS
+	mov	al,[floppy_tab]
+	pop	ds
+	or	al,al
+	jz	.fixed
 
+	mov	si,msg_try_a
+	call	boot_msg
+	mov	dx,BOOT_FLOPPY
+	mov	cx,BOOT_FD_TRIES
+	call	boot_try
+	jnc	.enter
+
+.fixed:
+	mov	si,msg_try_c
+	call	boot_msg
+	mov	dx,BOOT_DRIVE
 	mov	cx,BOOT_RETRIES
-.retry:
-	push	cx
+	call	boot_try
+	jnc	.enter
 
-; Reset first.  On this BIOS that also puts the drives back into 8-bit
-; PIO after the soft reset -- see fn00 in 13h_disk.asm.
-	mov	ah,0
-	mov	dl,BOOT_DRIVE
-	int	0x13
-	jc	.again
-
-	mov	ax,0x0201		; read, one sector
-	mov	cx,0x0001		; cylinder 0, sector 1
-	mov	dh,0			; head 0
-	mov	dl,BOOT_DRIVE
-	xor	bx,bx
-	mov	es,bx			; ES:BX = 0000:7C00
-	cnop
-	mov	bx,BOOT_OFF
-	int	0x13
-	jnc	.loaded
-
-.again:
-	pop	cx
-	loop	.retry
 	mov	si,msg_noread
-	jmp	short .give_up
-
-.loaded:
-	pop	cx
-
-; The last two bytes of a bootable sector are AA55h.  Without this test
-; a blank or data-only disk would be executed as code.
-	cmp	word [BOOT_OFF+510],0xAA55
-	je	.enter
-
-	mov	si,msg_nosig
-
-.give_up:
 	call	boot_msg
 ; INT 18h is where the PC/AT went when nothing would boot.  Here it
 ; prints and drops into the debug monitor, and retries the boot when the
@@ -130,16 +121,94 @@ int_19h:
 	jmp	.hang
 
 .enter:
-	mov	si,msg_booting
+	push	si			; the drive it was found on -- printing
+	mov	si,msg_booting		;  the message is about to overwrite SI
 	call	boot_msg
-
-	mov	dl,BOOT_DRIVE		; the sector is told where it came from
+	pop	dx			; DL = that drive, DH = 0
 	xor	ax,ax
 	mov	ds,ax
 	cnop
 	mov	es,ax
 	cnop
 	jmp	BOOT_SEG:BOOT_OFF
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; boot_try -- load and check a boot sector from one drive
+;
+;    Enter with:
+;	DX	the drive: 0000h for A, 0080h for the first fixed disk.
+;		DH must be zero -- it is the head the sector is read from
+;	CX	how many attempts to make
+;
+;    Exit with:
+;	Carry clear, and 0000:7C00 holding a sector that ends in AA55h
+;	SI	the drive, for handing to the sector in DL
+;	Carry set if it could not be read, or carried no signature
+;
+; The landing area is cleared before each drive is tried.  A read that
+; fails part way through, or a drive that returns short, must not be able
+; to leave anything executable there from an earlier attempt -- and with
+; two drives now tried in turn, "an earlier attempt" includes the other
+; one.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+boot_try:
+	pushm	ax,bx,cx,dx,di,es
+
+	mov	si,dx			; the drive, kept across INT 13h
+
+	xor	ax,ax
+	mov	es,ax
+	cnop
+	mov	di,BOOT_OFF
+	push	cx
+	mov	cx,256			; 256 words == one sector
+	rep	stosw			; AX is still zero
+	pop	cx
+
+.retry:
+	push	cx
+
+; Reset first.  On the fixed disk that also puts the drives back into
+; 8-bit PIO after the soft reset -- see fn00 in 13h_disk.asm.
+	mov	dx,si
+	mov	ah,0
+	int	0x13
+	jc	.again
+
+	mov	dx,si			; DH is zero: head 0
+	mov	ax,0x0201		; read, one sector
+	mov	cx,0x0001		; cylinder 0, sector 1
+	xor	bx,bx
+	mov	es,bx			; ES:BX = 0000:7C00
+	cnop
+	mov	bx,BOOT_OFF
+	int	0x13
+	jnc	.loaded
+
+.again:
+	pop	cx
+	loop	.retry
+	stc
+	jmp	short .9
+
+.loaded:
+	pop	cx
+
+; The last two bytes of a bootable sector are AA55h.  Without this test a
+; blank or data-only disk would be executed as code.
+	xor	ax,ax
+	mov	es,ax
+	cnop
+    es	cmp	word [BOOT_OFF+510],0xAA55
+	je	.ok
+	stc
+	jmp	short .9
+.ok:
+	clc
+.9:
+	popm	ax,bx,cx,dx,di,es
+	ret
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -213,8 +282,12 @@ int_18h:
 	hlt
 	jmp	.hang
 
+msg_try_a:
+	db	ASCII_CR,ASCII_LF,"Trying drive A: ...",ASCII_CR,ASCII_LF,0
+msg_try_c:
+	db	"Trying drive C: ...",ASCII_CR,ASCII_LF,0
 msg_booting:
-	db	ASCII_CR,ASCII_LF,"Booting from drive 80h ...",ASCII_CR,ASCII_LF,0
+	db	"Boot sector loaded, entering it ...",ASCII_CR,ASCII_LF,0
 msg_noread:
 	db	ASCII_CR,ASCII_LF,"INT 19h: cannot read the boot sector",ASCII_CR,ASCII_LF,0
 msg_nosig:

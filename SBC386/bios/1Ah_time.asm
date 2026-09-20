@@ -167,15 +167,60 @@ get_tick_count:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	global	int_irq0
 	align	2
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; A heartbeat, for telling a hung machine from a halted one.
+;
+; Writes a character to the console about once a second from the timer
+; tick.  If it keeps sounding through a lockup then interrupts are alive
+; and whatever is stuck is a software loop; if it stops, the tick is not
+; arriving at all, and nothing polled will ever recover the machine.  That
+; is the difference between a bug to find and a machine to reset, and once
+; the console has stopped answering there is no other way to tell.
+;
+; It is sounded twice, on either side of the INT 1Ch hook, because a hook
+; that hangs would silence a single beat placed after it and look exactly
+; like a dead tick.  Two characters separate the three cases:
+;
+;	"~+"	the tick is arriving and the hook returns -- look elsewhere
+;	"~"	the tick arrives, the INT 1Ch hook never comes back
+;	nothing	the tick is not being delivered: IF clear, IRQ0 masked,
+;		 counter 0 stopped, or the CPU halted
+;
+; Both beats test the same not-yet-incremented count, so they pair up.
+; INT 14h transmit is polled, so this works whatever else has failed.
+;
+; Debugging aid: TICK_BEAT belongs at 0 in any ROM anyone relies on.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%define TICK_BEAT 0
+
+%macro	beat 1
+%if TICK_BEAT
+	pushm	ax,dx,ds		; irq0 has saved nothing yet
+	get_bda	DS
+	test	word [timer_count_low],0x000F	; every sixteenth tick
+	jnz	%%quiet
+	mov	al,%1
+	mov	ah,1			; INT 14h, write a character
+	xor	dx,dx			; COM1
+	int	0x14
+%%quiet:
+	popm	ax,dx,ds
+%endif
+%endmacro
+
 int_irq0:
 	cld			; insurance
+	beat	'~'
 	int	0x1C
+	beat	'+'
 
 	pushm	bx,cx,ds
 	get_bda	DS
 	mov	cx,8		; will be used later
 
 	inc	dword [timer_count]
+
 	cmp	dword [timer_count],tick
 	jb	.2
 ; tick went to zero (or negative)

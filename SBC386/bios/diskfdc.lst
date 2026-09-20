@@ -2,7 +2,7 @@ Module: /mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/diskfdc.c
 GROUP: 'DGROUP' CONST,CONST2,_DATA
 
 File contains no line numbers.
-Segment: _TEXT BYTE USE16 0000055B bytes
+Segment: _TEXT BYTE USE16 00000731 bytes
 0000                          fd_wait_:
 0000    53                        push        bx 
 0001    51                        push        cx 
@@ -210,8 +210,8 @@ Routine Size: 307 bytes,    Routine Base: _TEXT + 0000
 019E    83 FE 04                  cmp         si,0x0004 
 01A1    7D 20                     jge         L$22 
 01A3                          L$19:
-01A3    8D 5E FC                  lea         bx,-0x4[bp] 
-01A6    8D 46 FE                  lea         ax,-0x2[bp] 
+01A3    8D 5E FE                  lea         bx,-0x2[bp] 
+01A6    8D 46 FC                  lea         ax,-0x4[bp] 
 01A9    8C D1                     mov         cx,ss 
 01AB    8C D2                     mov         dx,ss 
 01AD    E8 00 00                  call        fd_sense_ 
@@ -230,410 +230,593 @@ Routine Size: 307 bytes,    Routine Base: _TEXT + 0000
 01C6    85 C0                     test        ax,ax 
 01C8    75 EA                     jne         L$20 
 01CA    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-01CE    26 C6 47 3E 0F            mov         byte ptr es:0x3e[bx],0x0f 
-01D3    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-01D7    26 C6 47 41 00            mov         byte ptr es:0x41[bx],0x00 
-01DC    C9                        leave       
-01DD    5E                        pop         si 
-01DE    C3                        ret         
+01CE    26 8A 47 3E               mov         al,byte ptr es:0x3e[bx] 
+01D2    24 30                     and         al,0x30 
+01D4    0C 0F                     or          al,0x0f 
+01D6    26 88 47 3E               mov         byte ptr es:0x3e[bx],al 
+01DA    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+01DE    31 C0                     xor         ax,ax 
+01E0    26 C6 47 41 00            mov         byte ptr es:0x41[bx],0x00 
+01E5    C9                        leave       
+01E6    5E                        pop         si 
+01E7    C3                        ret         
 
-Routine Size: 172 bytes,    Routine Base: _TEXT + 0133
+Routine Size: 181 bytes,    Routine Base: _TEXT + 0133
 
-01DF                          _fd_rate:
-01DF    55                        push        bp 
-01E0    89 E5                     mov         bp,sp 
-01E2    8B 46 04                  mov         ax,word ptr 0x4[bp] 
-01E5    3D 04 00                  cmp         ax,0x0004 
-01E8    74 05                     je          L$23 
-01EA    3D 02 00                  cmp         ax,0x0002 
-01ED    75 04                     jne         L$24 
-01EF                          L$23:
-01EF    30 C0                     xor         al,al 
-01F1    5D                        pop         bp 
-01F2    C3                        ret         
-01F3                          L$24:
-01F3    B0 04                     mov         al,0x04 
-01F5    5D                        pop         bp 
-01F6    C3                        ret         
-01F7                          fd_motor_on_:
-01F7    53                        push        bx 
-01F8    51                        push        cx 
-01F9    52                        push        dx 
-01FA    50                        push        ax 
-01FB    E8 00 00                  call        _fd_rate 
-01FE    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0202    0C 82                     or          al,0x82 
-0204    26 8A 67 3F               mov         ah,byte ptr es:0x3f[bx] 
-0208    80 E4 86                  and         ah,0x86 
-020B    83 C4 02                  add         sp,0x0002 
-020E    38 C4                     cmp         ah,al 
-0210    74 2D                     je          L$26 
-0212    0F B6 D0                  movzx       dx,al 
-0215    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
-0219    B8 38 04                  mov         ax,0x0438 
-021C    E8 00 00                  call        outp_ 
-021F    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0223    26 C6 47 40 25            mov         byte ptr es:0x40[bx],0x25 
-0228    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-022C    26 8B 57 6C               mov         dx,word ptr es:0x6c[bx] 
-0230    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0234                          L$25:
-0234    26 8B 47 6C               mov         ax,word ptr es:0x6c[bx] 
-0238    29 D0                     sub         ax,dx 
-023A    3D 0A 00                  cmp         ax,0x000a 
-023D    72 F5                     jb          L$25 
-023F                          L$26:
-023F    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0243    26 C6 47 40 25            mov         byte ptr es:0x40[bx],0x25 
-0248    E9 EC FD                  jmp         L$3 
-024B                          fd_note_seek_:
-024B    53                        push        bx 
-024C    88 C6                     mov         dh,al 
-024E    31 C0                     xor         ax,ax 
-0250                          L$27:
-0250    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0254    01 C3                     add         bx,ax 
-0256    40                        inc         ax 
-0257    26 C6 47 42 00            mov         byte ptr es:0x42[bx],0x00 
-025C    3D 07 00                  cmp         ax,0x0007 
-025F    7C EF                     jl          L$27 
-0261    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0265    26 88 77 42               mov         byte ptr es:0x42[bx],dh 
-0269    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-026D    26 88 57 45               mov         byte ptr es:0x45[bx],dl 
-0271    5B                        pop         bx 
-0272    C3                        ret         
+01E8                          _fd_rate:
+01E8    55                        push        bp 
+01E9    89 E5                     mov         bp,sp 
+01EB    8B 46 04                  mov         ax,word ptr 0x4[bp] 
+01EE    3D 04 00                  cmp         ax,0x0004 
+01F1    74 05                     je          L$23 
+01F3    3D 02 00                  cmp         ax,0x0002 
+01F6    75 04                     jne         L$24 
+01F8                          L$23:
+01F8    30 C0                     xor         al,al 
+01FA    5D                        pop         bp 
+01FB    C3                        ret         
+01FC                          L$24:
+01FC    B0 04                     mov         al,0x04 
+01FE    5D                        pop         bp 
+01FF    C3                        ret         
+0200                          fd_motor_on_:
+0200    53                        push        bx 
+0201    51                        push        cx 
+0202    55                        push        bp 
+0203    89 E5                     mov         bp,sp 
+0205    50                        push        ax 
+0206    52                        push        dx 
+0207    E8 00 00                  call        _fd_rate 
+020A    8A 4E FE                  mov         cl,byte ptr -0x2[bp] 
+020D    88 C2                     mov         dl,al 
+020F    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0213    B6 10                     mov         dh,0x10 
+0215    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0219    D2 E6                     shl         dh,cl 
+021B    26 0F B6 5F 3E            movzx       bx,byte ptr es:0x3e[bx] 
+0220    0F B6 CE                  movzx       cx,dh 
+0223    83 C4 02                  add         sp,0x0002 
+0226    85 CB                     test        bx,cx 
+0228    74 03                     je          L$25 
+022A    80 F2 04                  xor         dl,0x04 
+022D                          L$25:
+022D    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0231    88 D0                     mov         al,dl 
+0233    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0237    0C 82                     or          al,0x82 
+0239    26 8A 67 3F               mov         ah,byte ptr es:0x3f[bx] 
+023D    80 E4 86                  and         ah,0x86 
+0240    38 C4                     cmp         ah,al 
+0242    74 2D                     je          L$27 
+0244    0F B6 D0                  movzx       dx,al 
+0247    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
+024B    B8 38 04                  mov         ax,0x0438 
+024E    E8 00 00                  call        outp_ 
+0251    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0255    26 C6 47 40 25            mov         byte ptr es:0x40[bx],0x25 
+025A    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+025E    26 8B 47 6C               mov         ax,word ptr es:0x6c[bx] 
+0262    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0266                          L$26:
+0266    26 8B 57 6C               mov         dx,word ptr es:0x6c[bx] 
+026A    29 C2                     sub         dx,ax 
+026C    83 FA 0A                  cmp         dx,0x000a 
+026F    72 F5                     jb          L$26 
+0271                          L$27:
+0271    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0275    26 C6 47 40 25            mov         byte ptr es:0x40[bx],0x25 
+027A    C9                        leave       
+027B    59                        pop         cx 
+027C    5B                        pop         bx 
+027D    C3                        ret         
+027E                          fd_note_seek_:
+027E    53                        push        bx 
+027F    88 C6                     mov         dh,al 
+0281    31 C0                     xor         ax,ax 
+0283                          L$28:
+0283    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0287    01 C3                     add         bx,ax 
+0289    40                        inc         ax 
+028A    26 C6 47 42 00            mov         byte ptr es:0x42[bx],0x00 
+028F    3D 07 00                  cmp         ax,0x0007 
+0292    7C EF                     jl          L$28 
+0294    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0298    26 88 77 42               mov         byte ptr es:0x42[bx],dh 
+029C    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+02A0    26 88 57 45               mov         byte ptr es:0x45[bx],dl 
+02A4    5B                        pop         bx 
+02A5    C3                        ret         
 
-Routine Size: 148 bytes,    Routine Base: _TEXT + 01DF
+Routine Size: 190 bytes,    Routine Base: _TEXT + 01E8
 
-0273                          _fd_seek:
-0273    C8 04 00 00               enter       0x0004,0x00 
-0277    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
-027A    B8 01 00                  mov         ax,0x0001 
-027D    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0281    D3 E0                     shl         ax,cl 
-0283    26 0F B6 57 3E            movzx       dx,byte ptr es:0x3e[bx] 
-0288    85 C2                     test        dx,ax 
-028A    0F 84 7B 00               je          L$37 
-028E    31 D2                     xor         dx,dx 
-0290    EB 06                     jmp         L$29 
-0292                          L$28:
-0292    42                        inc         dx 
-0293    83 FA 02                  cmp         dx,0x0002 
-0296    7D 40                     jge         L$33 
-0298                          L$29:
-0298    B8 07 00                  mov         ax,0x0007 
-029B    E8 00 00                  call        fd_out_ 
-029E    85 C0                     test        ax,ax 
-02A0    75 0A                     jne         L$30 
-02A2    8B 46 04                  mov         ax,word ptr 0x4[bp] 
-02A5    E8 00 00                  call        fd_out_ 
-02A8    85 C0                     test        ax,ax 
-02AA    74 0C                     je          L$32 
-02AC                          L$30:
-02AC    31 D2                     xor         dx,dx 
-02AE    31 C0                     xor         ax,ax 
-02B0    E8 00 00                  call        fd_note_seek_ 
-02B3                          L$31:
-02B3    B8 80 00                  mov         ax,0x0080 
-02B6    C9                        leave       
-02B7    C3                        ret         
-02B8                          L$32:
-02B8    8D 5E FE                  lea         bx,-0x2[bp] 
-02BB    8B 46 04                  mov         ax,word ptr 0x4[bp] 
-02BE    16                        push        ss 
-02BF    8C D1                     mov         cx,ss 
-02C1    53                        push        bx 
-02C2    8D 5E FC                  lea         bx,-0x4[bp] 
-02C5    E8 00 00                  call        fd_seek_done_ 
-02C8    85 C0                     test        ax,ax 
-02CA    75 E0                     jne         L$30 
-02CC    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
-02D0    75 C0                     jne         L$28 
-02D2    80 7E FE 00               cmp         byte ptr -0x2[bp],0x00 
-02D6    75 BA                     jne         L$28 
-02D8                          L$33:
-02D8    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
-02DC    75 06                     jne         L$34 
-02DE    80 7E FE 00               cmp         byte ptr -0x2[bp],0x00 
-02E2    74 10                     je          L$36 
-02E4                          L$34:
-02E4    0F B6 56 FE               movzx       dx,byte ptr -0x2[bp] 
-02E8    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
-02EC    E8 00 00                  call        fd_note_seek_ 
-02EF                          L$35:
-02EF    B8 40 00                  mov         ax,0x0040 
-02F2    C9                        leave       
-02F3    C3                        ret         
-02F4                          L$36:
-02F4    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
-02F7    B0 01                     mov         al,0x01 
-02F9    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
-02FD    D2 E0                     shl         al,cl 
-02FF    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
-0303    F6 D0                     not         al 
-0305    26 20 47 3E               and         byte ptr es:0x3e[bx],al 
-0309                          L$37:
-0309    8B 46 08                  mov         ax,word ptr 0x8[bp] 
-030C    85 C0                     test        ax,ax 
-030E    74 69                     je          L$40 
-0310    B8 0F 00                  mov         ax,0x000f 
-0313    E8 00 00                  call        fd_out_ 
-0316    85 C0                     test        ax,ax 
-0318    75 99                     jne         L$31 
-031A    8B 46 06                  mov         ax,word ptr 0x6[bp] 
-031D    C1 E0 02                  shl         ax,0x02 
-0320    0B 46 04                  or          ax,word ptr 0x4[bp] 
-0323    E8 00 00                  call        fd_out_ 
-0326    85 C0                     test        ax,ax 
-0328    75 89                     jne         L$31 
-032A    8B 46 08                  mov         ax,word ptr 0x8[bp] 
-032D    E8 00 00                  call        fd_out_ 
-0330    85 C0                     test        ax,ax 
-0332    0F 85 7D FF               jne         L$31 
-0336    8D 56 FE                  lea         dx,-0x2[bp] 
-0339    8D 5E FC                  lea         bx,-0x4[bp] 
-033C    16                        push        ss 
-033D    8B 46 04                  mov         ax,word ptr 0x4[bp] 
-0340    52                        push        dx 
-0341    8C D1                     mov         cx,ss 
-0343    E8 00 00                  call        fd_seek_done_ 
-0346    85 C0                     test        ax,ax 
-0348    0F 85 60 FF               jne         L$30 
-034C    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
-0350    75 08                     jne         L$38 
-0352    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
-0355    3A 46 08                  cmp         al,byte ptr 0x8[bp] 
-0358    74 1D                     je          L$39 
-035A                          L$38:
-035A    0F B6 56 FE               movzx       dx,byte ptr -0x2[bp] 
-035E    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
-0362    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
-0365    E8 00 00                  call        fd_note_seek_ 
-0368    B0 01                     mov         al,0x01 
-036A    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-036E    D2 E0                     shl         al,cl 
-0370    26 08 47 3E               or          byte ptr es:0x3e[bx],al 
-0374    E9 78 FF                  jmp         L$35 
-0377                          L$39:
-0377    31 C0                     xor         ax,ax 
-0379                          L$40:
-0379    C9                        leave       
-037A    C3                        ret         
-037B                          fd_result_:
-037B    53                        push        bx 
-037C    52                        push        dx 
-037D    31 DB                     xor         bx,bx 
-037F    EB 06                     jmp         L$42 
-0381                          L$41:
-0381    43                        inc         bx 
-0382    83 FB 07                  cmp         bx,0x0007 
-0385    7D 24                     jge         L$43 
-0387                          L$42:
-0387    A1 00 00                  mov         ax,word ptr _bda_ptr 
-038A    05 42 00                  add         ax,0x0042 
-038D    8B 16 02 00               mov         dx,word ptr _bda_ptr+0x2 
-0391    01 D8                     add         ax,bx 
-0393    E8 00 00                  call        fd_in_ 
-0396    85 C0                     test        ax,ax 
-0398    74 E7                     je          L$41 
-039A    C4 06 00 00               les         ax,dword ptr _bda_ptr 
-039E    01 C3                     add         bx,ax 
-03A0    B8 80 00                  mov         ax,0x0080 
-03A3    26 C6 47 42 00            mov         byte ptr es:0x42[bx],0x00 
-03A8    5A                        pop         dx 
-03A9    5B                        pop         bx 
-03AA    C3                        ret         
-03AB                          L$43:
-03AB    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-03AF    26 8A 67 42               mov         ah,byte ptr es:0x42[bx] 
-03B3    26 8A 47 43               mov         al,byte ptr es:0x43[bx] 
-03B7    F6 C4 C0                  test        ah,0xc0 
-03BA    75 05                     jne         L$45 
-03BC                          L$44:
-03BC    31 C0                     xor         ax,ax 
-03BE    5A                        pop         dx 
-03BF    5B                        pop         bx 
-03C0    C3                        ret         
-03C1                          L$45:
-03C1    3C 80                     cmp         al,0x80 
-03C3    75 07                     jne         L$46 
-03C5    26 80 7F 44 00            cmp         byte ptr es:0x44[bx],0x00 
-03CA    74 F0                     je          L$44 
-03CC                          L$46:
-03CC    A8 02                     test        al,0x02 
-03CE    74 06                     je          L$47 
-03D0    B8 03 00                  mov         ax,0x0003 
-03D3    5A                        pop         dx 
-03D4    5B                        pop         bx 
-03D5    C3                        ret         
-03D6                          L$47:
-03D6    A8 10                     test        al,0x10 
-03D8    74 06                     je          L$48 
-03DA    B8 08 00                  mov         ax,0x0008 
-03DD    5A                        pop         dx 
-03DE    5B                        pop         bx 
-03DF    C3                        ret         
-03E0                          L$48:
-03E0    A8 20                     test        al,0x20 
-03E2    74 06                     je          L$49 
-03E4    B8 10 00                  mov         ax,0x0010 
-03E7    5A                        pop         dx 
-03E8    5B                        pop         bx 
-03E9    C3                        ret         
-03EA                          L$49:
-03EA    A8 04                     test        al,0x04 
-03EC    74 06                     je          L$50 
-03EE    B8 04 00                  mov         ax,0x0004 
+02A6                          _fd_seek:
+02A6    C8 04 00 00               enter       0x0004,0x00 
+02AA    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
+02AD    B8 01 00                  mov         ax,0x0001 
+02B0    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+02B4    D3 E0                     shl         ax,cl 
+02B6    26 0F B6 57 3E            movzx       dx,byte ptr es:0x3e[bx] 
+02BB    85 C2                     test        dx,ax 
+02BD    0F 84 7B 00               je          L$38 
+02C1    31 D2                     xor         dx,dx 
+02C3    EB 06                     jmp         L$30 
+02C5                          L$29:
+02C5    42                        inc         dx 
+02C6    83 FA 02                  cmp         dx,0x0002 
+02C9    7D 40                     jge         L$34 
+02CB                          L$30:
+02CB    B8 07 00                  mov         ax,0x0007 
+02CE    E8 00 00                  call        fd_out_ 
+02D1    85 C0                     test        ax,ax 
+02D3    75 0A                     jne         L$31 
+02D5    8B 46 04                  mov         ax,word ptr 0x4[bp] 
+02D8    E8 00 00                  call        fd_out_ 
+02DB    85 C0                     test        ax,ax 
+02DD    74 0C                     je          L$33 
+02DF                          L$31:
+02DF    31 D2                     xor         dx,dx 
+02E1    31 C0                     xor         ax,ax 
+02E3    E8 00 00                  call        fd_note_seek_ 
+02E6                          L$32:
+02E6    B8 80 00                  mov         ax,0x0080 
+02E9    C9                        leave       
+02EA    C3                        ret         
+02EB                          L$33:
+02EB    8D 5E FE                  lea         bx,-0x2[bp] 
+02EE    8B 46 04                  mov         ax,word ptr 0x4[bp] 
+02F1    16                        push        ss 
+02F2    8C D1                     mov         cx,ss 
+02F4    53                        push        bx 
+02F5    8D 5E FC                  lea         bx,-0x4[bp] 
+02F8    E8 00 00                  call        fd_seek_done_ 
+02FB    85 C0                     test        ax,ax 
+02FD    75 E0                     jne         L$31 
+02FF    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
+0303    75 C0                     jne         L$29 
+0305    80 7E FE 00               cmp         byte ptr -0x2[bp],0x00 
+0309    75 BA                     jne         L$29 
+030B                          L$34:
+030B    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
+030F    75 06                     jne         L$35 
+0311    80 7E FE 00               cmp         byte ptr -0x2[bp],0x00 
+0315    74 10                     je          L$37 
+0317                          L$35:
+0317    0F B6 56 FE               movzx       dx,byte ptr -0x2[bp] 
+031B    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
+031F    E8 00 00                  call        fd_note_seek_ 
+0322                          L$36:
+0322    B8 40 00                  mov         ax,0x0040 
+0325    C9                        leave       
+0326    C3                        ret         
+0327                          L$37:
+0327    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
+032A    B0 01                     mov         al,0x01 
+032C    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+0330    D2 E0                     shl         al,cl 
+0332    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0336    F6 D0                     not         al 
+0338    26 20 47 3E               and         byte ptr es:0x3e[bx],al 
+033C                          L$38:
+033C    8B 46 08                  mov         ax,word ptr 0x8[bp] 
+033F    85 C0                     test        ax,ax 
+0341    74 69                     je          L$41 
+0343    B8 0F 00                  mov         ax,0x000f 
+0346    E8 00 00                  call        fd_out_ 
+0349    85 C0                     test        ax,ax 
+034B    75 99                     jne         L$32 
+034D    8B 46 06                  mov         ax,word ptr 0x6[bp] 
+0350    C1 E0 02                  shl         ax,0x02 
+0353    0B 46 04                  or          ax,word ptr 0x4[bp] 
+0356    E8 00 00                  call        fd_out_ 
+0359    85 C0                     test        ax,ax 
+035B    75 89                     jne         L$32 
+035D    8B 46 08                  mov         ax,word ptr 0x8[bp] 
+0360    E8 00 00                  call        fd_out_ 
+0363    85 C0                     test        ax,ax 
+0365    0F 85 7D FF               jne         L$32 
+0369    8D 56 FE                  lea         dx,-0x2[bp] 
+036C    8D 5E FC                  lea         bx,-0x4[bp] 
+036F    16                        push        ss 
+0370    8B 46 04                  mov         ax,word ptr 0x4[bp] 
+0373    52                        push        dx 
+0374    8C D1                     mov         cx,ss 
+0376    E8 00 00                  call        fd_seek_done_ 
+0379    85 C0                     test        ax,ax 
+037B    0F 85 60 FF               jne         L$31 
+037F    F6 46 FC C0               test        byte ptr -0x4[bp],0xc0 
+0383    75 08                     jne         L$39 
+0385    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
+0388    3A 46 08                  cmp         al,byte ptr 0x8[bp] 
+038B    74 1D                     je          L$40 
+038D                          L$39:
+038D    0F B6 56 FE               movzx       dx,byte ptr -0x2[bp] 
+0391    0F B6 46 FC               movzx       ax,byte ptr -0x4[bp] 
+0395    8A 4E 04                  mov         cl,byte ptr 0x4[bp] 
+0398    E8 00 00                  call        fd_note_seek_ 
+039B    B0 01                     mov         al,0x01 
+039D    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+03A1    D2 E0                     shl         al,cl 
+03A3    26 08 47 3E               or          byte ptr es:0x3e[bx],al 
+03A7    E9 78 FF                  jmp         L$36 
+03AA                          L$40:
+03AA    31 C0                     xor         ax,ax 
+03AC                          L$41:
+03AC    C9                        leave       
+03AD    C3                        ret         
+03AE                          fd_result_:
+03AE    53                        push        bx 
+03AF    52                        push        dx 
+03B0    31 DB                     xor         bx,bx 
+03B2    EB 06                     jmp         L$43 
+03B4                          L$42:
+03B4    43                        inc         bx 
+03B5    83 FB 07                  cmp         bx,0x0007 
+03B8    7D 24                     jge         L$44 
+03BA                          L$43:
+03BA    A1 00 00                  mov         ax,word ptr _bda_ptr 
+03BD    05 42 00                  add         ax,0x0042 
+03C0    8B 16 02 00               mov         dx,word ptr _bda_ptr+0x2 
+03C4    01 D8                     add         ax,bx 
+03C6    E8 00 00                  call        fd_in_ 
+03C9    85 C0                     test        ax,ax 
+03CB    74 E7                     je          L$42 
+03CD    C4 06 00 00               les         ax,dword ptr _bda_ptr 
+03D1    01 C3                     add         bx,ax 
+03D3    B8 80 00                  mov         ax,0x0080 
+03D6    26 C6 47 42 00            mov         byte ptr es:0x42[bx],0x00 
+03DB    5A                        pop         dx 
+03DC    5B                        pop         bx 
+03DD    C3                        ret         
+03DE                          L$44:
+03DE    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+03E2    26 8A 67 42               mov         ah,byte ptr es:0x42[bx] 
+03E6    26 8A 47 43               mov         al,byte ptr es:0x43[bx] 
+03EA    F6 C4 C0                  test        ah,0xc0 
+03ED    75 05                     jne         L$46 
+03EF                          L$45:
+03EF    31 C0                     xor         ax,ax 
 03F1    5A                        pop         dx 
 03F2    5B                        pop         bx 
 03F3    C3                        ret         
-03F4                          L$50:
-03F4    A8 01                     test        al,0x01 
-03F6    74 06                     je          L$51 
-03F8    B8 02 00                  mov         ax,0x0002 
-03FB    5A                        pop         dx 
-03FC    5B                        pop         bx 
-03FD    C3                        ret         
-03FE                          L$51:
-03FE    F6 C4 08                  test        ah,0x08 
-0401    74 06                     je          L$52 
-0403    B8 AA 00                  mov         ax,0x00aa 
+03F4                          L$46:
+03F4    3C 80                     cmp         al,0x80 
+03F6    75 07                     jne         L$47 
+03F8    26 80 7F 44 00            cmp         byte ptr es:0x44[bx],0x00 
+03FD    74 F0                     je          L$45 
+03FF                          L$47:
+03FF    A8 02                     test        al,0x02 
+0401    74 06                     je          L$48 
+0403    B8 03 00                  mov         ax,0x0003 
 0406    5A                        pop         dx 
 0407    5B                        pop         bx 
 0408    C3                        ret         
-0409                          L$52:
-0409    B8 40 00                  mov         ax,0x0040 
-040C    5A                        pop         dx 
-040D    5B                        pop         bx 
-040E    C3                        ret         
+0409                          L$48:
+0409    A8 10                     test        al,0x10 
+040B    74 06                     je          L$49 
+040D    B8 08 00                  mov         ax,0x0008 
+0410    5A                        pop         dx 
+0411    5B                        pop         bx 
+0412    C3                        ret         
+0413                          L$49:
+0413    A8 20                     test        al,0x20 
+0415    74 06                     je          L$50 
+0417    B8 10 00                  mov         ax,0x0010 
+041A    5A                        pop         dx 
+041B    5B                        pop         bx 
+041C    C3                        ret         
+041D                          L$50:
+041D    A8 04                     test        al,0x04 
+041F    74 06                     je          L$51 
+0421    B8 04 00                  mov         ax,0x0004 
+0424    5A                        pop         dx 
+0425    5B                        pop         bx 
+0426    C3                        ret         
+0427                          L$51:
+0427    A8 01                     test        al,0x01 
+0429    74 06                     je          L$52 
+042B    B8 02 00                  mov         ax,0x0002 
+042E    5A                        pop         dx 
+042F    5B                        pop         bx 
+0430    C3                        ret         
+0431                          L$52:
+0431    F6 C4 08                  test        ah,0x08 
+0434    74 06                     je          L$53 
+0436    B8 AA 00                  mov         ax,0x00aa 
+0439    5A                        pop         dx 
+043A    5B                        pop         bx 
+043B    C3                        ret         
+043C                          L$53:
+043C    B8 40 00                  mov         ax,0x0040 
+043F    5A                        pop         dx 
+0440    5B                        pop         bx 
+0441    C3                        ret         
 
-Routine Size: 412 bytes,    Routine Base: _TEXT + 0273
+Routine Size: 412 bytes,    Routine Base: _TEXT + 02A6
 
-040F                          _fd_rw:
-040F    C8 02 00 00               enter       0x0002,0x00 
-0413    8B 46 08                  mov         ax,word ptr 0x8[bp] 
-0416    85 C0                     test        ax,ax 
-0418    75 10                     jne         L$54 
-041A                          L$53:
-041A    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-041E    26 C6 47 41 80            mov         byte ptr es:0x41[bx],0x80 
-0423    26 8A 47 41               mov         al,byte ptr es:0x41[bx] 
-0427    E9 2D 01                  jmp         L$60 
-042A                          L$54:
-042A    E8 00 00                  call        fd_motor_on_ 
-042D    FF 76 0A                  push        word ptr 0xa[bp] 
-0430    FF 76 0C                  push        word ptr 0xc[bp] 
-0433    FF 76 06                  push        word ptr 0x6[bp] 
-0436    E8 00 00                  call        _fd_seek 
-0439    83 C4 06                  add         sp,0x0006 
-043C    89 46 FE                  mov         word ptr -0x2[bp],ax 
-043F    85 C0                     test        ax,ax 
-0441    74 0E                     je          L$55 
-0443    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0447    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
-044A    26 88 47 41               mov         byte ptr es:0x41[bx],al 
-044E    E9 06 01                  jmp         L$60 
-0451                          L$55:
-0451    E8 BC FC                  call        fd_specify_ 
-0454    85 C0                     test        ax,ax 
-0456    75 C2                     jne         L$53 
-0458    83 7E 04 00               cmp         word ptr 0x4[bp],0x0000 
-045C    0F 94 C0                  sete        al 
-045F    30 E4                     xor         ah,ah 
-0461    05 45 00                  add         ax,0x0045 
-0464    E8 00 00                  call        fd_out_ 
-0467    85 C0                     test        ax,ax 
-0469    75 AF                     jne         L$53 
-046B    8B 46 0C                  mov         ax,word ptr 0xc[bp] 
-046E    C1 E0 02                  shl         ax,0x02 
-0471    0B 46 06                  or          ax,word ptr 0x6[bp] 
-0474    E8 00 00                  call        fd_out_ 
+0442                          _fd_rw:
+0442    C8 02 00 00               enter       0x0002,0x00 
+0446    8B 46 08                  mov         ax,word ptr 0x8[bp] 
+0449    85 C0                     test        ax,ax 
+044B    75 10                     jne         L$55 
+044D                          L$54:
+044D    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0451    26 C6 47 41 80            mov         byte ptr es:0x41[bx],0x80 
+0456    26 8A 47 41               mov         al,byte ptr es:0x41[bx] 
+045A    E9 61 01                  jmp         L$63 
+045D                          L$55:
+045D    89 C2                     mov         dx,ax 
+045F    8B 46 06                  mov         ax,word ptr 0x6[bp] 
+0462    E8 00 00                  call        fd_motor_on_ 
+0465    FF 76 0A                  push        word ptr 0xa[bp] 
+0468    FF 76 0C                  push        word ptr 0xc[bp] 
+046B    FF 76 06                  push        word ptr 0x6[bp] 
+046E    E8 00 00                  call        _fd_seek 
+0471    83 C4 06                  add         sp,0x0006 
+0474    89 46 FE                  mov         word ptr -0x2[bp],ax 
 0477    85 C0                     test        ax,ax 
-0479    75 9F                     jne         L$53 
-047B    8B 46 0A                  mov         ax,word ptr 0xa[bp] 
-047E    E8 00 00                  call        fd_out_ 
-0481    85 C0                     test        ax,ax 
-0483    75 95                     jne         L$53 
-0485    8B 46 0C                  mov         ax,word ptr 0xc[bp] 
-0488    E8 00 00                  call        fd_out_ 
-048B    85 C0                     test        ax,ax 
-048D    75 8B                     jne         L$53 
-048F    8B 46 0E                  mov         ax,word ptr 0xe[bp] 
-0492    E8 00 00                  call        fd_out_ 
-0495    85 C0                     test        ax,ax 
-0497    75 81                     jne         L$53 
-0499    B8 02 00                  mov         ax,0x0002 
+0479    74 0E                     je          L$56 
+047B    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+047F    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
+0482    26 88 47 41               mov         byte ptr es:0x41[bx],al 
+0486    E9 35 01                  jmp         L$63 
+0489                          L$56:
+0489    E8 84 FC                  call        fd_specify_ 
+048C    85 C0                     test        ax,ax 
+048E    75 BD                     jne         L$54 
+0490    83 7E 04 00               cmp         word ptr 0x4[bp],0x0000 
+0494    0F 94 C0                  sete        al 
+0497    30 E4                     xor         ah,ah 
+0499    05 45 00                  add         ax,0x0045 
 049C    E8 00 00                  call        fd_out_ 
 049F    85 C0                     test        ax,ax 
-04A1    0F 85 75 FF               jne         L$53 
-04A5    8B 46 0E                  mov         ax,word ptr 0xe[bp] 
-04A8    E8 00 00                  call        fd_out_ 
-04AB    85 C0                     test        ax,ax 
-04AD    0F 85 69 FF               jne         L$53 
-04B1    B8 1B 00                  mov         ax,0x001b 
-04B4    E8 00 00                  call        fd_out_ 
-04B7    85 C0                     test        ax,ax 
-04B9    0F 85 5D FF               jne         L$53 
-04BD    B8 FF 00                  mov         ax,0x00ff 
+04A1    75 AA                     jne         L$54 
+04A3    8B 46 0C                  mov         ax,word ptr 0xc[bp] 
+04A6    C1 E0 02                  shl         ax,0x02 
+04A9    0B 46 06                  or          ax,word ptr 0x6[bp] 
+04AC    E8 00 00                  call        fd_out_ 
+04AF    85 C0                     test        ax,ax 
+04B1    75 9A                     jne         L$54 
+04B3    8B 46 0A                  mov         ax,word ptr 0xa[bp] 
+04B6    E8 00 00                  call        fd_out_ 
+04B9    85 C0                     test        ax,ax 
+04BB    75 90                     jne         L$54 
+04BD    8B 46 0C                  mov         ax,word ptr 0xc[bp] 
 04C0    E8 00 00                  call        fd_out_ 
 04C3    85 C0                     test        ax,ax 
-04C5    0F 85 51 FF               jne         L$53 
-04C9    83 7E 04 00               cmp         word ptr 0x4[bp],0x0000 
-04CD    74 0F                     je          L$56 
-04CF    68 00 02                  push        0x0200 
-04D2    66 FF 76 10               push        dword ptr 0x10[bp] 
-04D6    68 36 04                  push        0x0436 
-04D9    E8 00 00                  call        _fdc_pio_out 
-04DC    EB 0D                     jmp         L$57 
-04DE                          L$56:
-04DE    68 00 02                  push        0x0200 
-04E1    66 FF 76 10               push        dword ptr 0x10[bp] 
-04E5    68 36 04                  push        0x0436 
-04E8    E8 00 00                  call        _fdc_pio_in 
-04EB                          L$57:
-04EB    83 C4 08                  add         sp,0x0008 
-04EE    89 46 FE                  mov         word ptr -0x2[bp],ax 
-04F1    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-04F5    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
-04F9    0C 01                     or          al,0x01 
-04FB    0F B6 D0                  movzx       dx,al 
-04FE    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
-0502    B8 38 04                  mov         ax,0x0438 
-0505    E8 00 00                  call        outp_ 
-0508    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-050C    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
-0510    24 FE                     and         al,0xfe 
-0512    0F B6 D0                  movzx       dx,al 
-0515    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
-0519    B8 38 04                  mov         ax,0x0438 
-051C    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
-051F    E8 00 00                  call        outp_ 
-0522    B2 01                     mov         dl,0x01 
-0524    D2 E2                     shl         dl,cl 
-0526    83 7E FE 02               cmp         word ptr -0x2[bp],0x0002 
-052A    75 0E                     jne         L$58 
-052C    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0530    26 08 57 3E               or          byte ptr es:0x3e[bx],dl 
-0534    E8 00 00                  call        fd_result_ 
-0537    E9 E0 FE                  jmp         L$53 
-053A                          L$58:
-053A    E8 00 00                  call        fd_result_ 
-053D    89 46 FE                  mov         word ptr -0x2[bp],ax 
-0540    85 C0                     test        ax,ax 
-0542    74 08                     je          L$59 
-0544    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0548    26 08 57 3E               or          byte ptr es:0x3e[bx],dl 
-054C                          L$59:
-054C    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
-0550    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
-0553    26 88 47 41               mov         byte ptr es:0x41[bx],al 
-0557                          L$60:
-0557    30 E4                     xor         ah,ah 
-0559    C9                        leave       
-055A    C3                        ret         
+04C5    75 86                     jne         L$54 
+04C7    8B 46 0E                  mov         ax,word ptr 0xe[bp] 
+04CA    E8 00 00                  call        fd_out_ 
+04CD    85 C0                     test        ax,ax 
+04CF    0F 85 7A FF               jne         L$54 
+04D3    B8 02 00                  mov         ax,0x0002 
+04D6    E8 00 00                  call        fd_out_ 
+04D9    85 C0                     test        ax,ax 
+04DB    0F 85 6E FF               jne         L$54 
+04DF    8B 46 0E                  mov         ax,word ptr 0xe[bp] 
+04E2    E8 00 00                  call        fd_out_ 
+04E5    85 C0                     test        ax,ax 
+04E7    0F 85 62 FF               jne         L$54 
+04EB    B8 1B 00                  mov         ax,0x001b 
+04EE    E8 00 00                  call        fd_out_ 
+04F1    85 C0                     test        ax,ax 
+04F3    0F 85 56 FF               jne         L$54 
+04F7    B8 FF 00                  mov         ax,0x00ff 
+04FA    E8 00 00                  call        fd_out_ 
+04FD    85 C0                     test        ax,ax 
+04FF    0F 85 4A FF               jne         L$54 
+0503    83 7E 04 00               cmp         word ptr 0x4[bp],0x0000 
+0507    74 0F                     je          L$57 
+0509    68 00 02                  push        0x0200 
+050C    66 FF 76 10               push        dword ptr 0x10[bp] 
+0510    68 36 04                  push        0x0436 
+0513    E8 00 00                  call        _fdc_pio_out 
+0516    EB 0D                     jmp         L$58 
+0518                          L$57:
+0518    68 00 02                  push        0x0200 
+051B    66 FF 76 10               push        dword ptr 0x10[bp] 
+051F    68 36 04                  push        0x0436 
+0522    E8 00 00                  call        _fdc_pio_in 
+0525                          L$58:
+0525    83 C4 08                  add         sp,0x0008 
+0528    89 46 FE                  mov         word ptr -0x2[bp],ax 
+052B    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+052F    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
+0533    0C 01                     or          al,0x01 
+0535    0F B6 D0                  movzx       dx,al 
+0538    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
+053C    B8 38 04                  mov         ax,0x0438 
+053F    E8 00 00                  call        outp_ 
+0542    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0546    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
+054A    24 FE                     and         al,0xfe 
+054C    0F B6 D0                  movzx       dx,al 
+054F    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
+0553    B8 38 04                  mov         ax,0x0438 
+0556    E8 00 00                  call        outp_ 
+0559    83 7E FE 02               cmp         word ptr -0x2[bp],0x0002 
+055D    75 15                     jne         L$59 
+055F    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
+0562    B0 01                     mov         al,0x01 
+0564    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0568    D2 E0                     shl         al,cl 
+056A    26 08 47 3E               or          byte ptr es:0x3e[bx],al 
+056E    E8 00 00                  call        fd_result_ 
+0571    E9 D9 FE                  jmp         L$54 
+0574                          L$59:
+0574    E8 00 00                  call        fd_result_ 
+0577    89 46 FE                  mov         word ptr -0x2[bp],ax 
+057A    3D 02 00                  cmp         ax,0x0002 
+057D    74 10                     je          L$60 
+057F    3D 04 00                  cmp         ax,0x0004 
+0582    75 1A                     jne         L$61 
+0584    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0588    26 80 7F 44 00            cmp         byte ptr es:0x44[bx],0x00 
+058D    75 0F                     jne         L$61 
+058F                          L$60:
+058F    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
+0592    B0 10                     mov         al,0x10 
+0594    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0598    D2 E0                     shl         al,cl 
+059A    26 30 47 3E               xor         byte ptr es:0x3e[bx],al 
+059E                          L$61:
+059E    83 7E FE 00               cmp         word ptr -0x2[bp],0x0000 
+05A2    74 0F                     je          L$62 
+05A4    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
+05A7    B0 01                     mov         al,0x01 
+05A9    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+05AD    D2 E0                     shl         al,cl 
+05AF    26 08 47 3E               or          byte ptr es:0x3e[bx],al 
+05B3                          L$62:
+05B3    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+05B7    8A 46 FE                  mov         al,byte ptr -0x2[bp] 
+05BA    26 88 47 41               mov         byte ptr es:0x41[bx],al 
+05BE                          L$63:
+05BE    30 E4                     xor         ah,ah 
+05C0    C9                        leave       
+05C1    C3                        ret         
 
-Routine Size: 332 bytes,    Routine Base: _TEXT + 040F
+Routine Size: 384 bytes,    Routine Base: _TEXT + 0442
+
+05C2                          _fd_format:
+05C2    56                        push        si 
+05C3    C8 02 00 00               enter       0x0002,0x00 
+05C7    8B 76 0E                  mov         si,word ptr 0xe[bp] 
+05CA    83 7E 08 00               cmp         word ptr 0x8[bp],0x0000 
+05CE    75 10                     jne         L$66 
+05D0                          L$64:
+05D0    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+05D4    26 C6 47 41 80            mov         byte ptr es:0x41[bx],0x80 
+05D9                          L$65:
+05D9    26 8A 47 41               mov         al,byte ptr es:0x41[bx] 
+05DD    E9 4C 01                  jmp         L$76 
+05E0                          L$66:
+05E0    83 FE 01                  cmp         si,0x0001 
+05E3    7C 05                     jl          L$67 
+05E5    83 FE 24                  cmp         si,0x0024 
+05E8    7E 0B                     jle         L$68 
+05EA                          L$67:
+05EA    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+05EE    26 C6 47 41 01            mov         byte ptr es:0x41[bx],0x01 
+05F3    EB E4                     jmp         L$65 
+05F5                          L$68:
+05F5    83 FE 0F                  cmp         si,0x000f 
+05F8    7C 07                     jl          L$69 
+05FA    C7 46 FE 00 00            mov         word ptr -0x2[bp],0x0000 
+05FF    EB 05                     jmp         L$70 
+0601                          L$69:
+0601    C7 46 FE 04 00            mov         word ptr -0x2[bp],0x0004 
+0606                          L$70:
+0606    FF 76 08                  push        word ptr 0x8[bp] 
+0609    E8 00 00                  call        _fd_rate 
+060C    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
+060F    B4 10                     mov         ah,0x10 
+0611    D2 E4                     shl         ah,cl 
+0613    83 C4 02                  add         sp,0x0002 
+0616    3A 46 FE                  cmp         al,byte ptr -0x2[bp] 
+0619    75 12                     jne         L$71 
+061B    8B 1E 00 00               mov         bx,word ptr _bda_ptr 
+061F    88 E0                     mov         al,ah 
+0621    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
+0625    F6 D0                     not         al 
+0627    26 20 47 3E               and         byte ptr es:0x3e[bx],al 
+062B    EB 08                     jmp         L$72 
+062D                          L$71:
+062D    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0631    26 08 67 3E               or          byte ptr es:0x3e[bx],ah 
+0635                          L$72:
+0635    8B 56 08                  mov         dx,word ptr 0x8[bp] 
+0638    8B 46 06                  mov         ax,word ptr 0x6[bp] 
+063B    E8 00 00                  call        fd_motor_on_ 
+063E    FF 76 0A                  push        word ptr 0xa[bp] 
+0641    FF 76 0C                  push        word ptr 0xc[bp] 
+0644    FF 76 06                  push        word ptr 0x6[bp] 
+0647    E8 00 00                  call        _fd_seek 
+064A    83 C4 06                  add         sp,0x0006 
+064D    89 C2                     mov         dx,ax 
+064F    85 C0                     test        ax,ax 
+0651    74 0B                     je          L$73 
+0653    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0657    26 88 47 41               mov         byte ptr es:0x41[bx],al 
+065B    E9 CE 00                  jmp         L$76 
+065E                          L$73:
+065E    E8 AF FA                  call        fd_specify_ 
+0661    85 C0                     test        ax,ax 
+0663    0F 85 69 FF               jne         L$64 
+0667    B8 4D 00                  mov         ax,0x004d 
+066A    E8 00 00                  call        fd_out_ 
+066D    85 C0                     test        ax,ax 
+066F    0F 85 5D FF               jne         L$64 
+0673    8B 46 0C                  mov         ax,word ptr 0xc[bp] 
+0676    C1 E0 02                  shl         ax,0x02 
+0679    0B 46 06                  or          ax,word ptr 0x6[bp] 
+067C    E8 00 00                  call        fd_out_ 
+067F    85 C0                     test        ax,ax 
+0681    0F 85 4B FF               jne         L$64 
+0685    B8 02 00                  mov         ax,0x0002 
+0688    E8 00 00                  call        fd_out_ 
+068B    85 C0                     test        ax,ax 
+068D    0F 85 3F FF               jne         L$64 
+0691    89 F0                     mov         ax,si 
+0693    E8 00 00                  call        fd_out_ 
+0696    85 C0                     test        ax,ax 
+0698    0F 85 34 FF               jne         L$64 
+069C    8B 46 10                  mov         ax,word ptr 0x10[bp] 
+069F    E8 00 00                  call        fd_out_ 
+06A2    85 C0                     test        ax,ax 
+06A4    0F 85 28 FF               jne         L$64 
+06A8    8B 46 12                  mov         ax,word ptr 0x12[bp] 
+06AB    E8 00 00                  call        fd_out_ 
+06AE    85 C0                     test        ax,ax 
+06B0    0F 85 1C FF               jne         L$64 
+06B4    C1 E6 02                  shl         si,0x02 
+06B7    56                        push        si 
+06B8    66 FF 76 14               push        dword ptr 0x14[bp] 
+06BC    68 36 04                  push        0x0436 
+06BF    E8 00 00                  call        _fdc_pio_out 
+06C2    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+06C6    89 C6                     mov         si,ax 
+06C8    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
+06CC    0C 01                     or          al,0x01 
+06CE    83 C4 08                  add         sp,0x0008 
+06D1    0F B6 D0                  movzx       dx,al 
+06D4    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
+06D8    B8 38 04                  mov         ax,0x0438 
+06DB    E8 00 00                  call        outp_ 
+06DE    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+06E2    26 8A 47 3F               mov         al,byte ptr es:0x3f[bx] 
+06E6    24 FE                     and         al,0xfe 
+06E8    0F B6 D0                  movzx       dx,al 
+06EB    26 88 47 3F               mov         byte ptr es:0x3f[bx],al 
+06EF    B8 38 04                  mov         ax,0x0438 
+06F2    8A 4E 06                  mov         cl,byte ptr 0x6[bp] 
+06F5    E8 00 00                  call        outp_ 
+06F8    B0 01                     mov         al,0x01 
+06FA    D2 E0                     shl         al,cl 
+06FC    88 C1                     mov         cl,al 
+06FE    83 FE 02                  cmp         si,0x0002 
+0701    75 0E                     jne         L$74 
+0703    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0707    26 08 47 3E               or          byte ptr es:0x3e[bx],al 
+070B    E8 00 00                  call        fd_result_ 
+070E    E9 BF FE                  jmp         L$64 
+0711                          L$74:
+0711    E8 00 00                  call        fd_result_ 
+0714    89 C2                     mov         dx,ax 
+0716    85 C0                     test        ax,ax 
+0718    74 08                     je          L$75 
+071A    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+071E    26 08 4F 3E               or          byte ptr es:0x3e[bx],cl 
+0722                          L$75:
+0722    C4 1E 00 00               les         bx,dword ptr _bda_ptr 
+0726    88 D0                     mov         al,dl 
+0728    26 88 57 41               mov         byte ptr es:0x41[bx],dl 
+072C                          L$76:
+072C    30 E4                     xor         ah,ah 
+072E    C9                        leave       
+072F    5E                        pop         si 
+0730    C3                        ret         
+
+Routine Size: 367 bytes,    Routine Base: _TEXT + 05C2
 
 No disassembly errors
 

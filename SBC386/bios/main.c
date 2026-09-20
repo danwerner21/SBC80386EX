@@ -175,8 +175,10 @@ jleds(code);
 		   the driver will happily transfer at a cylinder it has
 		   never moved a head to -- which the controller reports as
 		   wrong-cylinder in ST2, long after the mistake was made. */
-		if( nfd )
+		if( nfd ) {
 			fd_reset();
+			fd_set_1E();
+		}
 	}
 
 

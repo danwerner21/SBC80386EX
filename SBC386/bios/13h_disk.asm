@@ -89,6 +89,29 @@ segment	_TEXT
 ;---	49:           ; Get Extended Disk Change Status
 ;	4E:           ; Set Hardware Configuration
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; A trace, matching the one in 40h_flop.asm and for the same reason: INT
+; 14h transmit is polled, so it still writes when a hang has taken the
+; interrupts with it.  Fixed disk calls are prefixed "h" to tell them
+; apart from the floppy's, so a read of drive 80h shows as "h2." and a
+; failing one as "h2!".
+;
+; HD_TRACE and FD_TRACE are separate defines on purpose -- either half can
+; be watched without the other drowning it -- but both are debugging aids
+; and neither belongs in a ROM anyone relies on.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%define HD_TRACE 0
+
+%if HD_TRACE
+hd_trace:				; AL = the character to send
+	pushm	ax,bx,cx,dx
+	mov	ah,1			; INT 14h write, polled
+	xor	dx,dx			; COM1
+	int	0x14
+	popm	ax,bx,cx,dx
+	ret
+%endif
+
 int_13h:
 	sti
 	test	dl,0x80		;Fixed disk or floppy disk call
@@ -98,6 +121,18 @@ int_13h:
 	mov	bp,sp		;establish stack addressing
 
 	cld			;just in case
+
+%if HD_TRACE
+	push	ax
+	mov	al,'h'
+	call	hd_trace
+	pop	ax
+	push	ax
+	mov	al,ah
+	add	al,'0'
+	call	hd_trace
+	pop	ax
+%endif
 
 	mov	di,chs_call_tab
 	cmp	ah,len_chs_call_tab
@@ -193,6 +228,16 @@ good_return_AH:
 ; already set; errors from the driver were recorded by ide_error, and
 ; the code it returned has been carried up into AH, so the two agree.
 record_status:
+%if HD_TRACE
+	push	ax
+	mov	al,'.'
+	test	byte [bp+offset_flags],01
+	jz	.tr
+	mov	al,'!'
+.tr:
+	call	hd_trace
+	pop	ax
+%endif
 	push	es
 	get_bda	ES
     es	mov	[hd_status],ah

@@ -2941,6 +2941,100 @@ void debugmon(void)
  *	    bit 4	wrong cylinder: the header says another track
  *	    bit 0	missing data address mark
  */
+/*
+ * FDFMT -- format one track through INT 13h function 05h.
+ *
+ * The rung below "FORMAT A:", and the reason to have it: a format that
+ * fails under DOS says nothing about whether the driver, the identifier
+ * table, or DOS's own use of the call is at fault.  This builds the
+ * table itself, formats exactly one track, and prints the seven result
+ * bytes -- so a failure here is the driver's and a failure only under
+ * DOS is not.
+ *
+ * The identifier table is four bytes a sector: cylinder, head, record
+ * and size.  Sectors are numbered from 1 with no interleave, which is
+ * what a PC floppy has used since the format existed.
+ *
+ * This DESTROYS the track.  There is no confirmation, because every
+ * other write command here has none either, but cylinder 0 carries the
+ * boot sector and the start of the FAT.
+ */
+		if( is_cmd(&cp,"FDFMT") )
+		{
+			T_REGS	regs;
+			dword	v;
+			word	cyl, head, nsec, cur_ds, i, got;
+			byte	far *t;
+			union {
+				byte	far *p;
+				struct { word off; word seg; } fp;
+			} m;
+
+			cyl = head = 0;
+			nsec = 18;
+			got = 0;
+			if( parse_val(&cp,&v) )	{ cyl  = (word)v;       got++; }
+			if( parse_val(&cp,&v) )	{ head = (word)(v & 1); got++; }
+			if( parse_val(&cp,&v) && v )	nsec = (word)v;
+
+			if( got != 2 || nsec < 1 || nsec > 36 ) {
+				printf("usage: FDFMT <cyl> <head> [<sectors>]\n"
+				       "       hex.  drive A only, and it"
+				       " ERASES that track.\n"
+				       "       sectors defaults to 12h (18),"
+				       " use 09 for 720Kb.\n");
+				continue;
+			}
+
+			m.fp.seg = 0x1000;
+			m.fp.off = 0;
+			t = m.p;
+
+			/* C, H, R, N for each sector.  N is 2, meaning 512. */
+			for( i = 0; i < nsec; i++ ) {
+				t[i*4+0] = (byte)cyl;
+				t[i*4+1] = (byte)head;
+				t[i*4+2] = (byte)(i + 1);
+				t[i*4+3] = 2;
+			}
+
+			ASM {
+				mov	ax,ds
+				mov	[cur_ds],ax
+			}
+
+			regs.ax = (word)(0x0500 | (nsec & 0xFF));
+			regs.cx = (word)(((cyl & 0x00FF) << 8)
+					| ((cyl >> 2) & 0x00C0));
+			regs.dx = (word)(head << 8);	/* DL = 0, drive A */
+			regs.bx = m.fp.off;
+			regs.es = m.fp.seg;
+			regs.ds = cur_ds;
+			regs.si = regs.di = 0;
+			regs.flags = 0;
+
+			printf("FDFMT: cyl %u head %u, %u sectors"
+			       "  AX=%04X CX=%04X DX=%04X\n",
+				cyl, head, nsec,
+				regs.ax, regs.cx, regs.dx);
+
+			int13_call(&regs);
+
+			printf("      returned AH=%02X  %s\n",
+				(word)(regs.ax >> 8),
+				(regs.flags & 1) ? "CY -- failed" : "NC");
+
+			printf("      765 result:");
+			for( i = 0; i < 7; i++ )
+				printf(" %02X", (word)bda.fd_ctrl_stat[i]);
+			printf("\n      fd_status %02X  seek_status %02X"
+			       "  latch %02X\n",
+				(word)bda.fd_status,
+				(word)bda.seek_status,
+				(word)bda.motor_status);
+			continue;
+		}
+
 		if( is_cmd(&cp,"FD13") )
 		{
 			T_REGS	regs;

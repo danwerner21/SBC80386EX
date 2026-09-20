@@ -253,7 +253,17 @@ int __cdecl fd_reset( void )
 		return( CONTROLLER_FAILED );
 	}
 
-	bda.seek_status = 0x0F;		/* every drive needs recalibrating */
+	/* Every drive needs recalibrating, but the discovered data rates in
+	   bits 4 and 5 survive.  Which rate the medium in the slot actually
+	   wants is a property of the medium, not of the controller, and a
+	   reset says nothing about it either way.
+
+	   Clearing them here is not a small loss.  Every retry path resets
+	   first -- DOS's own, the bootstrap's two attempts, INT 13h function
+	   00h -- so a rate learned from a failure was always wiped before
+	   the retry that was meant to use it, and a 720Kb disk in a 1.44Mb
+	   drive would be tried at 500 kbps for ever. */
+	bda.seek_status = (byte)((bda.seek_status & 0x30) | 0x0F);
 	bda.fd_status   = NO_ERROR;
 	return( NO_ERROR );
 }
@@ -281,9 +291,24 @@ byte __cdecl fd_rate( int fdtype )
 }
 
 
-static void fd_motor_on( int fdtype )
+/* Which rate a drive is actually using, as opposed to the one its
+   configured type implies.  A 1.44Mb drive reads 720Kb media perfectly
+   well -- at 250 kbps, not the 500 its type calls for -- and nothing can
+   be asked about what is in the slot.  So the configured rate is tried,
+   and a failure that looks like the wrong one flips this bit for next
+   time.  Bits 4 and 5 of seek_status are free; its documented use is the
+   low four, one per drive, for "needs recalibrating". */
+#define FD_ALTRATE(d)	((byte)(0x10 << (d)))
+
+static void fd_motor_on( int drive, int fdtype )
 {
-	byte	want = (byte)(L_NRESET | L_MOTOR | fd_rate(fdtype));
+	byte	rate = fd_rate(fdtype);
+	byte	want;
+
+	if( bda.seek_status & FD_ALTRATE(drive) )
+		rate ^= L_MINI;
+
+	want = (byte)(L_NRESET | L_MOTOR | rate);
 
 	if( (bda.motor_status & (L_MOTOR|L_MINI|L_NRESET)) != want ) {
 		fd_latch( want );
@@ -434,7 +459,7 @@ int __cdecl fd_rw( int write, int drive, int fdtype,
 	if( fdtype == FD_NONE )
 		return( bda.fd_status = TIME_OUT );
 
-	fd_motor_on(fdtype);
+	fd_motor_on(drive,fdtype);
 
 	rc = fd_seek(drive,head,cyl);
 	if( rc != NO_ERROR )
@@ -470,6 +495,16 @@ int __cdecl fd_rw( int write, int drive, int fdtype,
 
 	rc = fd_result();
 
+	/* A missing address mark, or no data with nothing else wrong, is what
+	   the wrong data rate looks like: the head is over real media and
+	   reading nothing it recognises.  Flip the rate for this drive so the
+	   retry -- DOS offers one, and the bootstrap makes two attempts of its
+	   own -- comes back at the other speed.  If that was not the problem
+	   the bit flips again next time and costs nothing but the attempt. */
+	if( rc == ADDRESS_MARK_NOT_FOUND
+	 || (rc == SECTOR_NOT_FOUND && bda.fd_ctrl_stat[2] == 0) )
+		bda.seek_status ^= FD_ALTRATE(drive);
+
 	/* Any failure puts the drive back in the "needs recalibrating" set,
 	   so the next attempt homes the head before trusting a cylinder
 	   number again.  Wrong-cylinder in ST2 is the case that matters:
@@ -477,6 +512,109 @@ int __cdecl fd_rw( int write, int drive, int fdtype,
 	   retries at the same place will help until it is re-found.  DOS
 	   offers Retry on exactly these errors, and this is what makes
 	   taking it worth anything. */
+	if( rc != NO_ERROR )
+		bda.seek_status |= (1 << drive);
+
+	return( bda.fd_status = (byte)rc );
+}
+
+
+/*----------------------------------------------------------------------
+ * Format one track.
+ *
+ * The 765 writes a whole track in a single command.  The host does not
+ * supply data -- it supplies four bytes an identifier, C H R N, one set
+ * per sector, and the controller lays down the address marks, the gaps
+ * and a data field of the filler byte in between.  Which is why the
+ * execution phase here is nsec*4 bytes and not nsec*512: what is being
+ * written is the track's structure, and the sector contents come from a
+ * single byte repeated by the controller.
+ *
+ * INT 13h function 05h hands that identifier table down from the caller,
+ * so the interleave, the numbering, and any deliberately odd sector are
+ * the caller's to decide and none of this driver's business.
+ *---------------------------------------------------------------------*/
+int __cdecl fd_format( int drive, int fdtype, int cyl, int head,
+		int nsec, int gpl, int fill, byte far *chrn )
+{
+	int	rc;
+
+	if( fdtype == FD_NONE )
+		return( bda.fd_status = TIME_OUT );
+
+	/* nsec*4 is the byte count handed to the transfer, and the caller
+	   set nsec.  A silly one would either run the execution phase off
+	   the end of the caller's table or never satisfy the controller. */
+	if( nsec < 1 || nsec > 36 )
+		return( bda.fd_status = INVALID_COMMAND );
+
+	/* The data rate follows the format being written, not whatever was
+	   last discovered in the slot.  Formatting defines the medium
+	   instead of reading one that already exists, so the rate cannot be
+	   inherited from a previous read's guess -- a 720Kb disk read in a
+	   1.44Mb drive leaves the alternate-rate bit set, and formatting at
+	   that rate afterwards would quietly write the wrong format.
+	   Sectors per track names it: 15 and 18 are the 500 kbps formats,
+	   9 is 250. */
+	if( fd_rate(fdtype) == (byte)((nsec >= 15) ? 0 : L_MINI) )
+		bda.seek_status &= ~FD_ALTRATE(drive);
+	else
+		bda.seek_status |= FD_ALTRATE(drive);
+
+	fd_motor_on(drive,fdtype);
+
+	rc = fd_seek(drive,head,cyl);
+	if( rc != NO_ERROR )
+		return( bda.fd_status = (byte)rc );
+
+	/* Every time, not once at reset.  See the note on fd_specify(). */
+	if( fd_specify() )
+		return( bda.fd_status = TIME_OUT );
+
+	if( fd_out(0x4D)			/* MFM format a track	*/
+	 || fd_out((word)((head << 2) | drive))
+	 || fd_out(0x02)			/* N: 512 bytes		*/
+	 || fd_out((word)nsec)			/* SC: sectors a track	*/
+	 || fd_out((word)gpl)			/* GPL: the format gap	*/
+	 || fd_out((word)fill) )		/* D: the filler byte	*/
+		return( bda.fd_status = TIME_OUT );
+
+	/* Two things about this transfer are unlike a sector write, and
+	   both are relied on rather than arranged.
+
+	   The controller asks for four bytes, writes a whole sector's worth
+	   of track, then asks for the next four.  So the gap between groups
+	   is a sector time -- about 10ms at 500 kbps, 22 at 250 -- where a
+	   write never waits longer than a byte time.  The inter-byte
+	   timeout in fdc_pio_out is around 65000 polls, near 100ms here,
+	   which covers it; the comment there justifies the figure against
+	   16 microseconds, which is the wrong quantity for this caller even
+	   though the number happens to serve.
+
+	   And the burst holds interrupts off for a whole revolution, near
+	   200ms, instead of the 8ms a sector costs.  The tick is lost for
+	   the duration, so a full format drifts the clock by a few seconds.
+	   Formatting is rare and the alternative is a rewrite of the
+	   transfer loop that the read path now depends on, so it stands --
+	   but it is a cost, not an absence of one. */
+	rc = fdc_pio_out(FDC_MSR,chrn,(word)(nsec * 4));
+
+	/* TC ends the command.  Pulsed, not left asserted. */
+	fd_latch_bits(0,L_TC);
+	fd_latch_bits(L_TC,0);
+
+	if( rc == 2 ) {
+		bda.seek_status |= (1 << drive);
+		(void)fd_result();
+		return( bda.fd_status = TIME_OUT );
+	}
+
+	rc = fd_result();
+
+	/* No rate fallback here, deliberately.  A read that finds nothing it
+	   recognises has a medium to discover; a format that fails has only
+	   the rate it was told to use, and flipping it would write the next
+	   attempt in a format nobody asked for. */
 	if( rc != NO_ERROR )
 		bda.seek_status |= (1 << drive);
 

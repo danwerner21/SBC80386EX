@@ -44,9 +44,18 @@ int  __cdecl fd_seek( int drive, int head, int cyl );
 int  __cdecl fd_rw( int write, int drive, int fdtype,
 		int cyl, int head, int sec, byte far *buf );
 
+/* chrn is four bytes a sector -- cylinder, head, record, size -- and nsec
+   of them.  gpl and fill come from the INT 1Eh table, which is what a
+   FORMAT patches when it wants a layout other than the standard one. */
+int  __cdecl fd_format( int drive, int fdtype, int cyl, int head,
+		int nsec, int gpl, int fill, byte far *chrn );
+
 /* in fdcpio.asm */
 extern int  __cdecl fdc_pio_in ( word base, byte far *buf, word count );
 extern int  __cdecl fdc_pio_out( word base, byte far *buf, word count );
 extern void FDC_stop_motor( void );
+
+/* in 40h_flop.asm -- point INT 1Eh at drive A's parameter table */
+extern void fd_set_1E( void );
 
 #endif	/* __DISKFDC_H */

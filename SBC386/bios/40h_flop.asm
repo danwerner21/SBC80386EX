@@ -61,9 +61,11 @@
 	global	disk_base_720
 	global	disk_base_1440
 	global	fd_param_table
+	global	fd_set_1E_
 
 	extern	_fd_reset
 	extern	_fd_rw
+	extern	_fd_format
 
 segment	_TEXT
 
@@ -83,6 +85,15 @@ fd_geom:
 	db	80, 2,  9		; FD_720
 	db	80, 2, 18		; FD_1440
 FD_TYPES	equ	($-fd_geom)/3
+
+; The same numbering as the enum in "nvram.h", which is the PC/AT CMOS
+; coding.  Named here because the tables below are lists of types
+; rather than a row per type, and a bare 4 in such a list says nothing.
+FD_NONE		equ	0
+FD_360		equ	1
+FD_1200		equ	2
+FD_720		equ	3
+FD_1440		equ	4
 
 ;
 ; The INT 1Eh disk base tables, one per type.  They differ in the places
@@ -107,7 +118,7 @@ disk_base_1440:
 	db	18		; sectors per track
 	db	0x1B		; gap length between sectors
 	db	0xFF		; data length
-	db	0x54		; gap length when formatting
+	db	0x6C		; gap length when formatting
 	db	0xF6		; fill byte for formatting
 	db	0x0F		; head settle time, milliseconds
 	db	0x08		; motor start time, eighths of a second
@@ -180,11 +191,130 @@ fd_type:
 ; boot failure that turned out to be a corrupt CF image -- the card would not
 ; boot on another PC either.  The switch is gone; it was chasing a fault that
 ; was never in this file.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; A trace, for watching a boot that hangs with no console left.
+;
+; INT 14h transmit is polled rather than interrupt driven, so this still
+; writes when a hang has taken the interrupts with it -- which is exactly
+; the case it is for.  One character in on each call, naming the function,
+; and one out saying how it went:
+;
+;	0 1 2 3 4 8 E	the function: 00, 01, 02, 03, 04, 08, 15h
+;	.		returned with no error
+;	!		returned an error
+;	?		an unsupported function
+;
+; So a working read is "2." and a drive retrying one for ever is
+; "2!2!2!2!..." for as long as you care to watch it.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%define FD_TRACE 0
+
+%if FD_TRACE
+fd_trace:				; AL = the character to send
+	pushm	ax,bx,cx,dx
+	mov	ah,1			; INT 14h write, polled
+	xor	dx,dx			; COM1
+	int	0x14
+	popm	ax,bx,cx,dx
+	ret
+
+
+;
+; The request, as "[cc hh ss nn ssss:bbbb]" -- cylinder, head, sector (with
+; the two high cylinder bits still in its top bits, as INT 13h passes them),
+; count, and the caller's buffer.
+;
+; Entered at the top of int_40h with CX and DX still as the caller set them,
+; and BP framing the pushed registers.  Every helper below preserves BX, CX
+; and DX so the live request survives being printed a piece at a time.
+;
+fd_trace_rw:
+	pushm	ax,bx,cx,dx
+	mov	al,'['
+	call	fd_trace
+	mov	al,ch			; cylinder, low eight bits
+	call	fd_trace_hex
+	mov	al,' '
+	call	fd_trace
+	mov	al,dh			; head
+	call	fd_trace_hex
+	mov	al,' '
+	call	fd_trace
+	mov	al,cl			; sector, plus the high cylinder bits
+	call	fd_trace_hex
+	mov	al,' '
+	call	fd_trace
+	mov	al,[bp+offset_ax]	; sector count, as it came in
+	call	fd_trace_hex
+	mov	al,' '
+	call	fd_trace
+	mov	ax,[bp+offset_es]
+	call	fd_trace_hex16
+	mov	al,':'
+	call	fd_trace
+	mov	ax,[bp+offset_bx]
+	call	fd_trace_hex16
+	mov	al,']'
+	call	fd_trace
+	popm	ax,bx,cx,dx
+	ret
+
+fd_trace_hex16:				; AX, as four hex digits
+	pushm	ax,bx,cx,dx
+	xchg	al,ah
+	call	fd_trace_hex
+	xchg	al,ah
+	call	fd_trace_hex
+	popm	ax,bx,cx,dx
+	ret
+
+fd_trace_hex:				; AL, as two hex digits
+	pushm	ax,bx,cx,dx
+	mov	ah,al
+	shr	al,4
+	call	fd_trace_nyb
+	mov	al,ah
+	call	fd_trace_nyb
+	popm	ax,bx,cx,dx
+	ret
+
+fd_trace_nyb:
+	and	al,0x0F
+	add	al,'0'
+	cmp	al,'9'
+	jbe	.1
+	add	al,7			; 'A' through 'F'
+.1:
+	jmp	fd_trace		; its RET returns for us
+%endif
+
+
 int_40h:
 	sti
 	pushm	all,ds,es
 	mov	bp,sp
 	cld
+
+%if FD_TRACE
+	push	ax
+	mov	al,ah
+	add	al,'0'			; 0-4 and 8 land on digits, 15h on E
+	call	fd_trace
+	pop	ax
+
+; For the transfer calls, say what was asked for.  Which sectors DOS wants
+; is the whole question once the driver is known to return them correctly:
+; a request that is itself wrong -- a silly count, a cylinder off the end,
+; a buffer in a segment that does not exist -- would be carried out
+; faithfully and still wreck the caller.  The one-character trace cannot
+; show that, and it is the only thing left that it cannot show.
+	cmp	ah,0x02
+	jb	.notrw
+	cmp	ah,0x05			; 05h formats, and wants the same
+	ja	.notrw			;  detail as a transfer
+	call	fd_trace_rw
+.notrw:
+%endif
 
 	cmp	ah,0x00
 	je	fn00_reset
@@ -196,10 +326,14 @@ int_40h:
 	je	fn03_write
 	cmp	ah,0x04
 	je	fn04_verify
+	cmp	ah,0x05
+	je	fn05_format
 	cmp	ah,0x08
 	je	fn08_params
 	cmp	ah,0x15
 	je	fn15_type
+	cmp	ah,0x18
+	je	fn18_media
 
 	mov	ah,INVALID_COMMAND
 ; fall through
@@ -210,6 +344,10 @@ int_40h:
 ;
 fd_error:
 	mov	[bp+offset_ax+1],ah
+%if FD_TRACE
+	mov	al,'!'
+	call	fd_trace
+%endif
 	push	ds
 	get_bda	DS
 	mov	[fd_status],ah
@@ -220,6 +358,10 @@ fd_error:
 
 fd_good:
 	mov	byte [bp+offset_ax+1],0
+%if FD_TRACE
+	mov	al,'.'
+	call	fd_trace
+%endif
 	push	ds
 	get_bda	DS
 	mov	byte [fd_status],0
@@ -282,6 +424,18 @@ fn04_verify:
 fn03_write:				;  a verify rather than a read
 	mov	di,1
 	jmp	short rw_common
+
+;
+; Put back the caller's cursor registers.  Used at every exit below that
+; can be reached after they have been pushed.
+;
+%macro	rw_pop 0
+	pop	word [bp+offset_dx]
+	pop	word [bp+offset_cx]
+	pop	word [bp+offset_bx]
+	pop	word [bp+offset_es]
+%endmacro
+
 fn02_read:
 	xor	di,di
 rw_common:
@@ -289,11 +443,54 @@ rw_common:
 	jc	.nodrive
 	mov	bh,al			; BH = the FD_ type
 
+;
+; The caller's CX, DX and ES:BX are this loop's cursor: fd_next steps the
+; cylinder, head and sector in the frame, and the buffer walks on by 512 a
+; sector.  They have to go back before returning.  INT 13h hands back the
+; registers it was called with -- only AH, AL and the Carry mean anything
+; on return -- and DOS depends on that: it adds the transfer length to its
+; own ES:BX afterwards, so a pointer left walked on gets counted twice.
+;
+; The doubling is not a slow leak.  It gains a sector for every sector
+; transferred, and the moment the offset carries past FFFFh the next read
+; lands back at the bottom of the same segment, on top of whatever is
+; already living there -- which, when the file being loaded is COMMAND.COM,
+; is DOS itself.
+;
+	push	word [bp+offset_es]
+	push	word [bp+offset_bx]
+	push	word [bp+offset_cx]
+	push	word [bp+offset_dx]
+
+;
+; A verify has no buffer of its own, and the pointer handed with one is
+; not required to point anywhere.  DOS passes ES:BX = 0000:0000, because
+; on a PC function 04h confirms the sectors read back and never moves a
+; byte into memory -- there is nothing for a buffer to mean.
+;
+; Reading a sector there writes the disk straight over the interrupt
+; vector table.  FORMAT's verify pass asks for eighteen of them at once,
+; so the whole table goes, every vector with it, and the machine is dead
+; where it stands -- no console, no tick, nothing left to report with.
+;
+; Read into the BIOS scratch buffer instead and throw the data away, the
+; way the fixed disk path has always done it.  Overwriting the frame here
+; is safe because the caller's registers are put back on the way out.
+;
+	cmp	byte [bp+offset_ax+1],4
+	jne	.notverify
+	extern	_SecBuffer
+    cs	mov	ax,[_SecBuffer]
+	mov	[bp+offset_bx],ax
+    cs	mov	ax,[_SecBuffer+2]
+	mov	[bp+offset_es],ax
+.notverify:
+
+	xor	dx,dx			; DX counts up: how many worked
 	movzx	cx,byte [bp+offset_ax]	; sectors wanted
 	jcxz	.done			; nothing asked for
 
 	mov	si,cx			; SI counts down
-	xor	dx,dx			; DX counts up: how many worked
 
 .loop:
 	pushm	si,di,dx,bx
@@ -368,15 +565,18 @@ rw_common:
 	jmp	.loop
 
 .done:
+	rw_pop
 	mov	[bp+offset_ax],dl	; sectors transferred
 	jmp	fd_good
 
 .failed:
+	mov	ah,al			; the status, before AX is needed again
+	rw_pop
 	mov	[bp+offset_ax],dl	; how many made it
-	mov	ah,al
 	jmp	fd_error
 
 .badseek:
+	rw_pop
 	mov	[bp+offset_ax],dl
 	mov	ah,SECTOR_NOT_FOUND
 	jmp	fd_error
@@ -431,6 +631,177 @@ fd_next:
 .bad:
 	stc
 	jmp	short .9
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 05h -- format a track
+;
+;  Enter with:
+;	AL	sectors per track
+;	CH	cylinder, CL bits 7:6 its high bits
+;	DH	head
+;	DL	drive
+;	ES:BX	the address field table: four bytes a sector, C H R N
+;
+; The gap and the filler byte come from the table INT 1Eh points at, not
+; from anything here.  That is where a FORMAT puts them when it wants a
+; layout other than the standard one, and taking them from the built-in
+; table instead would quietly ignore it.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+fn05_format:
+	call	fd_type
+	jc	.nodrive
+	mov	bh,al			; BH = the FD_ type
+
+	push	word [bp+offset_es]	; the care rw_common takes, for the
+	push	word [bp+offset_bx]	;  same reason: the caller's cursor
+	push	word [bp+offset_cx]	;  registers have to go back
+	push	word [bp+offset_dx]
+
+	push	ds			; restored after the call below
+
+	push	word [bp+offset_es]	; chrn: segment first, so the offset
+	push	word [bp+offset_bx]	;  lands at the lower address
+
+; The format gap and the filler, out of the INT 1Eh table.
+	push	ds
+	xor	ax,ax
+	mov	ds,ax
+	cnop
+	lds	si,[0x1E*4]		; DS:SI -> the disk base table
+	mov	di,[si+7]		; low half the gap, high half the filler
+	pop	ds
+	cnop
+
+	mov	ax,di
+	shr	ax,8
+	push	ax			; fill
+	mov	ax,di
+	xor	ah,ah
+	push	ax			; gpl
+
+	movzx	ax,byte [bp+offset_ax]	; AL: sectors per track
+	push	ax
+
+	movzx	ax,byte [bp+offset_dx+1]	; DH: head
+	push	ax
+
+	mov	cl,[bp+offset_cx]	; the cylinder is split the same way
+	and	cl,0xC0			;  a read splits it
+	movzx	cx,cl
+	shl	cx,2
+	movzx	ax,byte [bp+offset_cx+1]
+	or	ax,cx
+	push	ax
+
+	movzx	ax,bh			; the configured drive type
+	push	ax
+
+	movzx	ax,byte [bp+offset_dx]	; DL: drive, 0 or 1
+	and	ax,1
+	push	ax
+
+	mov	ax,DGROUP
+	mov	ds,ax
+	call	_fd_format
+	add	sp,18
+
+	pop	ds
+
+	or	ax,ax
+	jnz	.bad
+	rw_pop
+	jmp	fd_good
+.bad:
+	mov	ah,al			; the status, before AX is wanted again
+	rw_pop
+	jmp	fd_error
+
+.nodrive:
+	mov	ah,TIME_OUT		; nothing configured there
+	jmp	fd_error
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 18h -- set media type for format
+;
+;  Enter with:
+;	CH	last cylinder, CL bits 7:6 its high bits, bits 5:0 sectors
+;	DL	drive
+;
+;  Exit with:
+;	ES:DI	the parameter table describing that format
+;	AH	0, or 0Ch if this drive cannot be asked for it
+;
+; Nothing is programmed here and nothing needs to be.  DOS asks this
+; before formatting to find out whether a layout is possible at all and
+; to be given the table for it; the rate and the geometry are settled
+; when 05h runs.  Answering it is what lets a FORMAT proceed -- a drive
+; that returns "invalid command" here is one DOS will not format.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+fn18_media:
+	call	fd_type
+	jc	.nomedia
+	movzx	bx,al			; the configured drive type
+	add	bx,bx
+    cs	mov	si,[bx+fd_media_tab]
+
+; The geometry being asked for.
+	mov	al,[bp+offset_cx]
+	mov	ah,al
+	and	al,0x3F			; sectors per track
+	and	ah,0xC0
+	movzx	cx,ah
+	shl	cx,2
+	movzx	dx,byte [bp+offset_cx+1]
+	or	dx,cx
+	inc	dx			; cylinders, counted from the last
+
+.try:
+    cs	movzx	bx,byte [si]
+	or	bx,bx
+	jz	.nomedia		; the list ran out
+	inc	si
+
+	mov	di,bx			; fd_geom runs three bytes an entry
+	add	di,di
+	add	di,bx
+    cs	cmp	byte [di+fd_geom],dl	; cylinders
+	jne	.try
+    cs	cmp	byte [di+fd_geom+2],al	; sectors per track
+	jne	.try
+
+	add	bx,bx
+    cs	mov	di,[bx+fd_param_table]
+	mov	[bp+offset_di],di
+	mov	ax,cs
+	mov	[bp+offset_es],ax
+	jmp	fd_good
+
+.nomedia:
+	mov	ah,MEDIA_TYPE_NOT_FOUND
+	jmp	fd_error
+
+
+;
+; Which formats a drive of each type may be asked to write, zero ended.
+; A high density drive can also write the double density format of its
+; own size; nothing can write a format its heads cannot reach, and a
+; 720Kb drive asked for 1.44Mb has to be told no rather than left to
+; produce a disk that reads back as noise.
+;
+fd_media_tab:
+	dw	fd_media_none
+	dw	fd_media_360
+	dw	fd_media_1200
+	dw	fd_media_720
+	dw	fd_media_1440
+
+fd_media_none:	db	0
+fd_media_360:	db	FD_360, 0
+fd_media_1200:	db	FD_1200, FD_360, 0
+fd_media_720:	db	FD_720, 0
+fd_media_1440:	db	FD_1440, FD_720, 0
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -499,6 +870,38 @@ fn15_type:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; fd_count -- how many floppy drives are configured, in AL
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; fd_set_1E -- point INT 1Eh at the table for drive A's configured type
+;
+;	void fd_set_1E(void);
+;
+; POST calls this once the SETUP configuration is known.  The vector is
+; built from page0vectors pointing at the 1.44Mb table, which is the wrong
+; answer for a 720Kb or 360Kb drive: it claims 18 sectors a track where
+; there are 9, and DOS copies the table and works from the copy.
+;
+; Drive A decides it, because there is only one vector and INT 13h function
+; 08h hands out the right table per drive anyway.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+fd_set_1E_:
+	pushm	ax,bx,ds,es
+
+	get_bda	DS
+	movzx	bx,byte [floppy_tab]	; drive A's type
+	cmp	bx,FD_TYPES
+	jnb	.9			; nothing sensible configured
+	add	bx,bx
+    cs	mov	ax,[bx+fd_param_table]
+
+	get_loc0 ES
+    es	mov	[0x1E*4],ax		; offset
+	mov	ax,cs
+    es	mov	[0x1E*4+2],ax		; segment
+.9:
+	popm	ax,bx,ds,es
+	ret
+
+
 fd_count:
 	push	ds
 	get_bda	DS

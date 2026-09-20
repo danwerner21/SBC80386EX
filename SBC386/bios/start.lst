@@ -2403,5 +2403,5 @@
   1410                              <1> bootstrap:
   1411 00000010 EA000000F0          <1>         jmp     SEGBASE:0000	; 5 byte real-mode far call
   1412                              <1> %include "date.inc"
-  1413 00000015 30392F31392F3236    <2> 	db	"09/19/26"
+  1413 00000015 30392F32302F3236    <2> 	db	"09/20/26"
   1413 0000001D FFFC00              <1> 	db	0xFF, 0xFC, 0x00	; PC/AT

@@ -69,3 +69,5 @@ Thumbs.db
 *.mov
 *.wmv
 Coherent/emu/xfer/
+Coherent/emu/*.log
+!Coherent/board/

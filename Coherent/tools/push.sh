@@ -18,4 +18,5 @@ rm -f "$XFER/push.tar"
 tar --format=v7 --owner=0 --group=0 -cf "$XFER/push.tar" "$@"
 ( cd "$TOOLS/../emu" &&
   py ../tools/qmp.py hmp "change floppy0 fat:floppy:12:xfer vvfat read-only" )
-py "$TOOLS/sercon.py" run "mkdir -p $DEST && cd $DEST && dos x /dev/fha0 push.tar && tar xvf push.tar && rm push.tar; cd" 300
+# Coherent's mkdir -p fails on a directory that already exists.
+py "$TOOLS/sercon.py" run "{ [ -d $DEST ] || mkdir -p $DEST; } && cd $DEST && dos x /dev/fha0 push.tar && tar xvmf push.tar && rm push.tar; cd" 300

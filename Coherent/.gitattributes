@@ -1,4 +1,5 @@
 # Coherent files go back into Coherent, which wants LF and exact bytes.
 # core.autocrlf is on for this repository, so say so explicitly.
 sys.r12/** -text
+board/** -text
 *.sh text eol=lf

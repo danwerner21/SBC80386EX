@@ -4251,6 +4251,14 @@ lock_t	      *	lkp;
 # define	test_pl		plhi
 #endif
 
+/*
+ * SBC-386EX: say which check failed -- "L" and this file's line number
+ * in hex on the early console -- before failing as before.
+ */
+void	early_putc (), early_hex ();
+#define	LT_FAIL()	do { early_putc ('L'); early_hex ((unsigned long) __LINE__); \
+				return -1; } while (0)
+
 #if	__USE_PROTO__
 int (LOCK_TESTS) (int negative)
 #else
@@ -4286,7 +4294,7 @@ int		negative;
 
 	if ((prev_pl = TRYLOCK (basic_lock, test_pl)) == invpl ||
 	    TRYLOCK (basic_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 
 	UNLOCK (basic_lock, prev_pl);
@@ -4294,7 +4302,7 @@ int		negative;
 	prev_pl = LOCK (basic_lock, test_pl);
 
 	if (TRYLOCK (basic_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 	UNLOCK (basic_lock, prev_pl);
 
@@ -4305,12 +4313,12 @@ int		negative;
 	if ((prev_pl = RW_TRYRDLOCK (rw_lock, test_pl)) == invpl ||
 	    RW_TRYRDLOCK (rw_lock, test_pl) == invpl ||
 	    RW_TRYWRLOCK (rw_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 	(void) RW_RDLOCK (rw_lock, test_pl);
 
 	if (RW_TRYWRLOCK (rw_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 	RW_UNLOCK (rw_lock, prev_pl);
 	RW_UNLOCK (rw_lock, prev_pl);
@@ -4320,7 +4328,7 @@ int		negative;
 	if ((prev_pl = RW_TRYWRLOCK (rw_lock, test_pl)) == invpl ||
 	    RW_TRYWRLOCK (rw_lock, test_pl) != invpl ||
 	    RW_TRYRDLOCK (rw_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 	RW_UNLOCK (rw_lock, prev_pl);
 
@@ -4329,7 +4337,7 @@ int		negative;
 
 	if (RW_TRYWRLOCK (rw_lock, test_pl) != invpl ||
 	    RW_TRYRDLOCK (rw_lock, test_pl) != invpl)
-		return -1;
+		LT_FAIL ();
 
 	RW_UNLOCK (rw_lock, prev_pl);
 
@@ -4344,7 +4352,7 @@ int		negative;
 	    SLEEP_LOCKOWNED (sleep_lock) == FALSE ||
 	    SLEEP_LOCKAVAIL (sleep_lock) == TRUE ||
 	    SLEEP_TRYLOCK (sleep_lock) == TRUE)
-		return -1;
+		LT_FAIL ();
 
 	SLEEP_UNLOCK (sleep_lock);
 
@@ -4354,7 +4362,7 @@ int		negative;
 	    SLEEP_LOCKOWNED (sleep_lock) == FALSE ||
 	    SLEEP_LOCKAVAIL (sleep_lock) == TRUE ||
 	    SLEEP_TRYLOCK (sleep_lock) == TRUE)
-		return -1;
+		LT_FAIL ();
 
 	SLEEP_UNLOCK (sleep_lock);
 
@@ -4363,7 +4371,7 @@ int		negative;
 	if (SLEEP_LOCKOWNED (sleep_lock) == FALSE ||
 	    SLEEP_LOCKAVAIL (sleep_lock) == TRUE ||
 	    SLEEP_TRYLOCK (sleep_lock) == TRUE)
-		return -1;
+		LT_FAIL ();
 
 	SLEEP_UNLOCK (sleep_lock);
 

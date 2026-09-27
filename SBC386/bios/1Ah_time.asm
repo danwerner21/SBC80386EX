@@ -252,6 +252,9 @@ int_irq0:
 	call	FDC_stop_motor
 .3:
 ; handle the printer & serial line timeouts
+	extern	vt_tick			; 16h_kbd.asm -- the held Escape
+	call	vt_tick
+
 	mov	bx,printer_timeout	; 4 printer, 4 serial timeouts
 .4:	cmp	byte [bx],ch
 	je	.5

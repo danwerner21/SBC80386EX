@@ -828,36 +828,41 @@
    165 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
    166                              <1> ; */
    167                              <1> ; Miscellaneous */
-   168 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
-   169 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
-   170                              <1> ; */
-   171                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
-   172 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
-   173 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
-   174 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
-   175 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
-   176                              <1> ; this size is stored in CMOS on the PC/AT */
-   177 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
-   178 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
-   179                              <1> ; */
-   180                              <1> ; start of 31 bytes of NVRAM informaiion */
-   181 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
-   182                              <1> ; starts with 2 bytes of SIO0 params */
-   183 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
-   184 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   185 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
-   186 000000EE <res 10h>           <1> nvram_unused	resb	16
-   187 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   188                              <1> ; end of 31 bytes of NVRAM information */
-   189                              <1> ; */
-   190 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   191                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   192 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   193                              <1> ; */
-   194                              <1> ; Extentsion to BDA during BIOS startup */
-   195                              <1> ; */
-   196                              <1> endstruc
-   196          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   168 000000A1 ??                  <1> vt_state	resb	1	; VT100 escape translation: 0 idle, 1 ESC, 2 CSI, 3 SS3 */
+   169 000000A2 ??                  <1> vt_digit	resb	1	; the number accumulating in an ESC [ n ~ sequence */
+   170 000000A3 ??                  <1> vt_timer	resb	1	; ticks left before a lone ESC is delivered as itself */
+   171 000000A4 ????????            <1> rsvd_network	resb	4	; reserved for network adapters */
+   172 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   173                              <1> ; */
+   174                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   175 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   176                              <1> ; NOT SPARE: hdinit.c casts this to T_DISKTAB[2] -- 40 of its 41 bytes. */
+   177 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   178 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   179 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   180                              <1> ; this size is stored in CMOS on the PC/AT */
+   181 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   182 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   183                              <1> ; */
+   184                              <1> ; start of 31 bytes of NVRAM informaiion */
+   185 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   186                              <1> ; starts with 2 bytes of SIO0 params */
+   187 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   188 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   189 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   190 000000EE ??                  <1> console_sel	resb	1		; which console SETUP was told to use */
+   191 000000EF <res Fh>            <1> nvram_unused	resb	15
+   192 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   193                              <1> ; end of 31 bytes of NVRAM information */
+   194                              <1> ; */
+   195 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   196                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   197 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   198                              <1> ; */
+   199                              <1> ; Extentsion to BDA during BIOS startup */
+   200                              <1> ; */
+   201                              <1> endstruc
+   201          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     48                                  %undef XXX
     49                                  
     50                                  	global	int_10h

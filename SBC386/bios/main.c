@@ -155,6 +155,18 @@ jleds(code);
 	   the serial line.  Absent, nothing changes. */
 	vga3_init();
 
+	/* Now that it is known whether a board answered, honour what SETUP was
+	   told.  Video-only quietly stays serial if nothing answered: see the
+	   note in nvram.h about not stranding a machine without a console. */
+	switch( bda.console_sel ) {
+	case CONSEL_SERIAL:
+		bda.console = CON_SERIAL;
+		break;
+	case CONSEL_VIDEO:
+		if( bda.console & CON_VIDEO )	bda.console = CON_VIDEO;
+		break;
+	}
+
 	ASM {
 		mov	ax,0x0083
 		int	0x10

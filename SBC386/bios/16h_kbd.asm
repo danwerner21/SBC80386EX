@@ -48,6 +48,7 @@
 	global	int_irq4
 	global	int_irq1
 	global	kbd_init_
+	global	vt_tick
 
 	extern	reboot_			; 19h_boot.asm -- restarts the board
 
@@ -74,6 +75,7 @@ segment	_TEXT
 RESET_KEY	equ	0x1E		; Ctrl-^
 RESET_COUNT	equ	3		; how many in a row
 ASCII_BEL	equ 	0X08
+VT_TIMEOUT	equ	2		; ticks: 55 to 110 ms for the rest of a sequence
 
 NS_EOI		equ	0x20		; non-specific end of interrupt
 KBD_START	equ	0x1E		; kbd_buffer, at 40:1E as on a PC
@@ -100,6 +102,7 @@ kbd_init_:
 	mov	byte [kbd_flag],0
 	mov	byte [kbd_flag1],0
 	mov	byte [alt_input],0	; the console reset sequence counter
+	mov	byte [vt_state],0	; no escape sequence part-read
 	mov	byte [kbd_flag2],0
 	mov	byte [kbd_flag3],0	; no scan code prefix outstanding
 
@@ -156,6 +159,8 @@ int_irq4:
 	jb	.1			; not there yet; eat it and carry on
 	jmp	reboot_			; does not return
 .stuff:
+	call	vt_in			; an escape sequence, or a character?
+	jc	.1			; consumed; nothing to deliver yet
 	call	kbd_stuff
 	jmp	.1
 .9:
@@ -165,6 +170,196 @@ int_irq4:
 	popm	ax,bx,cx,dx,si,di,ds
 	iret
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; vt_in -- one received character through the VT100 escape translator
+;
+;	Enter with AL, DS the BDA.
+;	Exit with CF set if the character was part of a sequence and there
+;	is nothing to deliver; CF clear if AL should be stuffed as itself.
+;	A recognised sequence is stuffed here, as a scan code with no ASCII,
+;	and returns CF set.
+;
+; A terminal sends the keys a PC has as scan codes -- arrows, Home, the
+; function keys -- as escape sequences, two to five characters, arriving
+; one interrupt apart.  So this is a state machine across interrupts,
+; with the state in the BDA:
+;
+;	1  ESC seen.  " [ " goes to 2, " O " to 3, anything else means the
+;	   ESC was a keystroke of its own and both are delivered.
+;	2  CSI.  Digits accumulate; a letter or " ~ " ends it.
+;	3  SS3.  One letter ends it -- what a VT100 sends for F1 to F4 and,
+;	   in application mode, for the arrows.
+;
+; THE LONE ESCAPE is the hard case and the reason for vt_timer.  A user
+; pressing Escape sends exactly the character that opens every sequence,
+; and nothing distinguishes them but what does or does not follow.  So a
+; lone ESC is held, and vt_tick -- called from the timer -- delivers it
+; when nothing has followed for two ticks.  Without that, Escape in an
+; editor would not arrive until the next keystroke, which vi would find
+; unusable.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+vt_in:
+	cmp	byte [vt_state],0
+	jne	.in_seq
+	cmp	al,ASCII_ESC
+	jne	.pass
+	mov	byte [vt_state],1
+	mov	byte [vt_timer],VT_TIMEOUT
+	stc
+	ret
+.pass:
+	clc
+	ret
+
+.in_seq:
+	cmp	byte [vt_state],2
+	je	.csi
+	ja	.ss3
+
+; state 1: ESC, and now the character that says what it was
+	cmp	al,'['
+	je	.to_csi
+	cmp	al,'O'
+	je	.to_ss3
+	mov	byte [vt_state],0	; a keystroke of its own: ESC, then this
+	push	ax
+	mov	al,ASCII_ESC
+	call	kbd_stuff
+	pop	ax
+	clc
+	ret
+.to_csi:
+	mov	byte [vt_state],2
+	mov	byte [vt_digit],0
+	mov	byte [vt_timer],VT_TIMEOUT
+	stc
+	ret
+.to_ss3:
+	mov	byte [vt_state],3
+	mov	byte [vt_timer],VT_TIMEOUT
+	stc
+	ret
+
+; state 2: ESC [ .  Digits accumulate; ~ or a letter ends it.
+.csi:
+	cmp	al,'0'
+	jb	.csi_end
+	cmp	al,'9'
+	ja	.csi_end
+	pushm	ax,bx
+	mov	bl,al
+	mov	al,[vt_digit]
+	mov	ah,10
+	mul	ah
+	sub	bl,'0'
+	add	al,bl
+	mov	[vt_digit],al
+	popm	ax,bx
+	mov	byte [vt_timer],VT_TIMEOUT
+	stc
+	ret
+.csi_end:
+	cmp	al,'~'
+	je	.tilde
+	mov	bx,vt_csi		; a letter: A..D, H, F
+	jmp	short .letter
+.tilde:
+	push	ax
+	mov	al,[vt_digit]
+	mov	bx,vt_tilde
+	call	vt_lookup
+	pop	ax
+	jmp	short .finish
+
+; state 3: ESC O .  One letter and it is over.
+.ss3:
+	mov	bx,vt_ss3
+.letter:
+	push	ax
+	call	vt_lookup
+	pop	ax
+.finish:
+	mov	byte [vt_state],0
+	stc
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; vt_lookup -- AL against the pairs at CS:BX; stuff the scan code if it
+; is there.  A sequence this BIOS does not know is dropped, which is
+; better than delivering a letter the user did not type.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+vt_lookup:
+	pushm	ax,bx
+.1:
+   cs	cmp	byte [bx],0
+	je	.9			; end of table: unknown, dropped
+   cs	cmp	al,[bx]
+	je	.hit
+	add	bx,2
+	jmp	short .1
+.hit:
+   cs	mov	ah,[bx+1]		; the scan code
+	xor	al,al			; no ASCII, as a PC gives these keys
+	call	kbd_stuff_ax
+.9:
+	popm	ax,bx
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; vt_tick -- called from the timer, 18.2 times a second
+;
+; Delivers a lone Escape once nothing has followed it, and abandons a
+; sequence that stopped halfway.  DS is the BDA; everything preserved.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+vt_tick:
+	cmp	byte [vt_state],0
+	je	.9
+	dec	byte [vt_timer]
+	jnz	.9
+	pushm	ax,bx,cx,dx
+	cmp	byte [vt_state],1
+	jne	.drop			; a truncated sequence: let it go
+	mov	al,ASCII_ESC		; a keystroke after all
+	call	kbd_stuff
+.drop:
+	mov	byte [vt_state],0
+	popm	ax,bx,cx,dx
+.9:
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; What a terminal sends, and the scan code a PC program expects back.
+; Pairs, zero-terminated.  The scan codes are the ones INT 16h returns
+; with a zero ASCII byte, which is how every DOS program recognises a
+; key that has no character.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	align	2
+vt_csi:					; after ESC [
+	db	'A',0x48			; up
+	db	'B',0x50			; down
+	db	'C',0x4D			; right
+	db	'D',0x4B			; left
+	db	'H',0x47			; home
+	db	'F',0x4F			; end
+	db	0
+
+vt_ss3:					; after ESC O -- application mode, and F1..F4
+	db	'A',0x48,'B',0x50,'C',0x4D,'D',0x4B
+	db	'H',0x47,'F',0x4F
+	db	'P',0x3B,'Q',0x3C,'R',0x3D,'S',0x3E
+	db	0
+
+vt_tilde:				; the number in ESC [ n ~
+	db	1,0x47,  2,0x52,  3,0x53,  4,0x4F	; home ins del end
+	db	5,0x49,  6,0x51				; page up, page down
+	db	11,0x3B, 12,0x3C, 13,0x3D, 14,0x3E, 15,0x3F	; F1..F5
+	db	17,0x40, 18,0x41, 19,0x42, 20,0x43, 21,0x44	; F6..F10
+	db	23,0x85, 24,0x86			; F11, F12
+	db	0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; kbd_stuff -- put the character in AL into the ring buffer
@@ -387,6 +582,7 @@ KBC_SELFTEST	equ	0xAA		; resets the controller; replies 55
 KBC_WRCMD	equ	0x60		; write the command byte
 KBC_ENABLE	equ	0xAE		; keyboard interface on
 KB_RESET	equ	0xFF		; to the keyboard; replies FA, then AA
+KB_SETLED	equ	0xED		; then a lamp mask; each replies FA
 KBC_CMDBYTE	equ	0x41		; IRQ on, set-2-to-1 translation on,
 				; interface enabled, no system flag
 
@@ -536,6 +732,47 @@ int_irq1:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; kbd_leds -- make the lamps agree with kbd_flag
+;
+; DS is the BDA.  Everything preserved.  Called after every make code:
+; the comparison below is the whole cost unless a lock key has actually
+; changed, so it does not matter that most keys are not lock keys.
+;
+; kbd_flag2 holds what the lamps were last set to, in the keyboard's own
+; bit order -- scroll, num, caps -- which is kbd_flag's lock bits shifted
+; down four.  That the two layouts line up is a convenience of the PC
+; definitions, not a coincidence worth relying on elsewhere.
+;
+; ED, then the mask; the keyboard acknowledges each with FA.  Both
+; acknowledgements are taken here rather than left for the interrupt,
+; which would read them as break codes of 7A -- harmless in themselves,
+; but the next real key would then arrive one interrupt behind.
+;
+; This runs inside INT 09h with interrupts off and blocks for two
+; keyboard frames, about 2 ms.  That is well under a timer tick, and it
+; is only paid when a lock key is struck.  If the keyboard stops
+; answering mid-sequence the bounded waits in kbc_take end it.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+kbd_leds:
+	pushm	ax,cx,dx
+	mov	al,[kbd_flag]
+	shr	al,4
+	and	al,7			; scroll, num, caps
+	cmp	al,[kbd_flag2]
+	je	.9			; the lamps already say this
+	mov	[kbd_flag2],al
+	push	ax
+	mov	al,KB_SETLED
+	call	kbc_put_data
+	call	kbc_take		; the FA
+	pop	ax
+	call	kbc_put_data		; the mask
+	call	kbc_take		; and its FA
+.9:
+	popm	ax,cx,dx
+	ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; kbd_scan1 -- one set-1 scan code in AL, DS the BDA
 ;
 ; Shift-state keys change kbd_flag and produce nothing.  Everything else
@@ -577,6 +814,7 @@ kbd_scan1:
 	jc	.done
 	call	kbd_stuff_ax
 .done:
+	call	kbd_leds		; cheap unless a lock key just changed
 	ret
 
 .pfx_e0:

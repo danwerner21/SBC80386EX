@@ -118,11 +118,15 @@ rtc_user_wait_flag	resd	1	; user wait flag */
 rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
 ; */
 ; Miscellaneous */
-rsvd_network	resb	7	; reserved for network adapters */
+vt_state	resb	1	; VT100 escape translation: 0 idle, 1 ESC, 2 CSI, 3 SS3 */
+vt_digit	resb	1	; the number accumulating in an ESC [ n ~ sequence */
+vt_timer	resb	1	; ticks left before a lone ESC is delivered as itself */
+rsvd_network	resb	4	; reserved for network adapters */
 ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
 ; */
 ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
 errno	resw	1				; library error flag (errno.h) */
+; NOT SPARE: hdinit.c casts this to T_DISKTAB[2] -- 40 of its 41 bytes. */
 rsvd_unused	resb	41	; reserved for 386EX usage */
 serial_flags	resb	4	; flags for each serial device**/
 extended_memory	resw	1	; size of Extended Memory in Kilobytes */
@@ -136,7 +140,8 @@ nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
 floppy_tab	resb	2		; floppy disk driver table */
 disk_tab	resb	8  		; hard disk driver table */
 boot_order	resb	1		; which device INT 19h tries, and in what order */
-nvram_unused	resb	16
+console_sel	resb	1		; which console SETUP was told to use */
+nvram_unused	resb	15
 nvram_checksum	resw	1	; 31st byte of the NVRAM info */
 ; end of 31 bytes of NVRAM information */
 ; */

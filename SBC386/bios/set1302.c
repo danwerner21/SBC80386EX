@@ -159,6 +159,7 @@ T_STR top_name[] = {
 	"RS-232 Serial"		,
 	"Date/Time/Battery"	,
 	"Boot Order"		,
+	"Console"		,
 #if MONITOR
 	"Debug Monitor"		,
 #endif
@@ -193,13 +194,16 @@ VOID set_top(int modified)
 			case 5:
 				modified |= set_boot();
 				break;
-#if MONITOR
 			case 6:
+				modified |= set_console();
+				break;
+#if MONITOR
+			case 7:
 				debugmon();
 				break;
-			case 7:
+			case 8:
 #else
-			case 6:
+			case 7:
 #endif
 				testmain();
 				break;
@@ -346,6 +350,52 @@ T_STR boot_orders[] = {
  * fixed disk that is absent waits out its own timeout.  A board that always
  * boots from one of them should not pay for the other on every start.
  */
+T_STR consoles[] = {
+	"Both -- the screen mirrored down the serial line",
+	"Serial only",
+	"Video only, when a board is fitted",
+	};
+
+/*
+ * Which console INT 10h drives.  See nvram.h for why zero means both and
+ * why video-only falls back to serial.
+ *
+ * The setting is applied at the next boot rather than here.  Applying it
+ * at once would be tidier but would let someone sitting at a terminal
+ * choose video-only and lose the session they were making the choice in.
+ */
+int set_console(void)
+{
+	int	opt;
+	byte	cur;
+
+	cur = bda.console_sel;
+	if( cur >= CONSEL_END )	cur = CONSEL_BOTH;
+
+	printf("\nConsole\n");
+	printf("\nCurrently %s\n", consoles[cur]);
+	printf("In use this boot: %s\n",
+		(bda.console & CON_VIDEO)
+			? ((bda.console & CON_SERIAL) ? "video and serial" : "video")
+			: "serial");
+
+	if( !(bda.console & CON_VIDEO) )
+		printf("\nNote: no video board answered at this boot, so the serial\n"
+		       "      console is used whatever is chosen here.\n");
+
+	opt = option_get( "Console", consoles, nelem(consoles) );
+
+	if( opt >= 1  &&  opt <= nelem(consoles) ) {
+		bda.console_sel = (byte)(opt - 1);
+		printf("\nStored.  The new setting takes effect at the next"
+		       " boot.\n");
+		return 1;
+	}
+
+	return 0;
+}
+
+
 int set_boot(void)
 {
 	int	opt;

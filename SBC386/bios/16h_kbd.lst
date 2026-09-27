@@ -825,896 +825,1141 @@
    162 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
    163                              <1> ; */
    164                              <1> ; Miscellaneous */
-   165 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
-   166 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
-   167                              <1> ; */
-   168                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
-   169 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
-   170 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
-   171 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
-   172 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
-   173                              <1> ; this size is stored in CMOS on the PC/AT */
-   174 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
-   175 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
-   176                              <1> ; */
-   177                              <1> ; start of 31 bytes of NVRAM informaiion */
-   178 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
-   179                              <1> ; starts with 2 bytes of SIO0 params */
-   180 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
-   181 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   182 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
-   183 000000EE <res 10h>           <1> nvram_unused	resb	16
-   184 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   185                              <1> ; end of 31 bytes of NVRAM information */
-   186                              <1> ; */
-   187 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   188                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   189 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   190                              <1> ; */
-   191                              <1> ; Extentsion to BDA during BIOS startup */
-   192                              <1> ; */
-   193                              <1> endstruc
-   193          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   165 000000A1 ??                  <1> vt_state	resb	1	; VT100 escape translation: 0 idle, 1 ESC, 2 CSI, 3 SS3 */
+   166 000000A2 ??                  <1> vt_digit	resb	1	; the number accumulating in an ESC [ n ~ sequence */
+   167 000000A3 ??                  <1> vt_timer	resb	1	; ticks left before a lone ESC is delivered as itself */
+   168 000000A4 ????????            <1> rsvd_network	resb	4	; reserved for network adapters */
+   169 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   170                              <1> ; */
+   171                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   172 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   173                              <1> ; NOT SPARE: hdinit.c casts this to T_DISKTAB[2] -- 40 of its 41 bytes. */
+   174 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   175 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   176 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   177                              <1> ; this size is stored in CMOS on the PC/AT */
+   178 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   179 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   180                              <1> ; */
+   181                              <1> ; start of 31 bytes of NVRAM informaiion */
+   182 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   183                              <1> ; starts with 2 bytes of SIO0 params */
+   184 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   185 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   186 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   187 000000EE ??                  <1> console_sel	resb	1		; which console SETUP was told to use */
+   188 000000EF <res Fh>            <1> nvram_unused	resb	15
+   189 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   190                              <1> ; end of 31 bytes of NVRAM information */
+   191                              <1> ; */
+   192 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   193                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   194 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   195                              <1> ; */
+   196                              <1> ; Extentsion to BDA during BIOS startup */
+   197                              <1> ; */
+   198                              <1> endstruc
+   198          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     45                                  %undef XXX
     46                                  
     47                                  	global	int_16h
     48                                  	global	int_irq4
     49                                  	global	int_irq1
     50                                  	global	kbd_init_
-    51                                  
-    52                                  	extern	reboot_			; 19h_boot.asm -- restarts the board
-    53                                  
-    54                                  segment	_TEXT
-    55                                  
-    56                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    57                                  ; The console reset sequence -- this machine's Ctrl-Alt-Del
-    58                                  ;
-    59                                  ; A serial console has no Ctrl and no Alt to press: it delivers characters,
-    60                                  ; not key events, which is why kbd_flag never holds anything.  Nothing
-    61                                  ; requires the sequence to be that particular one, though, so the trigger is
-    62                                  ; a character unlikely to arrive by accident, three times in a row.
-    63                                  ;
-    64                                  ; 1Eh is Ctrl-^.  It was picked over the more obvious Ctrl-] (1Dh) because
-    65                                  ; that is the telnet escape and would be eaten by the terminal program
-    66                                  ; before it ever reached the board, and over Ctrl-\ (1Ch) because that is
-    67                                  ; SIGQUIT to a Unix terminal.  Nothing in common use binds Ctrl-^.
-    68                                  ;
-    69                                  ; The count lives in alt_input, which on a PC accumulates Alt+numpad digits
-    70                                  ; and here has nothing to do: the serial console has no Alt and no numpad.
-    71                                  ; The PS/2 keyboard, which has both, has a real Ctrl-Alt-Del in kbd_scan1
-    72                                  ; and does not use this field.
-    73                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    74                                  RESET_KEY	equ	0x1E		; Ctrl-^
-    75                                  RESET_COUNT	equ	3		; how many in a row
-    76                                  ASCII_BEL	equ 	0X08
-    77                                  
-    78                                  NS_EOI		equ	0x20		; non-specific end of interrupt
-    79                                  KBD_START	equ	0x1E		; kbd_buffer, at 40:1E as on a PC
-    80                                  KBD_END		equ	0x3E		; one past its last word
-    81                                  
-    82                                  
-    83                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    84                                  ; kbd_init -- set the ring buffer up and turn the receive interrupt on
-    85                                  ;
-    86                                  ;	void kbd_init(void);
+    51                                  	global	vt_tick
+    52                                  
+    53                                  	extern	reboot_			; 19h_boot.asm -- restarts the board
+    54                                  
+    55                                  segment	_TEXT
+    56                                  
+    57                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    58                                  ; The console reset sequence -- this machine's Ctrl-Alt-Del
+    59                                  ;
+    60                                  ; A serial console has no Ctrl and no Alt to press: it delivers characters,
+    61                                  ; not key events, which is why kbd_flag never holds anything.  Nothing
+    62                                  ; requires the sequence to be that particular one, though, so the trigger is
+    63                                  ; a character unlikely to arrive by accident, three times in a row.
+    64                                  ;
+    65                                  ; 1Eh is Ctrl-^.  It was picked over the more obvious Ctrl-] (1Dh) because
+    66                                  ; that is the telnet escape and would be eaten by the terminal program
+    67                                  ; before it ever reached the board, and over Ctrl-\ (1Ch) because that is
+    68                                  ; SIGQUIT to a Unix terminal.  Nothing in common use binds Ctrl-^.
+    69                                  ;
+    70                                  ; The count lives in alt_input, which on a PC accumulates Alt+numpad digits
+    71                                  ; and here has nothing to do: the serial console has no Alt and no numpad.
+    72                                  ; The PS/2 keyboard, which has both, has a real Ctrl-Alt-Del in kbd_scan1
+    73                                  ; and does not use this field.
+    74                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    75                                  RESET_KEY	equ	0x1E		; Ctrl-^
+    76                                  RESET_COUNT	equ	3		; how many in a row
+    77                                  ASCII_BEL	equ 	0X08
+    78                                  VT_TIMEOUT	equ	2		; ticks: 55 to 110 ms for the rest of a sequence
+    79                                  
+    80                                  NS_EOI		equ	0x20		; non-specific end of interrupt
+    81                                  KBD_START	equ	0x1E		; kbd_buffer, at 40:1E as on a PC
+    82                                  KBD_END		equ	0x3E		; one past its last word
+    83                                  
+    84                                  
+    85                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    86                                  ; kbd_init -- set the ring buffer up and turn the receive interrupt on
     87                                  ;
-    88                                  ; Called from POST.  Until this runs the buffer pointers are zero, which
-    89                                  ; would make the buffer look like a 16-word ring based at 40:0000 -- on
-    90                                  ; top of the serial device table.
-    91                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    92                                  kbd_init_:
-    93 00000000 1E5250                  	pushm	ax,dx,ds
-    94                                  
-    95 00000003 6A401F                  	get_bda	DS
-    96 00000006 C70680001E00            	mov	word [buffer_start],KBD_START
-    97 0000000C C70682003E00            	mov	word [buffer_end],KBD_END
-    98 00000012 C7061A001E00            	mov	word [buffer_head],KBD_START
-    99 00000018 C7061C001E00            	mov	word [buffer_tail],KBD_START
-   100 0000001E C606170000              	mov	byte [kbd_flag],0
-   101 00000023 C606180000              	mov	byte [kbd_flag1],0
-   102 00000028 C606190000              	mov	byte [alt_input],0	; the console reset sequence counter
-   103 0000002D C606970000              	mov	byte [kbd_flag2],0
-   104 00000032 C606960000              	mov	byte [kbd_flag3],0	; no scan code prefix outstanding
-   105                                  
-   106 00000037 BAF903                  	mov	dx,IER0			; receive data available
-   107 0000003A B001                    	mov	al,0x01
-   108 0000003C EE                      	out	dx,al
-   109                                  
-   110 0000003D 585A1F                  	popm	ax,dx,ds
-   111                                  
-   112 00000040 B80400                  	mov	ax,4			; IRQ4 -- SIO0 receive
-   113                                  	extern	unmask_interrupt_
-   114 00000043 E8(0000)                	call	unmask_interrupt_
-   115                                  
-   116 00000046 E87101                  	call	kbc_init		; and the PS/2 keyboard, if the board is in
-   117 00000049 C3                      	ret
+    88                                  ;	void kbd_init(void);
+    89                                  ;
+    90                                  ; Called from POST.  Until this runs the buffer pointers are zero, which
+    91                                  ; would make the buffer look like a 16-word ring based at 40:0000 -- on
+    92                                  ; top of the serial device table.
+    93                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    94                                  kbd_init_:
+    95 00000000 1E5250                  	pushm	ax,dx,ds
+    96                                  
+    97 00000003 6A401F                  	get_bda	DS
+    98 00000006 C70680001E00            	mov	word [buffer_start],KBD_START
+    99 0000000C C70682003E00            	mov	word [buffer_end],KBD_END
+   100 00000012 C7061A001E00            	mov	word [buffer_head],KBD_START
+   101 00000018 C7061C001E00            	mov	word [buffer_tail],KBD_START
+   102 0000001E C606170000              	mov	byte [kbd_flag],0
+   103 00000023 C606180000              	mov	byte [kbd_flag1],0
+   104 00000028 C606190000              	mov	byte [alt_input],0	; the console reset sequence counter
+   105 0000002D C606A10000              	mov	byte [vt_state],0	; no escape sequence part-read
+   106 00000032 C606970000              	mov	byte [kbd_flag2],0
+   107 00000037 C606960000              	mov	byte [kbd_flag3],0	; no scan code prefix outstanding
+   108                                  
+   109 0000003C BAF903                  	mov	dx,IER0			; receive data available
+   110 0000003F B001                    	mov	al,0x01
+   111 00000041 EE                      	out	dx,al
+   112                                  
+   113 00000042 585A1F                  	popm	ax,dx,ds
+   114                                  
+   115 00000045 B80400                  	mov	ax,4			; IRQ4 -- SIO0 receive
+   116                                  	extern	unmask_interrupt_
+   117 00000048 E8(0000)                	call	unmask_interrupt_
    118                                  
-   119                                  
-   120                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   121                                  ; int_irq4 -- the SIO0 receive interrupt
-   122                                  ;
-   123                                  ; Drains the UART into the ring buffer.  The loop matters: at 9600 baud
-   124                                  ; with interrupts occasionally masked elsewhere, more than one character
-   125                                  ; can be waiting by the time this runs, and leaving one behind would
-   126                                  ; leave the interrupt asserted with nothing to clear it.
-   127                                  ;
-   128                                  ; A full buffer drops the character and beeps, which is what a PC does.
-   129                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   130                                  int_irq4:
-   131 0000004A 1E575652515350          	pushm	ax,bx,cx,dx,si,di,ds
-   132                                  
-   133 00000051 6A401F                  	get_bda	DS
-   134 00000054 FC                      	cld
-   135                                  .1:
-   136 00000055 BAFD03                  	mov	dx,LSR0
-   137 00000058 EC                      	in	al,dx
-   138 00000059 A801                    	test	al,0x01			; anything in the receiver?
-   139 0000005B 7424                    	jz	.9
-   140                                  
-   141 0000005D BAF803                  	mov	dx,RBR0
-   142 00000060 EC                      	in	al,dx
-   143 00000061 247F                    	and	al,0x7F			; the console is 7-bit clean
-   144                                  
-   145                                  ; Watch for the reset sequence before the character goes anywhere.  The
-   146                                  ; matching characters are eaten rather than delivered: this is an escape
-   147                                  ; out of the running system, not data, and a partial sequence reaching DOS
-   148                                  ; would be worse than losing it.
-   149 00000063 3C1E                    	cmp	al,RESET_KEY
-   150 00000065 7407                    	je	.rkey
-   151 00000067 C606190000              	mov	byte [alt_input],0	; anything else breaks the run
-   152 0000006C EB0E                    	jmp	short .stuff
-   153                                  .rkey:
-   154 0000006E FE061900                	inc	byte [alt_input]
-   155 00000072 803E190003              	cmp	byte [alt_input],RESET_COUNT
-   156 00000077 72DC                    	jb	.1			; not there yet; eat it and carry on
-   157 00000079 E9(0000)                	jmp	reboot_			; does not return
-   158                                  .stuff:
-   159 0000007C E80E00                  	call	kbd_stuff
-   160 0000007F EBD4                    	jmp	.1
-   161                                  .9:
-   162 00000081 B020                    	mov	al,NS_EOI
-   163 00000083 E620                    	out	OCW2M_AT,al
-   164                                  
-   165 00000085 585B595A5E5F1F          	popm	ax,bx,cx,dx,si,di,ds
-   166 0000008C CF                      	iret
-   167                                  
-   168                                  
-   169                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   170                                  ; kbd_stuff -- put the character in AL into the ring buffer
-   171                                  ;
-   172                                  ;  DS is the BDA.  AX, BX, CX are destroyed.
-   173                                  ;
-   174                                  ; The stored word is the PC convention: scan code in the high byte,
-   175                                  ; ASCII in the low.  DOS reads the ASCII; a few programs check the scan
-   176                                  ; code, which is why it is synthesised rather than left zero.
-   177                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   178                                  kbd_stuff:
-   179 0000008D 52515350                	pushm	ax,bx,cx,dx
-   180                                  
-   181                                  ; DEL from a terminal means backspace to DOS
-   182 00000091 3C7F                    	cmp	al,0x7F
-   183 00000093 7502                    	jne	.1
-   184 00000095 B008                    	mov	al,ASCII_BS
-   185                                  .1:
-   186 00000097 0FB6D8                  	movzx	bx,al
-   187 0000009A 2E8AA7[3A01]               cs	mov	ah,[bx+kbd_scan]	; synthesise the scan code
-   188 0000009F 89C1                    	mov	cx,ax			; CX is the word to store
-   189                                  kbd_stuff_word:				; entered from kbd_stuff_ax with CX made
-   190                                  
-   191 000000A1 8B1E1C00                	mov	bx,[buffer_tail]
-   192 000000A5 89D8                    	mov	ax,bx
-   193 000000A7 83C002                  	add	ax,2
-   194 000000AA 83F83E                  	cmp	ax,KBD_END
-   195 000000AD 7203                    	jb	.2
-   196 000000AF B81E00                  	mov	ax,KBD_START		; wrapped
-   197                                  .2:
-   198 000000B2 3B061A00                	cmp	ax,[buffer_head]
-   199 000000B6 7407                    	je	.full			; tail would meet head: no room
-   200                                  
-   201 000000B8 890F                    	mov	[bx],cx			; DS is 0040, BX is the offset
-   202 000000BA A31C00                  	mov	[buffer_tail],ax
-   203 000000BD EB08                    	jmp	.9
-   204                                  .full:
-   205 000000BF B008                    	mov	al,ASCII_BEL		; the buffer is full -- complain
-   206 000000C1 B401                    	mov	ah,1
-   207 000000C3 31D2                    	xor	dx,dx
-   208 000000C5 CD14                    	int	0x14
-   209                                  .9:
-   210 000000C7 585B595A                	popm	ax,bx,cx,dx
-   211 000000CB C3                      	ret
-   212                                  
-   213                                  
-   214                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   215                                  ; INT 16h -- keyboard services
-   216                                  ;
-   217                                  ;    Function		Usage
-   218                                  ;    ========		=====
-   219                                  ;	00	read a key, waiting for one
-   220                                  ;	01	report whether a key is waiting, without taking it
-   221                                  ;	02	read the shift flags
-   222                                  ;	10h	as 00, extended
-   223                                  ;	11h	as 01, extended
-   224                                  ;	12h	as 02, extended
-   225                                  ;
-   226                                  ; 10h/11h/12h are the 101-key forms.  On a serial console they have
-   227                                  ; nothing extra to report, so they share the code.
-   228                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   229                                  int_16h:
-   230 000000CC FB                      	sti
-   231 000000CD 061E60                  	pushm	all,ds,es
-   232 000000D0 89E5                    	mov	bp,sp
-   233 000000D2 FC                      	cld
-   234 000000D3 6A401F                  	get_bda	DS
-   235                                  
-   236 000000D6 88E0                    	mov	al,ah
-   237 000000D8 240F                    	and	al,0x0F			; 10h/11h/12h behave as 00/01/02
-   238 000000DA 3C02                    	cmp	al,2
-   239 000000DC 7710                    	ja	k_bad
-   240                                  
-   241 000000DE 08C0                    	or	al,al
-   242 000000E0 7415                    	jz	k_read
-   243 000000E2 FEC8                    	dec	al
-   244 000000E4 7435                    	jz	k_peek
-   245                                  
-   246                                  ; function 02 -- shift flags
-   247 000000E6 A01700                  	mov	al,[kbd_flag]
-   248 000000E9 88460E                  	mov	[bp+offset_ax],al
-   249 000000EC EB05                    	jmp	k_done
-   250                                  
-   251                                  k_bad:
-   252 000000EE C7460E0000              	mov	word [bp+offset_ax],0
-   253                                  k_done:
-   254 000000F3 611F07                  	popm	all,ds,es
-   255 000000F6 CF                      	iret
-   256                                  
-   257                                  
-   258                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   259                                  ; function 00 -- read a key, waiting until there is one
-   260                                  ;
-   261                                  ; HLT rather than a spin: the tick and the receive interrupt both wake
-   262                                  ; it, and it keeps the bus quiet while DOS is idle at the prompt.
-   263                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   264                                  k_read:
-   265 000000F7 FB                      	sti
-   266                                  .1:
-   267 000000F8 8B1E1A00                	mov	bx,[buffer_head]
-   268 000000FC 3B1E1C00                	cmp	bx,[buffer_tail]
-   269 00000100 7503                    	jne	.2
-   270 00000102 F4                      	hlt				; nothing yet; wait for an interrupt
-   271 00000103 EBF3                    	jmp	.1
-   272                                  .2:
-   273 00000105 8B07                    	mov	ax,[bx]			; the waiting key
+   119 0000004B E8A002                  	call	kbc_init		; and the PS/2 keyboard, if the board is in
+   120 0000004E C3                      	ret
+   121                                  
+   122                                  
+   123                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   124                                  ; int_irq4 -- the SIO0 receive interrupt
+   125                                  ;
+   126                                  ; Drains the UART into the ring buffer.  The loop matters: at 9600 baud
+   127                                  ; with interrupts occasionally masked elsewhere, more than one character
+   128                                  ; can be waiting by the time this runs, and leaving one behind would
+   129                                  ; leave the interrupt asserted with nothing to clear it.
+   130                                  ;
+   131                                  ; A full buffer drops the character and beeps, which is what a PC does.
+   132                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   133                                  int_irq4:
+   134 0000004F 1E575652515350          	pushm	ax,bx,cx,dx,si,di,ds
+   135                                  
+   136 00000056 6A401F                  	get_bda	DS
+   137 00000059 FC                      	cld
+   138                                  .1:
+   139 0000005A BAFD03                  	mov	dx,LSR0
+   140 0000005D EC                      	in	al,dx
+   141 0000005E A801                    	test	al,0x01			; anything in the receiver?
+   142 00000060 7429                    	jz	.9
+   143                                  
+   144 00000062 BAF803                  	mov	dx,RBR0
+   145 00000065 EC                      	in	al,dx
+   146 00000066 247F                    	and	al,0x7F			; the console is 7-bit clean
+   147                                  
+   148                                  ; Watch for the reset sequence before the character goes anywhere.  The
+   149                                  ; matching characters are eaten rather than delivered: this is an escape
+   150                                  ; out of the running system, not data, and a partial sequence reaching DOS
+   151                                  ; would be worse than losing it.
+   152 00000068 3C1E                    	cmp	al,RESET_KEY
+   153 0000006A 7407                    	je	.rkey
+   154 0000006C C606190000              	mov	byte [alt_input],0	; anything else breaks the run
+   155 00000071 EB0E                    	jmp	short .stuff
+   156                                  .rkey:
+   157 00000073 FE061900                	inc	byte [alt_input]
+   158 00000077 803E190003              	cmp	byte [alt_input],RESET_COUNT
+   159 0000007C 72DC                    	jb	.1			; not there yet; eat it and carry on
+   160 0000007E E9(0000)                	jmp	reboot_			; does not return
+   161                                  .stuff:
+   162 00000081 E81300                  	call	vt_in			; an escape sequence, or a character?
+   163 00000084 72D4                    	jc	.1			; consumed; nothing to deliver yet
+   164 00000086 E83801                  	call	kbd_stuff
+   165 00000089 EBCF                    	jmp	.1
+   166                                  .9:
+   167 0000008B B020                    	mov	al,NS_EOI
+   168 0000008D E620                    	out	OCW2M_AT,al
+   169                                  
+   170 0000008F 585B595A5E5F1F          	popm	ax,bx,cx,dx,si,di,ds
+   171 00000096 CF                      	iret
+   172                                  
+   173                                  
+   174                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   175                                  ; vt_in -- one received character through the VT100 escape translator
+   176                                  ;
+   177                                  ;	Enter with AL, DS the BDA.
+   178                                  ;	Exit with CF set if the character was part of a sequence and there
+   179                                  ;	is nothing to deliver; CF clear if AL should be stuffed as itself.
+   180                                  ;	A recognised sequence is stuffed here, as a scan code with no ASCII,
+   181                                  ;	and returns CF set.
+   182                                  ;
+   183                                  ; A terminal sends the keys a PC has as scan codes -- arrows, Home, the
+   184                                  ; function keys -- as escape sequences, two to five characters, arriving
+   185                                  ; one interrupt apart.  So this is a state machine across interrupts,
+   186                                  ; with the state in the BDA:
+   187                                  ;
+   188                                  ;	1  ESC seen.  " [ " goes to 2, " O " to 3, anything else means the
+   189                                  ;	   ESC was a keystroke of its own and both are delivered.
+   190                                  ;	2  CSI.  Digits accumulate; a letter or " ~ " ends it.
+   191                                  ;	3  SS3.  One letter ends it -- what a VT100 sends for F1 to F4 and,
+   192                                  ;	   in application mode, for the arrows.
+   193                                  ;
+   194                                  ; THE LONE ESCAPE is the hard case and the reason for vt_timer.  A user
+   195                                  ; pressing Escape sends exactly the character that opens every sequence,
+   196                                  ; and nothing distinguishes them but what does or does not follow.  So a
+   197                                  ; lone ESC is held, and vt_tick -- called from the timer -- delivers it
+   198                                  ; when nothing has followed for two ticks.  Without that, Escape in an
+   199                                  ; editor would not arrive until the next keystroke, which vi would find
+   200                                  ; unusable.
+   201                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   202                                  vt_in:
+   203 00000097 803EA10000              	cmp	byte [vt_state],0
+   204 0000009C 7512                    	jne	.in_seq
+   205 0000009E 3C1B                    	cmp	al,ASCII_ESC
+   206 000000A0 750C                    	jne	.pass
+   207 000000A2 C606A10001              	mov	byte [vt_state],1
+   208 000000A7 C606A30002              	mov	byte [vt_timer],VT_TIMEOUT
+   209 000000AC F9                      	stc
+   210 000000AD C3                      	ret
+   211                                  .pass:
+   212 000000AE F8                      	clc
+   213 000000AF C3                      	ret
+   214                                  
+   215                                  .in_seq:
+   216 000000B0 803EA10002              	cmp	byte [vt_state],2
+   217 000000B5 7435                    	je	.csi
+   218 000000B7 776D                    	ja	.ss3
+   219                                  
+   220                                  ; state 1: ESC, and now the character that says what it was
+   221 000000B9 3C5B                    	cmp	al,'['
+   222 000000BB 7412                    	je	.to_csi
+   223 000000BD 3C4F                    	cmp	al,'O'
+   224 000000BF 741F                    	je	.to_ss3
+   225 000000C1 C606A10000              	mov	byte [vt_state],0	; a keystroke of its own: ESC, then this
+   226 000000C6 50                      	push	ax
+   227 000000C7 B01B                    	mov	al,ASCII_ESC
+   228 000000C9 E8F500                  	call	kbd_stuff
+   229 000000CC 58                      	pop	ax
+   230 000000CD F8                      	clc
+   231 000000CE C3                      	ret
+   232                                  .to_csi:
+   233 000000CF C606A10002              	mov	byte [vt_state],2
+   234 000000D4 C606A20000              	mov	byte [vt_digit],0
+   235 000000D9 C606A30002              	mov	byte [vt_timer],VT_TIMEOUT
+   236 000000DE F9                      	stc
+   237 000000DF C3                      	ret
+   238                                  .to_ss3:
+   239 000000E0 C606A10003              	mov	byte [vt_state],3
+   240 000000E5 C606A30002              	mov	byte [vt_timer],VT_TIMEOUT
+   241 000000EA F9                      	stc
+   242 000000EB C3                      	ret
+   243                                  
+   244                                  ; state 2: ESC [ .  Digits accumulate; ~ or a letter ends it.
+   245                                  .csi:
+   246 000000EC 3C30                    	cmp	al,'0'
+   247 000000EE 7220                    	jb	.csi_end
+   248 000000F0 3C39                    	cmp	al,'9'
+   249 000000F2 771C                    	ja	.csi_end
+   250 000000F4 5350                    	pushm	ax,bx
+   251 000000F6 88C3                    	mov	bl,al
+   252 000000F8 A0A200                  	mov	al,[vt_digit]
+   253 000000FB B40A                    	mov	ah,10
+   254 000000FD F6E4                    	mul	ah
+   255 000000FF 80EB30                  	sub	bl,'0'
+   256 00000102 00D8                    	add	al,bl
+   257 00000104 A2A200                  	mov	[vt_digit],al
+   258 00000107 585B                    	popm	ax,bx
+   259 00000109 C606A30002              	mov	byte [vt_timer],VT_TIMEOUT
+   260 0000010E F9                      	stc
+   261 0000010F C3                      	ret
+   262                                  .csi_end:
+   263 00000110 3C7E                    	cmp	al,'~'
+   264 00000112 7405                    	je	.tilde
+   265 00000114 BB[7A01]                	mov	bx,vt_csi		; a letter: A..D, H, F
+   266 00000117 EB10                    	jmp	short .letter
+   267                                  .tilde:
+   268 00000119 50                      	push	ax
+   269 0000011A A0A200                  	mov	al,[vt_digit]
+   270 0000011D BB[9C01]                	mov	bx,vt_tilde
+   271 00000120 E81200                  	call	vt_lookup
+   272 00000123 58                      	pop	ax
+   273 00000124 EB08                    	jmp	short .finish
    274                                  
-   275 00000107 83C302                  	add	bx,2
-   276 0000010A 83FB3E                  	cmp	bx,KBD_END
-   277 0000010D 7203                    	jb	.3
-   278 0000010F BB1E00                  	mov	bx,KBD_START
-   279                                  .3:
-   280 00000112 891E1A00                	mov	[buffer_head],bx
-   281                                  
-   282 00000116 89460E                  	mov	[bp+offset_ax],ax
-   283 00000119 EBD8                    	jmp	k_done
-   284                                  
-   285                                  
-   286                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   287                                  ; function 01 -- is a key waiting?
-   288                                  ;
-   289                                  ;  ZF set means the buffer is empty.  The key is left where it is.
-   290                                  ;
-   291                                  ; The Zero flag has to reach the caller, so this returns with RETF 2 --
-   292                                  ; discarding the stacked flags -- rather than IRET, which would put them
-   293                                  ; back and lose the answer.
-   294                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   295                                  k_peek:
-   296 0000011B 8B1E1A00                	mov	bx,[buffer_head]
-   297 0000011F 3B1E1C00                	cmp	bx,[buffer_tail]
-   298 00000123 740D                    	je	.empty
-   299                                  
-   300 00000125 8B07                    	mov	ax,[bx]
-   301 00000127 89460E                  	mov	[bp+offset_ax],ax
-   302                                  
-   303 0000012A 611F07                  	popm	all,ds,es
-   304 0000012D 09E4                    	or	sp,sp			; SP is never zero, so ZF clear:
-   305 0000012F CA0200                  	retf	2			;  a key is waiting
-   306                                  .empty:
-   307 00000132 611F07                  	popm	all,ds,es
-   308 00000135 39E4                    	cmp	sp,sp			; ZF set: nothing waiting
-   309 00000137 CA0200                  	retf	2
+   275                                  ; state 3: ESC O .  One letter and it is over.
+   276                                  .ss3:
+   277 00000126 BB[8701]                	mov	bx,vt_ss3
+   278                                  .letter:
+   279 00000129 50                      	push	ax
+   280 0000012A E80800                  	call	vt_lookup
+   281 0000012D 58                      	pop	ax
+   282                                  .finish:
+   283 0000012E C606A10000              	mov	byte [vt_state],0
+   284 00000133 F9                      	stc
+   285 00000134 C3                      	ret
+   286                                  
+   287                                  
+   288                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   289                                  ; vt_lookup -- AL against the pairs at CS:BX; stuff the scan code if it
+   290                                  ; is there.  A sequence this BIOS does not know is dropped, which is
+   291                                  ; better than delivering a letter the user did not type.
+   292                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   293                                  vt_lookup:
+   294 00000135 5350                    	pushm	ax,bx
+   295                                  .1:
+   296 00000137 2E803F00                   cs	cmp	byte [bx],0
+   297 0000013B 7413                    	je	.9			; end of table: unknown, dropped
+   298 0000013D 2E3A07                     cs	cmp	al,[bx]
+   299 00000140 7405                    	je	.hit
+   300 00000142 83C302                  	add	bx,2
+   301 00000145 EBF0                    	jmp	short .1
+   302                                  .hit:
+   303 00000147 2E8A6701                   cs	mov	ah,[bx+1]		; the scan code
+   304 0000014B 30C0                    	xor	al,al			; no ASCII, as a PC gives these keys
+   305 0000014D E84D04                  	call	kbd_stuff_ax
+   306                                  .9:
+   307 00000150 585B                    	popm	ax,bx
+   308 00000152 C3                      	ret
+   309                                  
    310                                  
-   311                                  
-   312                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   313                                  ; kbd_scan -- ASCII to the scan code of the key that would produce it
-   314                                  ;
-   315                                  ; A serial console delivers characters, not key events, so the scan code
-   316                                  ; has to be invented.  Most software reads only the ASCII byte, but
-   317                                  ; enough of it looks at the scan code -- for Enter, Backspace and Escape
-   318                                  ; especially -- that returning zero causes trouble.
-   319                                  ;
-   320                                  ; The value is the set-1 make code of the key bearing that character;
-   321                                  ; shifted symbols carry the code of the unshifted key, which is what a
-   322                                  ; real keyboard would have reported.
-   323                                  ;
-   324                                  ; 00h..1Fh are the control codes: Ctrl+letter carries the letter's code,
-   325                                  ; with Backspace, Tab, Enter and Escape given their own keys.
-   326                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   327                                  	align	2
-   328                                  kbd_scan:
-   329                                  ;	  ^@   ^A   ^B   ^C   ^D   ^E   ^F   ^G
-   330 0000013A 031E302E20122122        	db 0x03,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
-   331                                  ;	  BS   TAB  ^J   ^K   ^L   CR   ^N   ^O
-   332 00000142 0E0F2425261C3118        	db 0x0E,0x0F,0x24,0x25,0x26,0x1C,0x31,0x18
-   333                                  ;	  ^P   ^Q   ^R   ^S   ^T   ^U   ^V   ^W
-   334 0000014A 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
-   335                                  ;	  ^X   ^Y   ^Z   ESC  ^\   ^]   ^^   ^_
-   336 00000152 2D152C012B1B070C        	db 0x2D,0x15,0x2C,0x01,0x2B,0x1B,0x07,0x0C
-   337                                  ;	  SP   !    "    #    $    %    &    '
-   338 0000015A 3902280405060828        	db 0x39,0x02,0x28,0x04,0x05,0x06,0x08,0x28
-   339                                  ;	  (    )    *    +    ,    -    .    /
-   340 00000162 0A0B090D330C3435        	db 0x0A,0x0B,0x09,0x0D,0x33,0x0C,0x34,0x35
-   341                                  ;	  0    1    2    3    4    5    6    7
-   342 0000016A 0B02030405060708        	db 0x0B,0x02,0x03,0x04,0x05,0x06,0x07,0x08
-   343                                  ;	  8    9    :    ;    <    =    >    ?
-   344 00000172 090A2727330D3435        	db 0x09,0x0A,0x27,0x27,0x33,0x0D,0x34,0x35
-   345                                  ;	  @    A    B    C    D    E    F    G
-   346 0000017A 031E302E20122122        	db 0x03,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
-   347                                  ;	  H    I    J    K    L    M    N    O
-   348 00000182 2317242526323118        	db 0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18
-   349                                  ;	  P    Q    R    S    T    U    V    W
-   350 0000018A 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
-   351                                  ;	  X    Y    Z    [    \    ]    ^    _
-   352 00000192 2D152C1A2B1B070C        	db 0x2D,0x15,0x2C,0x1A,0x2B,0x1B,0x07,0x0C
-   353                                  ;	  `    a    b    c    d    e    f    g
-   354 0000019A 291E302E20122122        	db 0x29,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
-   355                                  ;	  h    i    j    k    l    m    n    o
-   356 000001A2 2317242526323118        	db 0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18
-   357                                  ;	  p    q    r    s    t    u    v    w
-   358 000001AA 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
-   359                                  ;	  x    y    z    {    |    }    ~    DEL
-   360 000001B2 2D152C1A2B1B2953        	db 0x2D,0x15,0x2C,0x1A,0x2B,0x1B,0x29,0x53
-   361                                  len_kbd_scan	equ	$ - kbd_scan
-   362                                  
+   311                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   312                                  ; vt_tick -- called from the timer, 18.2 times a second
+   313                                  ;
+   314                                  ; Delivers a lone Escape once nothing has followed it, and abandons a
+   315                                  ; sequence that stopped halfway.  DS is the BDA; everything preserved.
+   316                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   317                                  vt_tick:
+   318 00000153 803EA10000              	cmp	byte [vt_state],0
+   319 00000158 741F                    	je	.9
+   320 0000015A FE0EA300                	dec	byte [vt_timer]
+   321 0000015E 7519                    	jnz	.9
+   322 00000160 52515350                	pushm	ax,bx,cx,dx
+   323 00000164 803EA10001              	cmp	byte [vt_state],1
+   324 00000169 7505                    	jne	.drop			; a truncated sequence: let it go
+   325 0000016B B01B                    	mov	al,ASCII_ESC		; a keystroke after all
+   326 0000016D E85100                  	call	kbd_stuff
+   327                                  .drop:
+   328 00000170 C606A10000              	mov	byte [vt_state],0
+   329 00000175 585B595A                	popm	ax,bx,cx,dx
+   330                                  .9:
+   331 00000179 C3                      	ret
+   332                                  
+   333                                  
+   334                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   335                                  ; What a terminal sends, and the scan code a PC program expects back.
+   336                                  ; Pairs, zero-terminated.  The scan codes are the ones INT 16h returns
+   337                                  ; with a zero ASCII byte, which is how every DOS program recognises a
+   338                                  ; key that has no character.
+   339                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   340                                  	align	2
+   341                                  vt_csi:					; after ESC [
+   342 0000017A 4148                    	db	'A',0x48			; up
+   343 0000017C 4250                    	db	'B',0x50			; down
+   344 0000017E 434D                    	db	'C',0x4D			; right
+   345 00000180 444B                    	db	'D',0x4B			; left
+   346 00000182 4847                    	db	'H',0x47			; home
+   347 00000184 464F                    	db	'F',0x4F			; end
+   348 00000186 00                      	db	0
+   349                                  
+   350                                  vt_ss3:					; after ESC O -- application mode, and F1..F4
+   351 00000187 41484250434D444B        	db	'A',0x48,'B',0x50,'C',0x4D,'D',0x4B
+   352 0000018F 4847464F                	db	'H',0x47,'F',0x4F
+   353 00000193 503B513C523D533E        	db	'P',0x3B,'Q',0x3C,'R',0x3D,'S',0x3E
+   354 0000019B 00                      	db	0
+   355                                  
+   356                                  vt_tilde:				; the number in ESC [ n ~
+   357 0000019C 014702520353044F        	db	1,0x47,  2,0x52,  3,0x53,  4,0x4F	; home ins del end
+   358 000001A4 05490651                	db	5,0x49,  6,0x51				; page up, page down
+   359 000001A8 0B3B0C3C0D3D0E3E0F-     	db	11,0x3B, 12,0x3C, 13,0x3D, 14,0x3E, 15,0x3F	; F1..F5
+   359 000001B1 3F                 
+   360 000001B2 114012411342144315-     	db	17,0x40, 18,0x41, 19,0x42, 20,0x43, 21,0x44	; F6..F10
+   360 000001BB 44                 
+   361 000001BC 17851886                	db	23,0x85, 24,0x86			; F11, F12
+   362 000001C0 00                      	db	0
    363                                  
    364                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   365                                  ; The PS/2 keyboard on the ECB VGA3 board
+   365                                  ; kbd_stuff -- put the character in AL into the ring buffer
    366                                  ;
-   367                                  ; The board carries an Intel 8242 -- an 8042 with the PC/AT keyboard
-   368                                  ; firmware in it -- at the first two ports of its I/O block, which P3 on
-   369                                  ; the board puts at 4E0h.  That makes this the port 60h/64h protocol at a
-   370                                  ; different address and nothing else: translation is on, so scan codes
-   371                                  ; arrive in set 1 exactly as INT 09h on a PC receives them.
-   372                                  ;
-   373                                  ; The interrupt goes out on the bus line K4 selects; both positions reach
-   374                                  ; the 386EX INT0 pin, which is master IR1, which with ICW2 = 08h is INT 09h.
-   375                                  ; K1 puts the video interrupt on INT5 (slave IR1, INT 71h) so the two never
-   376                                  ; share a line; nothing enables it.
-   377                                  ;
-   378                                  ; Established with V3KBD in the monitor before a line of this was written.
-   379                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   380                                  KBC_DATA	equ	0x4E0		; 8242 data, read and write
-   381                                  KBC_STAT	equ	0x4E1		; status on read, command on write
-   382                                  
-   383                                  KBC_OBF		equ	0x01		; a byte is waiting at KBC_DATA
-   384                                  KBC_IBF		equ	0x02		; the last byte written is not yet taken
+   367                                  ;  DS is the BDA.  AX, BX, CX are destroyed.
+   368                                  ;
+   369                                  ; The stored word is the PC convention: scan code in the high byte,
+   370                                  ; ASCII in the low.  DOS reads the ASCII; a few programs check the scan
+   371                                  ; code, which is why it is synthesised rather than left zero.
+   372                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   373                                  kbd_stuff:
+   374 000001C1 52515350                	pushm	ax,bx,cx,dx
+   375                                  
+   376                                  ; DEL from a terminal means backspace to DOS
+   377 000001C5 3C7F                    	cmp	al,0x7F
+   378 000001C7 7502                    	jne	.1
+   379 000001C9 B008                    	mov	al,ASCII_BS
+   380                                  .1:
+   381 000001CB 0FB6D8                  	movzx	bx,al
+   382 000001CE 2E8AA7[6E02]               cs	mov	ah,[bx+kbd_scan]	; synthesise the scan code
+   383 000001D3 89C1                    	mov	cx,ax			; CX is the word to store
+   384                                  kbd_stuff_word:				; entered from kbd_stuff_ax with CX made
    385                                  
-   386                                  KBC_SELFTEST	equ	0xAA		; resets the controller; replies 55
-   387                                  KBC_WRCMD	equ	0x60		; write the command byte
-   388                                  KBC_ENABLE	equ	0xAE		; keyboard interface on
-   389                                  KB_RESET	equ	0xFF		; to the keyboard; replies FA, then AA
-   390                                  KBC_CMDBYTE	equ	0x41		; IRQ on, set-2-to-1 translation on,
-   391                                  				; interface enabled, no system flag
-   392                                  
-   393                                  ; kbd_flag, 40:17, PC layout
-   394                                  KF_RSHIFT	equ	0x01
-   395                                  KF_LSHIFT	equ	0x02
-   396                                  KF_CTRL		equ	0x04
-   397                                  KF_ALT		equ	0x08
-   398                                  KF_SCROLL	equ	0x10
-   399                                  KF_NUM		equ	0x20
-   400                                  KF_CAPS		equ	0x40
-   401                                  KF_INS		equ	0x80
-   402                                  
-   403                                  ; kbd_flag3, 40:96, PC layout: the prefix state between interrupts
-   404                                  KF3_E1		equ	0x01		; last code was E1 (Pause)
-   405                                  KF3_E0		equ	0x02		; last code was E0
-   406                                  
+   386 000001D5 8B1E1C00                	mov	bx,[buffer_tail]
+   387 000001D9 89D8                    	mov	ax,bx
+   388 000001DB 83C002                  	add	ax,2
+   389 000001DE 83F83E                  	cmp	ax,KBD_END
+   390 000001E1 7203                    	jb	.2
+   391 000001E3 B81E00                  	mov	ax,KBD_START		; wrapped
+   392                                  .2:
+   393 000001E6 3B061A00                	cmp	ax,[buffer_head]
+   394 000001EA 7407                    	je	.full			; tail would meet head: no room
+   395                                  
+   396 000001EC 890F                    	mov	[bx],cx			; DS is 0040, BX is the offset
+   397 000001EE A31C00                  	mov	[buffer_tail],ax
+   398 000001F1 EB08                    	jmp	.9
+   399                                  .full:
+   400 000001F3 B008                    	mov	al,ASCII_BEL		; the buffer is full -- complain
+   401 000001F5 B401                    	mov	ah,1
+   402 000001F7 31D2                    	xor	dx,dx
+   403 000001F9 CD14                    	int	0x14
+   404                                  .9:
+   405 000001FB 585B595A                	popm	ax,bx,cx,dx
+   406 000001FF C3                      	ret
    407                                  
-   408                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   409                                  ; kbc_init -- bring the controller up, if it is there
-   410                                  ;
-   411                                  ; Called from kbd_init.  The board may be absent, in which case the port
-   412                                  ; floats and reads FF; that case leaves quietly and IR1 stays masked.  The
-   413                                  ; timer is not running yet when this is called, so waits are counted, not
-   414                                  ; timed: 64K reads of a port at seven wait states is some 30 ms, which is
-   415                                  ; more than an 8042 ever needs and short enough not to notice at POST.
-   416                                  ;
-   417                                  ; The sequence is the PC/AT one, in full, because a shorter one did not
-   418                                  ; work: drain, write the command byte and enable left the keyboard silent
-   419                                  ; until the monitor's V3KBD -- self-test, enable, keyboard reset -- was
-   420                                  ; run by hand.  The self-test resets the controller; the keyboard reset
-   421                                  ; resets the keyboard.  Its replies, FA then AA, take up to half a second
-   422                                  ; and are not waited for: IR1 is unmasked before they arrive and the ISR
-   423                                  ; takes them as the break codes of 7A and 2A, which mean nothing.
-   424                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   425                                  kbc_init:
-   426 000001BA 525150                  	pushm	ax,cx,dx
-   427                                  
-   428 000001BD BAE104                  	mov	dx,KBC_STAT
-   429 000001C0 EC                      	in	al,dx
-   430 000001C1 3CFF                    	cmp	al,0xFF
-   431 000001C3 7437                    	je	.9			; nothing there
-   432                                  
-   433                                  ; Whatever the controller has been holding since power-up goes.
-   434 000001C5 B91000                  	mov	cx,16
-   435                                  .drain:
-   436 000001C8 EC                      	in	al,dx
-   437 000001C9 A801                    	test	al,KBC_OBF
-   438 000001CB 7409                    	jz	.drained
-   439 000001CD BAE004                  	mov	dx,KBC_DATA
-   440 000001D0 EC                      	in	al,dx
-   441 000001D1 BAE104                  	mov	dx,KBC_STAT
-   442 000001D4 E2F2                    	loop	.drain
-   443                                  .drained:
-   444 000001D6 B0AA                    	mov	al,KBC_SELFTEST		; reset the controller ...
-   445 000001D8 E83C00                  	call	kbc_put_cmd
-   446 000001DB E82200                  	call	kbc_take		; ... and take its 55, or give up
-   447 000001DE B060                    	mov	al,KBC_WRCMD
-   448 000001E0 E83400                  	call	kbc_put_cmd
-   449 000001E3 B041                    	mov	al,KBC_CMDBYTE
-   450 000001E5 E83500                  	call	kbc_put_data
-   451 000001E8 B0AE                    	mov	al,KBC_ENABLE
-   452 000001EA E82A00                  	call	kbc_put_cmd
-   453 000001ED B0FF                    	mov	al,KB_RESET		; and reset the keyboard; see above
-   454 000001EF E82B00                  	call	kbc_put_data
-   455                                  
-   456 000001F2 58595A                  	popm	ax,cx,dx
-   457 000001F5 B80100                  	mov	ax,1			; IRQ1 -- the keyboard
-   458 000001F8 E8(0000)                	call	unmask_interrupt_
-   459 000001FB C3                      	ret
-   460                                  .9:
-   461 000001FC 58595A                  	popm	ax,cx,dx
-   462 000001FF C3                      	ret
-   463                                  
-   464                                  ; Wait, bounded, for the controller to offer a byte, and take it.  The
-   465                                  ; value is not wanted; the point is that the controller has finished
-   466                                  ; what it was asked before it is asked the next thing.
-   467                                  kbc_take:
-   468 00000200 525150                  	pushm	ax,cx,dx
-   469 00000203 BAE104                  	mov	dx,KBC_STAT
-   470 00000206 31C9                    	xor	cx,cx
-   471 00000208 EC                      .w:	in	al,dx
-   472 00000209 A801                    	test	al,KBC_OBF
-   473 0000020B E1FB                    	loopz	.w
-   474 0000020D 7404                    	jz	.9			; gave up
-   475 0000020F BAE004                  	mov	dx,KBC_DATA
-   476 00000212 EC                      	in	al,dx
-   477 00000213 58595A                  .9:	popm	ax,cx,dx
-   478 00000216 C3                      	ret
+   408                                  
+   409                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   410                                  ; INT 16h -- keyboard services
+   411                                  ;
+   412                                  ;    Function		Usage
+   413                                  ;    ========		=====
+   414                                  ;	00	read a key, waiting for one
+   415                                  ;	01	report whether a key is waiting, without taking it
+   416                                  ;	02	read the shift flags
+   417                                  ;	10h	as 00, extended
+   418                                  ;	11h	as 01, extended
+   419                                  ;	12h	as 02, extended
+   420                                  ;
+   421                                  ; 10h/11h/12h are the 101-key forms.  On a serial console they have
+   422                                  ; nothing extra to report, so they share the code.
+   423                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   424                                  int_16h:
+   425 00000200 FB                      	sti
+   426 00000201 061E60                  	pushm	all,ds,es
+   427 00000204 89E5                    	mov	bp,sp
+   428 00000206 FC                      	cld
+   429 00000207 6A401F                  	get_bda	DS
+   430                                  
+   431 0000020A 88E0                    	mov	al,ah
+   432 0000020C 240F                    	and	al,0x0F			; 10h/11h/12h behave as 00/01/02
+   433 0000020E 3C02                    	cmp	al,2
+   434 00000210 7710                    	ja	k_bad
+   435                                  
+   436 00000212 08C0                    	or	al,al
+   437 00000214 7415                    	jz	k_read
+   438 00000216 FEC8                    	dec	al
+   439 00000218 7435                    	jz	k_peek
+   440                                  
+   441                                  ; function 02 -- shift flags
+   442 0000021A A01700                  	mov	al,[kbd_flag]
+   443 0000021D 88460E                  	mov	[bp+offset_ax],al
+   444 00000220 EB05                    	jmp	k_done
+   445                                  
+   446                                  k_bad:
+   447 00000222 C7460E0000              	mov	word [bp+offset_ax],0
+   448                                  k_done:
+   449 00000227 611F07                  	popm	all,ds,es
+   450 0000022A CF                      	iret
+   451                                  
+   452                                  
+   453                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   454                                  ; function 00 -- read a key, waiting until there is one
+   455                                  ;
+   456                                  ; HLT rather than a spin: the tick and the receive interrupt both wake
+   457                                  ; it, and it keeps the bus quiet while DOS is idle at the prompt.
+   458                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   459                                  k_read:
+   460 0000022B FB                      	sti
+   461                                  .1:
+   462 0000022C 8B1E1A00                	mov	bx,[buffer_head]
+   463 00000230 3B1E1C00                	cmp	bx,[buffer_tail]
+   464 00000234 7503                    	jne	.2
+   465 00000236 F4                      	hlt				; nothing yet; wait for an interrupt
+   466 00000237 EBF3                    	jmp	.1
+   467                                  .2:
+   468 00000239 8B07                    	mov	ax,[bx]			; the waiting key
+   469                                  
+   470 0000023B 83C302                  	add	bx,2
+   471 0000023E 83FB3E                  	cmp	bx,KBD_END
+   472 00000241 7203                    	jb	.3
+   473 00000243 BB1E00                  	mov	bx,KBD_START
+   474                                  .3:
+   475 00000246 891E1A00                	mov	[buffer_head],bx
+   476                                  
+   477 0000024A 89460E                  	mov	[bp+offset_ax],ax
+   478 0000024D EBD8                    	jmp	k_done
    479                                  
-   480                                  ; Write AL to the controller (command) or to the keyboard (data), once
-   481                                  ; the input buffer is free.  Gives up rather than hangs.
-   482                                  kbc_put_cmd:
-   483 00000217 52                      	push	dx
-   484 00000218 BAE104                  	mov	dx,KBC_STAT
-   485 0000021B EB04                    	jmp	short kbc_put
-   486                                  kbc_put_data:
-   487 0000021D 52                      	push	dx
-   488 0000021E BAE004                  	mov	dx,KBC_DATA
-   489                                  kbc_put:
-   490 00000221 5150                    	pushm	ax,cx
-   491 00000223 B90000                  	mov	cx,0			; 64K tries
-   492                                  .wait:
-   493 00000226 52                      	push	dx
-   494 00000227 BAE104                  	mov	dx,KBC_STAT
-   495 0000022A EC                      	in	al,dx
-   496 0000022B 5A                      	pop	dx
-   497 0000022C A802                    	test	al,KBC_IBF
-   498 0000022E E0F6                    	loopnz	.wait
-   499 00000230 5859                    	popm	ax,cx
-   500 00000232 EE                      	out	dx,al
-   501 00000233 5A                      	pop	dx
-   502 00000234 C3                      	ret
-   503                                  
-   504                                  
-   505                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   506                                  ; int_irq1 -- INT 09h, a scan code from the 8242
-   507                                  ;
-   508                                  ; One byte per interrupt: the 8042 holds the keyboard off until the byte
-   509                                  ; is read, then lets the next one through, which raises the line again.
-   510                                  ; The line is edge-triggered, so the byte is taken before EOI and nothing
-   511                                  ; is left to re-arm.
-   512                                  ;
-   513                                  ; An interrupt with no byte waiting is spurious and is simply
-   514                                  ; acknowledged.  The VGA3's retrace interrupt is not used (vga3.asm
-   515                                  ; reads the CRTC's blanking bit instead), so K1 belongs on 2-3, off
-   516                                  ; this line.
-   517                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   518                                  int_irq1:
-   519 00000235 1E52515350              	pushm	ax,bx,cx,dx,ds
-   520                                  
-   521 0000023A BAE104                  	mov	dx,KBC_STAT
-   522 0000023D EC                      	in	al,dx
-   523 0000023E A801                    	test	al,KBC_OBF
-   524 00000240 740A                    	jz	.eoi			; no byte: spurious, acknowledge only
-   525 00000242 BAE004                  	mov	dx,KBC_DATA
-   526 00000245 EC                      	in	al,dx
-   527                                  
-   528 00000246 6A401F                  	get_bda	DS
-   529 00000249 E80A00                  	call	kbd_scan1
-   530                                  .eoi:
-   531 0000024C B020                    	mov	al,NS_EOI
-   532 0000024E E620                    	out	OCW2M_AT,al
-   533                                  
-   534 00000250 585B595A1F              	popm	ax,bx,cx,dx,ds
-   535 00000255 CF                      	iret
-   536                                  
-   537                                  
-   538                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   539                                  ; kbd_scan1 -- one set-1 scan code in AL, DS the BDA
-   540                                  ;
-   541                                  ; Shift-state keys change kbd_flag and produce nothing.  Everything else
-   542                                  ; is looked up by the shift state in force and stored as the PC word,
-   543                                  ; scan in AH and ASCII in AL, through kbd_stuff_ax.
-   544                                  ;
-   545                                  ; Prefixes: E0 marks the keys that were added to the 101-key board --
-   546                                  ; the cursor cluster, the right Ctrl and Alt, keypad Enter and /.  It is
-   547                                  ; remembered in kbd_flag3 across the interrupt boundary and consumed by
-   548                                  ; the next code.  E1 opens the six-byte Pause sequence, which is thrown
-   549                                  ; away in its entirety.
-   550                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   551                                  kbd_scan1:
-   552 00000256 3CE0                    	cmp	al,0xE0
-   553 00000258 7439                    	je	.pfx_e0
-   554 0000025A 3CE1                    	cmp	al,0xE1
-   555 0000025C 743B                    	je	.pfx_e1
-   556 0000025E F606960001              	test	byte [kbd_flag3],KF3_E1
-   557 00000263 753A                    	jnz	.in_pause
+   480                                  
+   481                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   482                                  ; function 01 -- is a key waiting?
+   483                                  ;
+   484                                  ;  ZF set means the buffer is empty.  The key is left where it is.
+   485                                  ;
+   486                                  ; The Zero flag has to reach the caller, so this returns with RETF 2 --
+   487                                  ; discarding the stacked flags -- rather than IRET, which would put them
+   488                                  ; back and lose the answer.
+   489                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   490                                  k_peek:
+   491 0000024F 8B1E1A00                	mov	bx,[buffer_head]
+   492 00000253 3B1E1C00                	cmp	bx,[buffer_tail]
+   493 00000257 740D                    	je	.empty
+   494                                  
+   495 00000259 8B07                    	mov	ax,[bx]
+   496 0000025B 89460E                  	mov	[bp+offset_ax],ax
+   497                                  
+   498 0000025E 611F07                  	popm	all,ds,es
+   499 00000261 09E4                    	or	sp,sp			; SP is never zero, so ZF clear:
+   500 00000263 CA0200                  	retf	2			;  a key is waiting
+   501                                  .empty:
+   502 00000266 611F07                  	popm	all,ds,es
+   503 00000269 39E4                    	cmp	sp,sp			; ZF set: nothing waiting
+   504 0000026B CA0200                  	retf	2
+   505                                  
+   506                                  
+   507                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   508                                  ; kbd_scan -- ASCII to the scan code of the key that would produce it
+   509                                  ;
+   510                                  ; A serial console delivers characters, not key events, so the scan code
+   511                                  ; has to be invented.  Most software reads only the ASCII byte, but
+   512                                  ; enough of it looks at the scan code -- for Enter, Backspace and Escape
+   513                                  ; especially -- that returning zero causes trouble.
+   514                                  ;
+   515                                  ; The value is the set-1 make code of the key bearing that character;
+   516                                  ; shifted symbols carry the code of the unshifted key, which is what a
+   517                                  ; real keyboard would have reported.
+   518                                  ;
+   519                                  ; 00h..1Fh are the control codes: Ctrl+letter carries the letter's code,
+   520                                  ; with Backspace, Tab, Enter and Escape given their own keys.
+   521                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   522                                  	align	2
+   523                                  kbd_scan:
+   524                                  ;	  ^@   ^A   ^B   ^C   ^D   ^E   ^F   ^G
+   525 0000026E 031E302E20122122        	db 0x03,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
+   526                                  ;	  BS   TAB  ^J   ^K   ^L   CR   ^N   ^O
+   527 00000276 0E0F2425261C3118        	db 0x0E,0x0F,0x24,0x25,0x26,0x1C,0x31,0x18
+   528                                  ;	  ^P   ^Q   ^R   ^S   ^T   ^U   ^V   ^W
+   529 0000027E 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
+   530                                  ;	  ^X   ^Y   ^Z   ESC  ^\   ^]   ^^   ^_
+   531 00000286 2D152C012B1B070C        	db 0x2D,0x15,0x2C,0x01,0x2B,0x1B,0x07,0x0C
+   532                                  ;	  SP   !    "    #    $    %    &    '
+   533 0000028E 3902280405060828        	db 0x39,0x02,0x28,0x04,0x05,0x06,0x08,0x28
+   534                                  ;	  (    )    *    +    ,    -    .    /
+   535 00000296 0A0B090D330C3435        	db 0x0A,0x0B,0x09,0x0D,0x33,0x0C,0x34,0x35
+   536                                  ;	  0    1    2    3    4    5    6    7
+   537 0000029E 0B02030405060708        	db 0x0B,0x02,0x03,0x04,0x05,0x06,0x07,0x08
+   538                                  ;	  8    9    :    ;    <    =    >    ?
+   539 000002A6 090A2727330D3435        	db 0x09,0x0A,0x27,0x27,0x33,0x0D,0x34,0x35
+   540                                  ;	  @    A    B    C    D    E    F    G
+   541 000002AE 031E302E20122122        	db 0x03,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
+   542                                  ;	  H    I    J    K    L    M    N    O
+   543 000002B6 2317242526323118        	db 0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18
+   544                                  ;	  P    Q    R    S    T    U    V    W
+   545 000002BE 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
+   546                                  ;	  X    Y    Z    [    \    ]    ^    _
+   547 000002C6 2D152C1A2B1B070C        	db 0x2D,0x15,0x2C,0x1A,0x2B,0x1B,0x07,0x0C
+   548                                  ;	  `    a    b    c    d    e    f    g
+   549 000002CE 291E302E20122122        	db 0x29,0x1E,0x30,0x2E,0x20,0x12,0x21,0x22
+   550                                  ;	  h    i    j    k    l    m    n    o
+   551 000002D6 2317242526323118        	db 0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18
+   552                                  ;	  p    q    r    s    t    u    v    w
+   553 000002DE 1910131F14162F11        	db 0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11
+   554                                  ;	  x    y    z    {    |    }    ~    DEL
+   555 000002E6 2D152C1A2B1B2953        	db 0x2D,0x15,0x2C,0x1A,0x2B,0x1B,0x29,0x53
+   556                                  len_kbd_scan	equ	$ - kbd_scan
+   557                                  
    558                                  
-   559 00000265 8A1E9600                	mov	bl,[kbd_flag3]		; BL bit 1: this code had an E0
-   560 00000269 80269600FD              	and	byte [kbd_flag3],~KF3_E0
-   561                                  
-   562 0000026E A880                    	test	al,0x80
-   563 00000270 7537                    	jnz	.release
-   564 00000272 E86400                  	call	.shifter		; a shift-state key?
-   565 00000275 721B                    	jc	.done			;   yes, and it has been handled
-   566                                  
-   567 00000277 3C53                    	cmp	al,0x53			; Del
-   568 00000279 750F                    	jne	.lookup
-   569 0000027B 8A261700                	mov	ah,[kbd_flag]
-   570 0000027F 80E40C                  	and	ah,KF_CTRL+KF_ALT
-   571 00000282 80FC0C                  	cmp	ah,KF_CTRL+KF_ALT
-   572 00000285 7503                    	jne	.lookup
-   573 00000287 E9(0000)                	jmp	reboot_			; Ctrl-Alt-Del: does not return
-   574                                  
-   575                                  .lookup:
-   576 0000028A E8AE00                  	call	kbd_lookup		; AX = the word, or CF if nothing
-   577 0000028D 7203                    	jc	.done
-   578 0000028F E8AC01                  	call	kbd_stuff_ax
-   579                                  .done:
-   580 00000292 C3                      	ret
-   581                                  
-   582                                  .pfx_e0:
-   583 00000293 800E960002              	or	byte [kbd_flag3],KF3_E0
-   584 00000298 C3                      	ret
-   585                                  .pfx_e1:
-   586 00000299 800E960001              	or	byte [kbd_flag3],KF3_E1
-   587 0000029E C3                      	ret
-   588                                  .in_pause:
-   589 0000029F 3CC5                    	cmp	al,0xC5			; the sequence ends with the break of 45
-   590 000002A1 75EF                    	jne	.done
-   591 000002A3 80269600FC              	and	byte [kbd_flag3],~(KF3_E1+KF3_E0)
-   592 000002A8 C3                      	ret
-   593                                  
-   594                                  .release:
-   595 000002A9 247F                    	and	al,0x7F
-   596 000002AB 3C1D                    	cmp	al,0x1D
-   597 000002AD 741E                    	je	.rel_ctrl
-   598 000002AF 3C38                    	cmp	al,0x38
-   599 000002B1 7420                    	je	.rel_alt
-   600 000002B3 F6C302                  	test	bl,KF3_E0		; E0 AA, E0 B6: the fake shifts (below)
-   601 000002B6 75DA                    	jnz	.done
-   602 000002B8 3C2A                    	cmp	al,0x2A
-   603 000002BA 7405                    	je	.rel_ls
-   604 000002BC 3C36                    	cmp	al,0x36
-   605 000002BE 7407                    	je	.rel_rs
-   606 000002C0 C3                      	ret				; the release of an ordinary key
-   607                                  .rel_ls:
-   608 000002C1 80261700FD              	and	byte [kbd_flag],~KF_LSHIFT
-   609 000002C6 C3                      	ret
-   610                                  .rel_rs:
-   611 000002C7 80261700FE              	and	byte [kbd_flag],~KF_RSHIFT
-   612 000002CC C3                      	ret
-   613                                  .rel_ctrl:
-   614 000002CD 80261700FB              	and	byte [kbd_flag],~KF_CTRL
-   615 000002D2 C3                      	ret
-   616                                  .rel_alt:
-   617 000002D3 80261700F7              	and	byte [kbd_flag],~KF_ALT
-   618 000002D8 C3                      	ret
-   619                                  
-   620                                  ; The make of a shift-state key.  CF set if AL was one.  Caps, Num and
-   621                                  ; Scroll toggle on make.  The LEDs are not yet driven: that wants a small
-   622                                  ; state machine for the keyboard's acknowledgements, and belongs with the
-   623                                  ; first thing that needs it.
-   624                                  ;
-   625                                  ; E0 2A and E0 36 are not shifts.  With Num Lock on, the keyboard brackets
-   626                                  ; every cursor-cluster key in them so that a host which knows nothing of
-   627                                  ; E0 still gets a cursor key rather than a digit.  This host does know,
-   628                                  ; so they are swallowed, or they would flip the keypad the wrong way.
-   629                                  .shifter:
-   630 000002D9 3C2A                    	cmp	al,0x2A
-   631 000002DB 741A                    	je	.set_ls
-   632 000002DD 3C36                    	cmp	al,0x36
-   633 000002DF 7422                    	je	.set_rs
-   634 000002E1 3C1D                    	cmp	al,0x1D
-   635 000002E3 742C                    	je	.set_ctrl
-   636 000002E5 3C38                    	cmp	al,0x38
-   637 000002E7 742F                    	je	.set_alt
-   638 000002E9 3C3A                    	cmp	al,0x3A
-   639 000002EB 7432                    	je	.tog_caps
-   640 000002ED 3C45                    	cmp	al,0x45
-   641 000002EF 7435                    	je	.tog_num
-   642 000002F1 3C46                    	cmp	al,0x46
-   643 000002F3 743D                    	je	.tog_scroll
-   644 000002F5 F8                      	clc
-   645 000002F6 C3                      	ret
-   646 000002F7 F6C302                  .set_ls:	test	bl,KF3_E0
-   647 000002FA 7513                    		jnz	.fake
-   648 000002FC 800E170002              		or	byte [kbd_flag],KF_LSHIFT
-   649 00000301 F9                      		stc
-   650 00000302 C3                      		ret
-   651 00000303 F6C302                  .set_rs:	test	bl,KF3_E0
-   652 00000306 7507                    		jnz	.fake
-   653 00000308 800E170001              		or	byte [kbd_flag],KF_RSHIFT
-   654 0000030D F9                      		stc
-   655 0000030E C3                      		ret
-   656 0000030F F9                      .fake:		stc			; eaten, nothing changes
-   657 00000310 C3                      		ret
-   658 00000311 800E170004              .set_ctrl:	or	byte [kbd_flag],KF_CTRL
-   659 00000316 F9                      		stc
-   660 00000317 C3                      		ret
-   661 00000318 800E170008              .set_alt:	or	byte [kbd_flag],KF_ALT
-   662 0000031D F9                      		stc
-   663 0000031E C3                      		ret
-   664 0000031F 8036170040              .tog_caps:	xor	byte [kbd_flag],KF_CAPS
-   665 00000324 F9                      		stc
-   666 00000325 C3                      		ret
-   667 00000326 F6C302                  .tog_num:	test	bl,KF3_E0		; E0 45 is not Num Lock
-   668 00000329 750E                    		jnz	.not_shifter
-   669 0000032B 8036170020              		xor	byte [kbd_flag],KF_NUM
-   670 00000330 F9                      		stc
-   671 00000331 C3                      		ret
-   672 00000332 8036170010              .tog_scroll:	xor	byte [kbd_flag],KF_SCROLL
-   673 00000337 F9                      		stc
-   674 00000338 C3                      		ret
-   675 00000339 F8                      .not_shifter:	clc
-   676 0000033A C3                      		ret
-   677                                  
-   678                                  
-   679                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   680                                  ; kbd_lookup -- scan code AL, E0 flag in BL bit 1, shift state in kbd_flag
-   681                                  ;
-   682                                  ; Returns the PC key word in AX, or CF set for a code with no meaning.
-   683                                  ; Three regions of the set-1 space, each with its own rule:
-   684                                  ;
-   685                                  ;    01..39   the typewriter keys, four tables' worth
-   686                                  ;    3B..44   F1..F10, plus 57 and 58 for F11 and F12: no ASCII, and the
-   687                                  ;             scan code moves by a fixed amount per shift state
-   688                                  ;    47..53   the keypad: digits when Num Lock says so and no E0 says
-   689                                  ;             otherwise, cursor keys with no ASCII when not
-   690                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   691                                  kbd_lookup:
-   692 0000033B 88C4                    	mov	ah,al			; AH: the scan code, kept for the word
-   693 0000033D 88DE                    	mov	dh,bl			; DH: the E0 flag; BL becomes an index
-   694 0000033F 8A0E1700                	mov	cl,[kbd_flag]
-   695                                  
-   696 00000343 3C39                    	cmp	al,0x39
-   697 00000345 761C                    	jbe	.typewriter
-   698 00000347 3C3B                    	cmp	al,0x3B
-   699 00000349 7216                    	jb	.none
-   700 0000034B 3C44                    	cmp	al,0x44
-   701 0000034D 765F                    	jbe	.fkey
-   702 0000034F 3C47                    	cmp	al,0x47
-   703 00000351 720E                    	jb	.none
-   704 00000353 3C53                    	cmp	al,0x53
-   705 00000355 0F869800                	jbe	.keypad
-   706 00000359 3C57                    	cmp	al,0x57
-   707 0000035B 7451                    	je	.fkey
-   708 0000035D 3C58                    	cmp	al,0x58
-   709 0000035F 744D                    	je	.fkey
-   710                                  .none:
-   711 00000361 F9                      	stc
-   712 00000362 C3                      	ret
-   713                                  
-   714                                  ; --- the typewriter keys ---------------------------------------------
-   715                                  .typewriter:
-   716 00000363 0FB6D8                  	movzx	bx,al
-   717 00000366 4B                      	dec	bx			; tables begin at scan code 01
-   718 00000367 F6C108                  	test	cl,KF_ALT
-   719 0000036A 753E                    	jnz	.alt
-   720 0000036C F6C104                  	test	cl,KF_CTRL
-   721 0000036F 752E                    	jnz	.ctrl
-   722 00000371 F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
-   723 00000374 7507                    	jnz	.shifted
-   724 00000376 2E8A87[4804]               cs	mov	al,[bx+kt_normal]
-   725 0000037B EB05                    	jmp	short .caps
-   726                                  .shifted:
-   727 0000037D 2E8A87[8104]               cs	mov	al,[bx+kt_shift]
-   728                                  .caps:
-   729 00000382 F6C140                  	test	cl,KF_CAPS
-   730 00000385 7416                    	jz	.tw_done
-   731                                  ; Caps Lock inverts shift for letters and nothing else
-   732 00000387 3C61                    	cmp	al,'a'
-   733 00000389 7208                    	jb	.caps_upper
-   734 0000038B 3C7A                    	cmp	al,'z'
-   735 0000038D 770E                    	ja	.tw_done
-   736 0000038F 2C20                    	sub	al,'a'-'A'
-   737 00000391 EB0A                    	jmp	short .tw_done
-   738                                  .caps_upper:
-   739 00000393 3C41                    	cmp	al,'A'
-   740 00000395 7206                    	jb	.tw_done
-   741 00000397 3C5A                    	cmp	al,'Z'
-   742 00000399 7702                    	ja	.tw_done
-   743 0000039B 0420                    	add	al,'a'-'A'
-   744                                  .tw_done:
-   745 0000039D F8                      	clc
-   746 0000039E C3                      	ret
-   747                                  .ctrl:
-   748 0000039F 2E8A87[BA04]               cs	mov	al,[bx+kt_ctrl]
-   749 000003A4 3CFF                    	cmp	al,0xFF			; FF marks a key with no Ctrl meaning
-   750 000003A6 74B9                    	je	.none
-   751 000003A8 F8                      	clc
-   752 000003A9 C3                      	ret
-   753                                  .alt:
-   754 000003AA 30C0                    	xor	al,al			; Alt+key: no ASCII, the scan code says which
-   755 000003AC F8                      	clc
-   756 000003AD C3                      	ret
-   757                                  
-   758                                  ; --- the function keys -----------------------------------------------
-   759                                  .fkey:
-   760 000003AE 3C57                    	cmp	al,0x57
-   761 000003B0 7202                    	jb	.f10
-   762 000003B2 2C4D                    	sub	al,0x57-0x0A		; F11, F12 follow F10 in the numbering
-   763                                  .f10:
-   764 000003B4 2C3B                    	sub	al,0x3B			; 0..11
-   765 000003B6 F6C108                  	test	cl,KF_ALT
-   766 000003B9 7528                    	jnz	.f_alt
-   767 000003BB F6C104                  	test	cl,KF_CTRL
-   768 000003BE 7519                    	jnz	.f_ctrl
-   769 000003C0 F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
-   770 000003C3 750A                    	jnz	.f_shift
-   771 000003C5 043B                    	add	al,0x3B			; F1..F10 are 3B..44, F11 and F12 85, 86
-   772 000003C7 3C45                    	cmp	al,0x45
-   773 000003C9 7220                    	jb	.f_out
-   774 000003CB 0440                    	add	al,0x85-0x45
-   775 000003CD EB1C                    	jmp	short .f_out
-   776                                  .f_shift:
-   777 000003CF 0454                    	add	al,0x54			; 54..5D, then 87, 88
-   778 000003D1 3C5E                    	cmp	al,0x5E
-   779 000003D3 7216                    	jb	.f_out
-   780 000003D5 0429                    	add	al,0x87-0x5E
-   781 000003D7 EB12                    	jmp	short .f_out
-   782                                  .f_ctrl:
-   783 000003D9 045E                    	add	al,0x5E			; 5E..67, then 89, 8A
-   784 000003DB 3C68                    	cmp	al,0x68
-   785 000003DD 720C                    	jb	.f_out
-   786 000003DF 0421                    	add	al,0x89-0x68
-   787 000003E1 EB08                    	jmp	short .f_out
-   788                                  .f_alt:
-   789 000003E3 0468                    	add	al,0x68			; 68..71, then 8B, 8C
-   790 000003E5 3C72                    	cmp	al,0x72
-   791 000003E7 7202                    	jb	.f_out
-   792 000003E9 0419                    	add	al,0x8B-0x72
-   793                                  .f_out:
-   794 000003EB 88C4                    	mov	ah,al
-   795 000003ED 30C0                    	xor	al,al
-   796 000003EF F8                      	clc
-   797 000003F0 C3                      	ret
+   559                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   560                                  ; The PS/2 keyboard on the ECB VGA3 board
+   561                                  ;
+   562                                  ; The board carries an Intel 8242 -- an 8042 with the PC/AT keyboard
+   563                                  ; firmware in it -- at the first two ports of its I/O block, which P3 on
+   564                                  ; the board puts at 4E0h.  That makes this the port 60h/64h protocol at a
+   565                                  ; different address and nothing else: translation is on, so scan codes
+   566                                  ; arrive in set 1 exactly as INT 09h on a PC receives them.
+   567                                  ;
+   568                                  ; The interrupt goes out on the bus line K4 selects; both positions reach
+   569                                  ; the 386EX INT0 pin, which is master IR1, which with ICW2 = 08h is INT 09h.
+   570                                  ; K1 puts the video interrupt on INT5 (slave IR1, INT 71h) so the two never
+   571                                  ; share a line; nothing enables it.
+   572                                  ;
+   573                                  ; Established with V3KBD in the monitor before a line of this was written.
+   574                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   575                                  KBC_DATA	equ	0x4E0		; 8242 data, read and write
+   576                                  KBC_STAT	equ	0x4E1		; status on read, command on write
+   577                                  
+   578                                  KBC_OBF		equ	0x01		; a byte is waiting at KBC_DATA
+   579                                  KBC_IBF		equ	0x02		; the last byte written is not yet taken
+   580                                  
+   581                                  KBC_SELFTEST	equ	0xAA		; resets the controller; replies 55
+   582                                  KBC_WRCMD	equ	0x60		; write the command byte
+   583                                  KBC_ENABLE	equ	0xAE		; keyboard interface on
+   584                                  KB_RESET	equ	0xFF		; to the keyboard; replies FA, then AA
+   585                                  KB_SETLED	equ	0xED		; then a lamp mask; each replies FA
+   586                                  KBC_CMDBYTE	equ	0x41		; IRQ on, set-2-to-1 translation on,
+   587                                  				; interface enabled, no system flag
+   588                                  
+   589                                  ; kbd_flag, 40:17, PC layout
+   590                                  KF_RSHIFT	equ	0x01
+   591                                  KF_LSHIFT	equ	0x02
+   592                                  KF_CTRL		equ	0x04
+   593                                  KF_ALT		equ	0x08
+   594                                  KF_SCROLL	equ	0x10
+   595                                  KF_NUM		equ	0x20
+   596                                  KF_CAPS		equ	0x40
+   597                                  KF_INS		equ	0x80
+   598                                  
+   599                                  ; kbd_flag3, 40:96, PC layout: the prefix state between interrupts
+   600                                  KF3_E1		equ	0x01		; last code was E1 (Pause)
+   601                                  KF3_E0		equ	0x02		; last code was E0
+   602                                  
+   603                                  
+   604                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   605                                  ; kbc_init -- bring the controller up, if it is there
+   606                                  ;
+   607                                  ; Called from kbd_init.  The board may be absent, in which case the port
+   608                                  ; floats and reads FF; that case leaves quietly and IR1 stays masked.  The
+   609                                  ; timer is not running yet when this is called, so waits are counted, not
+   610                                  ; timed: 64K reads of a port at seven wait states is some 30 ms, which is
+   611                                  ; more than an 8042 ever needs and short enough not to notice at POST.
+   612                                  ;
+   613                                  ; The sequence is the PC/AT one, in full, because a shorter one did not
+   614                                  ; work: drain, write the command byte and enable left the keyboard silent
+   615                                  ; until the monitor's V3KBD -- self-test, enable, keyboard reset -- was
+   616                                  ; run by hand.  The self-test resets the controller; the keyboard reset
+   617                                  ; resets the keyboard.  Its replies, FA then AA, take up to half a second
+   618                                  ; and are not waited for: IR1 is unmasked before they arrive and the ISR
+   619                                  ; takes them as the break codes of 7A and 2A, which mean nothing.
+   620                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   621                                  kbc_init:
+   622 000002EE 525150                  	pushm	ax,cx,dx
+   623                                  
+   624 000002F1 BAE104                  	mov	dx,KBC_STAT
+   625 000002F4 EC                      	in	al,dx
+   626 000002F5 3CFF                    	cmp	al,0xFF
+   627 000002F7 7437                    	je	.9			; nothing there
+   628                                  
+   629                                  ; Whatever the controller has been holding since power-up goes.
+   630 000002F9 B91000                  	mov	cx,16
+   631                                  .drain:
+   632 000002FC EC                      	in	al,dx
+   633 000002FD A801                    	test	al,KBC_OBF
+   634 000002FF 7409                    	jz	.drained
+   635 00000301 BAE004                  	mov	dx,KBC_DATA
+   636 00000304 EC                      	in	al,dx
+   637 00000305 BAE104                  	mov	dx,KBC_STAT
+   638 00000308 E2F2                    	loop	.drain
+   639                                  .drained:
+   640 0000030A B0AA                    	mov	al,KBC_SELFTEST		; reset the controller ...
+   641 0000030C E83C00                  	call	kbc_put_cmd
+   642 0000030F E82200                  	call	kbc_take		; ... and take its 55, or give up
+   643 00000312 B060                    	mov	al,KBC_WRCMD
+   644 00000314 E83400                  	call	kbc_put_cmd
+   645 00000317 B041                    	mov	al,KBC_CMDBYTE
+   646 00000319 E83500                  	call	kbc_put_data
+   647 0000031C B0AE                    	mov	al,KBC_ENABLE
+   648 0000031E E82A00                  	call	kbc_put_cmd
+   649 00000321 B0FF                    	mov	al,KB_RESET		; and reset the keyboard; see above
+   650 00000323 E82B00                  	call	kbc_put_data
+   651                                  
+   652 00000326 58595A                  	popm	ax,cx,dx
+   653 00000329 B80100                  	mov	ax,1			; IRQ1 -- the keyboard
+   654 0000032C E8(0000)                	call	unmask_interrupt_
+   655 0000032F C3                      	ret
+   656                                  .9:
+   657 00000330 58595A                  	popm	ax,cx,dx
+   658 00000333 C3                      	ret
+   659                                  
+   660                                  ; Wait, bounded, for the controller to offer a byte, and take it.  The
+   661                                  ; value is not wanted; the point is that the controller has finished
+   662                                  ; what it was asked before it is asked the next thing.
+   663                                  kbc_take:
+   664 00000334 525150                  	pushm	ax,cx,dx
+   665 00000337 BAE104                  	mov	dx,KBC_STAT
+   666 0000033A 31C9                    	xor	cx,cx
+   667 0000033C EC                      .w:	in	al,dx
+   668 0000033D A801                    	test	al,KBC_OBF
+   669 0000033F E1FB                    	loopz	.w
+   670 00000341 7404                    	jz	.9			; gave up
+   671 00000343 BAE004                  	mov	dx,KBC_DATA
+   672 00000346 EC                      	in	al,dx
+   673 00000347 58595A                  .9:	popm	ax,cx,dx
+   674 0000034A C3                      	ret
+   675                                  
+   676                                  ; Write AL to the controller (command) or to the keyboard (data), once
+   677                                  ; the input buffer is free.  Gives up rather than hangs.
+   678                                  kbc_put_cmd:
+   679 0000034B 52                      	push	dx
+   680 0000034C BAE104                  	mov	dx,KBC_STAT
+   681 0000034F EB04                    	jmp	short kbc_put
+   682                                  kbc_put_data:
+   683 00000351 52                      	push	dx
+   684 00000352 BAE004                  	mov	dx,KBC_DATA
+   685                                  kbc_put:
+   686 00000355 5150                    	pushm	ax,cx
+   687 00000357 B90000                  	mov	cx,0			; 64K tries
+   688                                  .wait:
+   689 0000035A 52                      	push	dx
+   690 0000035B BAE104                  	mov	dx,KBC_STAT
+   691 0000035E EC                      	in	al,dx
+   692 0000035F 5A                      	pop	dx
+   693 00000360 A802                    	test	al,KBC_IBF
+   694 00000362 E0F6                    	loopnz	.wait
+   695 00000364 5859                    	popm	ax,cx
+   696 00000366 EE                      	out	dx,al
+   697 00000367 5A                      	pop	dx
+   698 00000368 C3                      	ret
+   699                                  
+   700                                  
+   701                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   702                                  ; int_irq1 -- INT 09h, a scan code from the 8242
+   703                                  ;
+   704                                  ; One byte per interrupt: the 8042 holds the keyboard off until the byte
+   705                                  ; is read, then lets the next one through, which raises the line again.
+   706                                  ; The line is edge-triggered, so the byte is taken before EOI and nothing
+   707                                  ; is left to re-arm.
+   708                                  ;
+   709                                  ; An interrupt with no byte waiting is spurious and is simply
+   710                                  ; acknowledged.  The VGA3's retrace interrupt is not used (vga3.asm
+   711                                  ; reads the CRTC's blanking bit instead), so K1 belongs on 2-3, off
+   712                                  ; this line.
+   713                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   714                                  int_irq1:
+   715 00000369 1E52515350              	pushm	ax,bx,cx,dx,ds
+   716                                  
+   717 0000036E BAE104                  	mov	dx,KBC_STAT
+   718 00000371 EC                      	in	al,dx
+   719 00000372 A801                    	test	al,KBC_OBF
+   720 00000374 740A                    	jz	.eoi			; no byte: spurious, acknowledge only
+   721 00000376 BAE004                  	mov	dx,KBC_DATA
+   722 00000379 EC                      	in	al,dx
+   723                                  
+   724 0000037A 6A401F                  	get_bda	DS
+   725 0000037D E83200                  	call	kbd_scan1
+   726                                  .eoi:
+   727 00000380 B020                    	mov	al,NS_EOI
+   728 00000382 E620                    	out	OCW2M_AT,al
+   729                                  
+   730 00000384 585B595A1F              	popm	ax,bx,cx,dx,ds
+   731 00000389 CF                      	iret
+   732                                  
+   733                                  
+   734                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   735                                  ; kbd_leds -- make the lamps agree with kbd_flag
+   736                                  ;
+   737                                  ; DS is the BDA.  Everything preserved.  Called after every make code:
+   738                                  ; the comparison below is the whole cost unless a lock key has actually
+   739                                  ; changed, so it does not matter that most keys are not lock keys.
+   740                                  ;
+   741                                  ; kbd_flag2 holds what the lamps were last set to, in the keyboard's own
+   742                                  ; bit order -- scroll, num, caps -- which is kbd_flag's lock bits shifted
+   743                                  ; down four.  That the two layouts line up is a convenience of the PC
+   744                                  ; definitions, not a coincidence worth relying on elsewhere.
+   745                                  ;
+   746                                  ; ED, then the mask; the keyboard acknowledges each with FA.  Both
+   747                                  ; acknowledgements are taken here rather than left for the interrupt,
+   748                                  ; which would read them as break codes of 7A -- harmless in themselves,
+   749                                  ; but the next real key would then arrive one interrupt behind.
+   750                                  ;
+   751                                  ; This runs inside INT 09h with interrupts off and blocks for two
+   752                                  ; keyboard frames, about 2 ms.  That is well under a timer tick, and it
+   753                                  ; is only paid when a lock key is struck.  If the keyboard stops
+   754                                  ; answering mid-sequence the bounded waits in kbc_take end it.
+   755                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   756                                  kbd_leds:
+   757 0000038A 525150                  	pushm	ax,cx,dx
+   758 0000038D A01700                  	mov	al,[kbd_flag]
+   759 00000390 C0E804                  	shr	al,4
+   760 00000393 2407                    	and	al,7			; scroll, num, caps
+   761 00000395 3A069700                	cmp	al,[kbd_flag2]
+   762 00000399 7413                    	je	.9			; the lamps already say this
+   763 0000039B A29700                  	mov	[kbd_flag2],al
+   764 0000039E 50                      	push	ax
+   765 0000039F B0ED                    	mov	al,KB_SETLED
+   766 000003A1 E8ADFF                  	call	kbc_put_data
+   767 000003A4 E88DFF                  	call	kbc_take		; the FA
+   768 000003A7 58                      	pop	ax
+   769 000003A8 E8A6FF                  	call	kbc_put_data		; the mask
+   770 000003AB E886FF                  	call	kbc_take		; and its FA
+   771                                  .9:
+   772 000003AE 58595A                  	popm	ax,cx,dx
+   773 000003B1 C3                      	ret
+   774                                  
+   775                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   776                                  ; kbd_scan1 -- one set-1 scan code in AL, DS the BDA
+   777                                  ;
+   778                                  ; Shift-state keys change kbd_flag and produce nothing.  Everything else
+   779                                  ; is looked up by the shift state in force and stored as the PC word,
+   780                                  ; scan in AH and ASCII in AL, through kbd_stuff_ax.
+   781                                  ;
+   782                                  ; Prefixes: E0 marks the keys that were added to the 101-key board --
+   783                                  ; the cursor cluster, the right Ctrl and Alt, keypad Enter and /.  It is
+   784                                  ; remembered in kbd_flag3 across the interrupt boundary and consumed by
+   785                                  ; the next code.  E1 opens the six-byte Pause sequence, which is thrown
+   786                                  ; away in its entirety.
+   787                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   788                                  kbd_scan1:
+   789 000003B2 3CE0                    	cmp	al,0xE0
+   790 000003B4 743C                    	je	.pfx_e0
+   791 000003B6 3CE1                    	cmp	al,0xE1
+   792 000003B8 743E                    	je	.pfx_e1
+   793 000003BA F606960001              	test	byte [kbd_flag3],KF3_E1
+   794 000003BF 753D                    	jnz	.in_pause
+   795                                  
+   796 000003C1 8A1E9600                	mov	bl,[kbd_flag3]		; BL bit 1: this code had an E0
+   797 000003C5 80269600FD              	and	byte [kbd_flag3],~KF3_E0
    798                                  
-   799                                  ; --- the keypad ---------------------------------------------------------
-   800                                  .keypad:
-   801 000003F1 0FB6D8                  	movzx	bx,al
-   802 000003F4 83EB47                  	sub	bx,0x47
-   803 000003F7 F6C108                  	test	cl,KF_ALT
-   804 000003FA 75AE                    	jnz	.alt
-   805 000003FC F6C104                  	test	cl,KF_CTRL
-   806 000003FF 752C                    	jnz	.kp_ctrl
-   807                                  
-   808                                  ; Num Lock, an E0 (the cursor cluster), or Shift: each one flips it
-   809 00000401 F6C120                  	test	cl,KF_NUM
-   810 00000404 0F95C2                  	setnz	dl
-   811 00000407 F6C602                  	test	dh,KF3_E0
-   812 0000040A 7403                    	jz	.kp1
-   813 0000040C 80F201                  	xor	dl,1
-   814                                  .kp1:
-   815 0000040F F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
-   816 00000412 7403                    	jz	.kp2
-   817 00000414 80F201                  	xor	dl,1
-   818                                  .kp2:
-   819 00000417 2E8A87[F304]               cs	mov	al,[bx+kt_keypad]	; the digit, or '-' '+' regardless
-   820 0000041C 3C2D                    	cmp	al,'-'
-   821 0000041E 740B                    	je	.kp_out
-   822 00000420 3C2B                    	cmp	al,'+'
-   823 00000422 7407                    	je	.kp_out
-   824 00000424 F6C201                  	test	dl,1
-   825 00000427 7502                    	jnz	.kp_out			; digits wanted
-   826 00000429 30C0                    	xor	al,al			; a cursor key: no ASCII
-   827                                  .kp_out:
-   828 0000042B F8                      	clc
-   829 0000042C C3                      	ret
-   830                                  .kp_ctrl:
-   831 0000042D 2E8A87[0005]               cs	mov	al,[bx+kt_kp_ctrl]
-   832 00000432 3CFF                    	cmp	al,0xFF
-   833 00000434 0F8429FF                	je	.none
-   834 00000438 88C4                    	mov	ah,al			; Ctrl-cursor: the scan code is the meaning
-   835 0000043A 30C0                    	xor	al,al
-   836 0000043C F8                      	clc
-   837 0000043D C3                      	ret
-   838                                  
-   839                                  
-   840                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   841                                  ; kbd_stuff_ax -- AX is the complete word: scan in AH, ASCII in AL
-   842                                  ;
-   843                                  ; The tail of kbd_stuff, entered when the caller already knows the scan
-   844                                  ; code and does not want one synthesised from the ASCII.
-   845                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   846                                  kbd_stuff_ax:
-   847 0000043E 52515350                	pushm	ax,bx,cx,dx
-   848 00000442 89C1                    	mov	cx,ax
-   849 00000444 E95AFC                  	jmp	kbd_stuff_word
-   850                                  
-   851                                  
-   852                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   853                                  ; Set-1 scan code to ASCII, scan codes 01 to 39.  US layout.
-   854                                  ;
-   855                                  ; No line here may END with a backslash -- not even a comment.  NASM
-   856                                  ; takes that as a continuation and swallows the next line whole, which
-   857                                  ; is how the a..\ row once vanished and shifted every key after it by
-   858                                  ; fourteen places.  The listing shows it as a line number that skips.
-   859                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   860 00000447 90                      	align	2
-   861                                  kt_normal:
-   862                                  ;	  Esc  1    2    3    4    5    6    7    8    9    0    -    =    BS   Tab
-   863 00000448 1B3132333435363738-     	db 0x1B,'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08,0x09
-   863 00000451 39302D3D0809       
-   864                                  ;	  q    w    e    r    t    y    u    i    o    p    [    ]    Ent  Ctl
-   865 00000457 71776572747975696F-     	db 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D,0x00
-   865 00000460 705B5D0D00         
-   866                                  ;	  a    s    d    f    g    h    j    k    l    ;    '    `    LSh  backslash
-   867 00000465 6173646667686A6B6C-     	db 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 0x27,'`', 0x00,'\'
-   867 0000046E 3B2760005C         
-   868                                  ;	  z    x    c    v    b    n    m    ,    .    /    RSh  *    Alt  Sp
-   869 00000473 7A786376626E6D2C2E-     	db 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00,'*', 0x00,' '
-   869 0000047C 2F002A0020         
-   870                                  
-   871                                  kt_shift:
-   872 00000481 1B21402324255E262A-     	db 0x1B,'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0x08,0x00
-   872 0000048A 28295F2B0800       
-   873 00000490 51574552545955494F-     	db 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0x0D,0x00
-   873 00000499 507B7D0D00         
-   874 0000049E 4153444647484A4B4C-     	db 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0x00,'|'
-   874 000004A7 3A227E007C         
-   875 000004AC 5A584356424E4D3C3E-     	db 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0x00,'*', 0x00,' '
-   875 000004B5 3F002A0020         
-   876                                  
-   877                                  ; FF: no Ctrl meaning.  Ctrl-BS is DEL, Ctrl-Enter is LF, Ctrl-[ ESC,
-   878                                  ; Ctrl-\ FS, Ctrl-] GS, Ctrl-- US, Ctrl-6 RS, as on a PC.
-   879                                  kt_ctrl:
-   880 000004BA 1BFFFFFFFFFF1EFFFF-     	db 0x1B,0xFF,0xFF,0xFF,0xFF,0xFF,0x1E,0xFF,0xFF,0xFF,0xFF,0x1F,0xFF,0x7F,0xFF
-   880 000004C3 FFFF1FFF7FFF       
-   881 000004C9 11170512141915090F-     	db 0x11,0x17,0x05,0x12,0x14,0x19,0x15,0x09,0x0F,0x10,0x1B,0x1D,0x0A,0xFF
-   881 000004D2 101B1D0AFF         
-   882 000004D7 0113040607080A0B0C-     	db 0x01,0x13,0x04,0x06,0x07,0x08,0x0A,0x0B,0x0C,0xFF,0xFF,0xFF,0xFF,0x1C
-   882 000004E0 FFFFFFFF1C         
-   883 000004E5 1A180316020E0DFFFF-     	db 0x1A,0x18,0x03,0x16,0x02,0x0E,0x0D,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,' '
-   883 000004EE FFFFFFFF20         
-   884                                  
-   885                                  ; The keypad, scan codes 47 to 53, as digits
-   886                                  kt_keypad:
-   887                                  ;	  7    8    9    -    4    5    6    +    1    2    3    0    .
-   888 000004F3 3738392D3435362B31-     	db '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
-   888 000004FC 3233302E           
-   889                                  
-   890                                  ; The keypad with Ctrl: the extended scan codes a PC returns, FF for none
-   891                                  kt_kp_ctrl:
-   892                                  ;	  Home Up   PgUp -    Left 5    Rght +    End  Down PgDn Ins  Del
-   893 00000500 77FF84FF73FF74FF75-     	db 0x77,0xFF,0x84,0xFF,0x73,0xFF,0x74,0xFF,0x75,0xFF,0x76,0xFF,0xFF
-   893 00000509 FF76FFFF           
+   799 000003CA A880                    	test	al,0x80
+   800 000003CC 753A                    	jnz	.release
+   801 000003CE E86700                  	call	.shifter		; a shift-state key?
+   802 000003D1 721B                    	jc	.done			;   yes, and it has been handled
+   803                                  
+   804 000003D3 3C53                    	cmp	al,0x53			; Del
+   805 000003D5 750F                    	jne	.lookup
+   806 000003D7 8A261700                	mov	ah,[kbd_flag]
+   807 000003DB 80E40C                  	and	ah,KF_CTRL+KF_ALT
+   808 000003DE 80FC0C                  	cmp	ah,KF_CTRL+KF_ALT
+   809 000003E1 7503                    	jne	.lookup
+   810 000003E3 E9(0000)                	jmp	reboot_			; Ctrl-Alt-Del: does not return
+   811                                  
+   812                                  .lookup:
+   813 000003E6 E8B100                  	call	kbd_lookup		; AX = the word, or CF if nothing
+   814 000003E9 7203                    	jc	.done
+   815 000003EB E8AF01                  	call	kbd_stuff_ax
+   816                                  .done:
+   817 000003EE E899FF                  	call	kbd_leds		; cheap unless a lock key just changed
+   818 000003F1 C3                      	ret
+   819                                  
+   820                                  .pfx_e0:
+   821 000003F2 800E960002              	or	byte [kbd_flag3],KF3_E0
+   822 000003F7 C3                      	ret
+   823                                  .pfx_e1:
+   824 000003F8 800E960001              	or	byte [kbd_flag3],KF3_E1
+   825 000003FD C3                      	ret
+   826                                  .in_pause:
+   827 000003FE 3CC5                    	cmp	al,0xC5			; the sequence ends with the break of 45
+   828 00000400 75EC                    	jne	.done
+   829 00000402 80269600FC              	and	byte [kbd_flag3],~(KF3_E1+KF3_E0)
+   830 00000407 C3                      	ret
+   831                                  
+   832                                  .release:
+   833 00000408 247F                    	and	al,0x7F
+   834 0000040A 3C1D                    	cmp	al,0x1D
+   835 0000040C 741E                    	je	.rel_ctrl
+   836 0000040E 3C38                    	cmp	al,0x38
+   837 00000410 7420                    	je	.rel_alt
+   838 00000412 F6C302                  	test	bl,KF3_E0		; E0 AA, E0 B6: the fake shifts (below)
+   839 00000415 75D7                    	jnz	.done
+   840 00000417 3C2A                    	cmp	al,0x2A
+   841 00000419 7405                    	je	.rel_ls
+   842 0000041B 3C36                    	cmp	al,0x36
+   843 0000041D 7407                    	je	.rel_rs
+   844 0000041F C3                      	ret				; the release of an ordinary key
+   845                                  .rel_ls:
+   846 00000420 80261700FD              	and	byte [kbd_flag],~KF_LSHIFT
+   847 00000425 C3                      	ret
+   848                                  .rel_rs:
+   849 00000426 80261700FE              	and	byte [kbd_flag],~KF_RSHIFT
+   850 0000042B C3                      	ret
+   851                                  .rel_ctrl:
+   852 0000042C 80261700FB              	and	byte [kbd_flag],~KF_CTRL
+   853 00000431 C3                      	ret
+   854                                  .rel_alt:
+   855 00000432 80261700F7              	and	byte [kbd_flag],~KF_ALT
+   856 00000437 C3                      	ret
+   857                                  
+   858                                  ; The make of a shift-state key.  CF set if AL was one.  Caps, Num and
+   859                                  ; Scroll toggle on make.  The LEDs are not yet driven: that wants a small
+   860                                  ; state machine for the keyboard's acknowledgements, and belongs with the
+   861                                  ; first thing that needs it.
+   862                                  ;
+   863                                  ; E0 2A and E0 36 are not shifts.  With Num Lock on, the keyboard brackets
+   864                                  ; every cursor-cluster key in them so that a host which knows nothing of
+   865                                  ; E0 still gets a cursor key rather than a digit.  This host does know,
+   866                                  ; so they are swallowed, or they would flip the keypad the wrong way.
+   867                                  .shifter:
+   868 00000438 3C2A                    	cmp	al,0x2A
+   869 0000043A 741A                    	je	.set_ls
+   870 0000043C 3C36                    	cmp	al,0x36
+   871 0000043E 7422                    	je	.set_rs
+   872 00000440 3C1D                    	cmp	al,0x1D
+   873 00000442 742C                    	je	.set_ctrl
+   874 00000444 3C38                    	cmp	al,0x38
+   875 00000446 742F                    	je	.set_alt
+   876 00000448 3C3A                    	cmp	al,0x3A
+   877 0000044A 7432                    	je	.tog_caps
+   878 0000044C 3C45                    	cmp	al,0x45
+   879 0000044E 7435                    	je	.tog_num
+   880 00000450 3C46                    	cmp	al,0x46
+   881 00000452 743D                    	je	.tog_scroll
+   882 00000454 F8                      	clc
+   883 00000455 C3                      	ret
+   884 00000456 F6C302                  .set_ls:	test	bl,KF3_E0
+   885 00000459 7513                    		jnz	.fake
+   886 0000045B 800E170002              		or	byte [kbd_flag],KF_LSHIFT
+   887 00000460 F9                      		stc
+   888 00000461 C3                      		ret
+   889 00000462 F6C302                  .set_rs:	test	bl,KF3_E0
+   890 00000465 7507                    		jnz	.fake
+   891 00000467 800E170001              		or	byte [kbd_flag],KF_RSHIFT
+   892 0000046C F9                      		stc
+   893 0000046D C3                      		ret
+   894 0000046E F9                      .fake:		stc			; eaten, nothing changes
+   895 0000046F C3                      		ret
+   896 00000470 800E170004              .set_ctrl:	or	byte [kbd_flag],KF_CTRL
+   897 00000475 F9                      		stc
+   898 00000476 C3                      		ret
+   899 00000477 800E170008              .set_alt:	or	byte [kbd_flag],KF_ALT
+   900 0000047C F9                      		stc
+   901 0000047D C3                      		ret
+   902 0000047E 8036170040              .tog_caps:	xor	byte [kbd_flag],KF_CAPS
+   903 00000483 F9                      		stc
+   904 00000484 C3                      		ret
+   905 00000485 F6C302                  .tog_num:	test	bl,KF3_E0		; E0 45 is not Num Lock
+   906 00000488 750E                    		jnz	.not_shifter
+   907 0000048A 8036170020              		xor	byte [kbd_flag],KF_NUM
+   908 0000048F F9                      		stc
+   909 00000490 C3                      		ret
+   910 00000491 8036170010              .tog_scroll:	xor	byte [kbd_flag],KF_SCROLL
+   911 00000496 F9                      		stc
+   912 00000497 C3                      		ret
+   913 00000498 F8                      .not_shifter:	clc
+   914 00000499 C3                      		ret
+   915                                  
+   916                                  
+   917                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   918                                  ; kbd_lookup -- scan code AL, E0 flag in BL bit 1, shift state in kbd_flag
+   919                                  ;
+   920                                  ; Returns the PC key word in AX, or CF set for a code with no meaning.
+   921                                  ; Three regions of the set-1 space, each with its own rule:
+   922                                  ;
+   923                                  ;    01..39   the typewriter keys, four tables' worth
+   924                                  ;    3B..44   F1..F10, plus 57 and 58 for F11 and F12: no ASCII, and the
+   925                                  ;             scan code moves by a fixed amount per shift state
+   926                                  ;    47..53   the keypad: digits when Num Lock says so and no E0 says
+   927                                  ;             otherwise, cursor keys with no ASCII when not
+   928                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   929                                  kbd_lookup:
+   930 0000049A 88C4                    	mov	ah,al			; AH: the scan code, kept for the word
+   931 0000049C 88DE                    	mov	dh,bl			; DH: the E0 flag; BL becomes an index
+   932 0000049E 8A0E1700                	mov	cl,[kbd_flag]
+   933                                  
+   934 000004A2 3C39                    	cmp	al,0x39
+   935 000004A4 761C                    	jbe	.typewriter
+   936 000004A6 3C3B                    	cmp	al,0x3B
+   937 000004A8 7216                    	jb	.none
+   938 000004AA 3C44                    	cmp	al,0x44
+   939 000004AC 765F                    	jbe	.fkey
+   940 000004AE 3C47                    	cmp	al,0x47
+   941 000004B0 720E                    	jb	.none
+   942 000004B2 3C53                    	cmp	al,0x53
+   943 000004B4 0F869800                	jbe	.keypad
+   944 000004B8 3C57                    	cmp	al,0x57
+   945 000004BA 7451                    	je	.fkey
+   946 000004BC 3C58                    	cmp	al,0x58
+   947 000004BE 744D                    	je	.fkey
+   948                                  .none:
+   949 000004C0 F9                      	stc
+   950 000004C1 C3                      	ret
+   951                                  
+   952                                  ; --- the typewriter keys ---------------------------------------------
+   953                                  .typewriter:
+   954 000004C2 0FB6D8                  	movzx	bx,al
+   955 000004C5 4B                      	dec	bx			; tables begin at scan code 01
+   956 000004C6 F6C108                  	test	cl,KF_ALT
+   957 000004C9 753E                    	jnz	.alt
+   958 000004CB F6C104                  	test	cl,KF_CTRL
+   959 000004CE 752E                    	jnz	.ctrl
+   960 000004D0 F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
+   961 000004D3 7507                    	jnz	.shifted
+   962 000004D5 2E8A87[A605]               cs	mov	al,[bx+kt_normal]
+   963 000004DA EB05                    	jmp	short .caps
+   964                                  .shifted:
+   965 000004DC 2E8A87[DF05]               cs	mov	al,[bx+kt_shift]
+   966                                  .caps:
+   967 000004E1 F6C140                  	test	cl,KF_CAPS
+   968 000004E4 7416                    	jz	.tw_done
+   969                                  ; Caps Lock inverts shift for letters and nothing else
+   970 000004E6 3C61                    	cmp	al,'a'
+   971 000004E8 7208                    	jb	.caps_upper
+   972 000004EA 3C7A                    	cmp	al,'z'
+   973 000004EC 770E                    	ja	.tw_done
+   974 000004EE 2C20                    	sub	al,'a'-'A'
+   975 000004F0 EB0A                    	jmp	short .tw_done
+   976                                  .caps_upper:
+   977 000004F2 3C41                    	cmp	al,'A'
+   978 000004F4 7206                    	jb	.tw_done
+   979 000004F6 3C5A                    	cmp	al,'Z'
+   980 000004F8 7702                    	ja	.tw_done
+   981 000004FA 0420                    	add	al,'a'-'A'
+   982                                  .tw_done:
+   983 000004FC F8                      	clc
+   984 000004FD C3                      	ret
+   985                                  .ctrl:
+   986 000004FE 2E8A87[1806]               cs	mov	al,[bx+kt_ctrl]
+   987 00000503 3CFF                    	cmp	al,0xFF			; FF marks a key with no Ctrl meaning
+   988 00000505 74B9                    	je	.none
+   989 00000507 F8                      	clc
+   990 00000508 C3                      	ret
+   991                                  .alt:
+   992 00000509 30C0                    	xor	al,al			; Alt+key: no ASCII, the scan code says which
+   993 0000050B F8                      	clc
+   994 0000050C C3                      	ret
+   995                                  
+   996                                  ; --- the function keys -----------------------------------------------
+   997                                  .fkey:
+   998 0000050D 3C57                    	cmp	al,0x57
+   999 0000050F 7202                    	jb	.f10
+  1000 00000511 2C4D                    	sub	al,0x57-0x0A		; F11, F12 follow F10 in the numbering
+  1001                                  .f10:
+  1002 00000513 2C3B                    	sub	al,0x3B			; 0..11
+  1003 00000515 F6C108                  	test	cl,KF_ALT
+  1004 00000518 7528                    	jnz	.f_alt
+  1005 0000051A F6C104                  	test	cl,KF_CTRL
+  1006 0000051D 7519                    	jnz	.f_ctrl
+  1007 0000051F F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
+  1008 00000522 750A                    	jnz	.f_shift
+  1009 00000524 043B                    	add	al,0x3B			; F1..F10 are 3B..44, F11 and F12 85, 86
+  1010 00000526 3C45                    	cmp	al,0x45
+  1011 00000528 7220                    	jb	.f_out
+  1012 0000052A 0440                    	add	al,0x85-0x45
+  1013 0000052C EB1C                    	jmp	short .f_out
+  1014                                  .f_shift:
+  1015 0000052E 0454                    	add	al,0x54			; 54..5D, then 87, 88
+  1016 00000530 3C5E                    	cmp	al,0x5E
+  1017 00000532 7216                    	jb	.f_out
+  1018 00000534 0429                    	add	al,0x87-0x5E
+  1019 00000536 EB12                    	jmp	short .f_out
+  1020                                  .f_ctrl:
+  1021 00000538 045E                    	add	al,0x5E			; 5E..67, then 89, 8A
+  1022 0000053A 3C68                    	cmp	al,0x68
+  1023 0000053C 720C                    	jb	.f_out
+  1024 0000053E 0421                    	add	al,0x89-0x68
+  1025 00000540 EB08                    	jmp	short .f_out
+  1026                                  .f_alt:
+  1027 00000542 0468                    	add	al,0x68			; 68..71, then 8B, 8C
+  1028 00000544 3C72                    	cmp	al,0x72
+  1029 00000546 7202                    	jb	.f_out
+  1030 00000548 0419                    	add	al,0x8B-0x72
+  1031                                  .f_out:
+  1032 0000054A 88C4                    	mov	ah,al
+  1033 0000054C 30C0                    	xor	al,al
+  1034 0000054E F8                      	clc
+  1035 0000054F C3                      	ret
+  1036                                  
+  1037                                  ; --- the keypad ---------------------------------------------------------
+  1038                                  .keypad:
+  1039 00000550 0FB6D8                  	movzx	bx,al
+  1040 00000553 83EB47                  	sub	bx,0x47
+  1041 00000556 F6C108                  	test	cl,KF_ALT
+  1042 00000559 75AE                    	jnz	.alt
+  1043 0000055B F6C104                  	test	cl,KF_CTRL
+  1044 0000055E 752C                    	jnz	.kp_ctrl
+  1045                                  
+  1046                                  ; Num Lock, an E0 (the cursor cluster), or Shift: each one flips it
+  1047 00000560 F6C120                  	test	cl,KF_NUM
+  1048 00000563 0F95C2                  	setnz	dl
+  1049 00000566 F6C602                  	test	dh,KF3_E0
+  1050 00000569 7403                    	jz	.kp1
+  1051 0000056B 80F201                  	xor	dl,1
+  1052                                  .kp1:
+  1053 0000056E F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
+  1054 00000571 7403                    	jz	.kp2
+  1055 00000573 80F201                  	xor	dl,1
+  1056                                  .kp2:
+  1057 00000576 2E8A87[5106]               cs	mov	al,[bx+kt_keypad]	; the digit, or '-' '+' regardless
+  1058 0000057B 3C2D                    	cmp	al,'-'
+  1059 0000057D 740B                    	je	.kp_out
+  1060 0000057F 3C2B                    	cmp	al,'+'
+  1061 00000581 7407                    	je	.kp_out
+  1062 00000583 F6C201                  	test	dl,1
+  1063 00000586 7502                    	jnz	.kp_out			; digits wanted
+  1064 00000588 30C0                    	xor	al,al			; a cursor key: no ASCII
+  1065                                  .kp_out:
+  1066 0000058A F8                      	clc
+  1067 0000058B C3                      	ret
+  1068                                  .kp_ctrl:
+  1069 0000058C 2E8A87[5E06]               cs	mov	al,[bx+kt_kp_ctrl]
+  1070 00000591 3CFF                    	cmp	al,0xFF
+  1071 00000593 0F8429FF                	je	.none
+  1072 00000597 88C4                    	mov	ah,al			; Ctrl-cursor: the scan code is the meaning
+  1073 00000599 30C0                    	xor	al,al
+  1074 0000059B F8                      	clc
+  1075 0000059C C3                      	ret
+  1076                                  
+  1077                                  
+  1078                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1079                                  ; kbd_stuff_ax -- AX is the complete word: scan in AH, ASCII in AL
+  1080                                  ;
+  1081                                  ; The tail of kbd_stuff, entered when the caller already knows the scan
+  1082                                  ; code and does not want one synthesised from the ASCII.
+  1083                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1084                                  kbd_stuff_ax:
+  1085 0000059D 52515350                	pushm	ax,bx,cx,dx
+  1086 000005A1 89C1                    	mov	cx,ax
+  1087 000005A3 E92FFC                  	jmp	kbd_stuff_word
+  1088                                  
+  1089                                  
+  1090                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1091                                  ; Set-1 scan code to ASCII, scan codes 01 to 39.  US layout.
+  1092                                  ;
+  1093                                  ; No line here may END with a backslash -- not even a comment.  NASM
+  1094                                  ; takes that as a continuation and swallows the next line whole, which
+  1095                                  ; is how the a..\ row once vanished and shifted every key after it by
+  1096                                  ; fourteen places.  The listing shows it as a line number that skips.
+  1097                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1098                                  	align	2
+  1099                                  kt_normal:
+  1100                                  ;	  Esc  1    2    3    4    5    6    7    8    9    0    -    =    BS   Tab
+  1101 000005A6 1B3132333435363738-     	db 0x1B,'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08,0x09
+  1101 000005AF 39302D3D0809       
+  1102                                  ;	  q    w    e    r    t    y    u    i    o    p    [    ]    Ent  Ctl
+  1103 000005B5 71776572747975696F-     	db 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D,0x00
+  1103 000005BE 705B5D0D00         
+  1104                                  ;	  a    s    d    f    g    h    j    k    l    ;    '    `    LSh  backslash
+  1105 000005C3 6173646667686A6B6C-     	db 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 0x27,'`', 0x00,'\'
+  1105 000005CC 3B2760005C         
+  1106                                  ;	  z    x    c    v    b    n    m    ,    .    /    RSh  *    Alt  Sp
+  1107 000005D1 7A786376626E6D2C2E-     	db 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00,'*', 0x00,' '
+  1107 000005DA 2F002A0020         
+  1108                                  
+  1109                                  kt_shift:
+  1110 000005DF 1B21402324255E262A-     	db 0x1B,'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0x08,0x00
+  1110 000005E8 28295F2B0800       
+  1111 000005EE 51574552545955494F-     	db 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0x0D,0x00
+  1111 000005F7 507B7D0D00         
+  1112 000005FC 4153444647484A4B4C-     	db 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0x00,'|'
+  1112 00000605 3A227E007C         
+  1113 0000060A 5A584356424E4D3C3E-     	db 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0x00,'*', 0x00,' '
+  1113 00000613 3F002A0020         
+  1114                                  
+  1115                                  ; FF: no Ctrl meaning.  Ctrl-BS is DEL, Ctrl-Enter is LF, Ctrl-[ ESC,
+  1116                                  ; Ctrl-\ FS, Ctrl-] GS, Ctrl-- US, Ctrl-6 RS, as on a PC.
+  1117                                  kt_ctrl:
+  1118 00000618 1BFFFFFFFFFF1EFFFF-     	db 0x1B,0xFF,0xFF,0xFF,0xFF,0xFF,0x1E,0xFF,0xFF,0xFF,0xFF,0x1F,0xFF,0x7F,0xFF
+  1118 00000621 FFFF1FFF7FFF       
+  1119 00000627 11170512141915090F-     	db 0x11,0x17,0x05,0x12,0x14,0x19,0x15,0x09,0x0F,0x10,0x1B,0x1D,0x0A,0xFF
+  1119 00000630 101B1D0AFF         
+  1120 00000635 0113040607080A0B0C-     	db 0x01,0x13,0x04,0x06,0x07,0x08,0x0A,0x0B,0x0C,0xFF,0xFF,0xFF,0xFF,0x1C
+  1120 0000063E FFFFFFFF1C         
+  1121 00000643 1A180316020E0DFFFF-     	db 0x1A,0x18,0x03,0x16,0x02,0x0E,0x0D,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,' '
+  1121 0000064C FFFFFFFF20         
+  1122                                  
+  1123                                  ; The keypad, scan codes 47 to 53, as digits
+  1124                                  kt_keypad:
+  1125                                  ;	  7    8    9    -    4    5    6    +    1    2    3    0    .
+  1126 00000651 3738392D3435362B31-     	db '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
+  1126 0000065A 3233302E           
+  1127                                  
+  1128                                  ; The keypad with Ctrl: the extended scan codes a PC returns, FF for none
+  1129                                  kt_kp_ctrl:
+  1130                                  ;	  Home Up   PgUp -    Left 5    Rght +    End  Down PgDn Ins  Del
+  1131 0000065E 77FF84FF73FF74FF75-     	db 0x77,0xFF,0x84,0xFF,0x73,0xFF,0x74,0xFF,0x75,0xFF,0x76,0xFF,0xFF
+  1131 00000667 FF76FFFF           

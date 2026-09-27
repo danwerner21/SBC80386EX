@@ -10,7 +10,7 @@ was found on the way, and what is left.**
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
 | Assessed | 2026-09-06, by code inspection |
-| Last updated | 2026-09-26 — Phase 7, the VGA3 video console and PS/2 keyboard, working |
+| Last updated | 2026-09-26 — Phase 7 done; with VT100 translation, every phase is closed |
 
 ---
 
@@ -21,8 +21,9 @@ own disks, and drives its own display and keyboard.** Phases 0 through 6 are com
 verified on hardware — Phase 5's reset, shadowing, watchdog and second IDE device are
 recorded in 06b, 06c and 06d. **Phase 7, the ECB VGA3 video console and its PS/2 keyboard,
 is complete and recorded in section 10**; the serial console remains first-class and both
-run at once. VT100 escape translation is still parked, and is now the only part of Phase 3
-outstanding. What is left is listed in `0TODO.md`, which supersedes section 09.
+run at once. VT100 escape translation, parked since the plan was written, went in with it,
+so **every phase of the original plan is now closed**. What is left is listed in `0TODO.md`,
+which supersedes section 09.
 
 The original assessment held up: nothing was architecturally wrong, and the work went in
 the predicted order. What it could not predict was the hardware, and most of the time
@@ -411,7 +412,7 @@ console emulation. Effort figures assume you already know this codebase.
 - **setup** — Implement `set_fixed()`; currently it prints "not implemented". A
   boot-device byte in NVRAM plus the drive table it already has room for.
 
-### Phase 3 · Console — INT 10h, 16h, 17h — **DONE except VT100 escape translation**
+### Phase 3 · Console — INT 10h, 16h, 17h — **DONE**
 
 > A serial terminal pretending to be a PC display and keyboard. Scope this to what IO.SYS
 > and COMMAND.COM actually call; resist building a full VGA BIOS.
@@ -2103,6 +2104,17 @@ keeps it in step with what the terminal has done, the video side draws where it 
 
 `INT 09h` and the serial receive ISR fill the same ring buffer at `40:1E`, so `INT 16h` did
 not change at all and DOS cannot tell which console a key came from.
+
+The serial path gained **VT100 escape translation** at the same time — `vt_in`, a state
+machine across interrupts, turning `ESC [ A` and its relatives into the scan codes a PC
+program expects. It had been parked since Phase 3 on the grounds that the hardware
+transition would change what needed translating, which turned out to be right: it is now
+only about the serial path, because the PS/2 keyboard produces real scan codes already.
+
+The lone Escape is what makes it more than a table. The character that opens every sequence
+is also a key, and only what fails to follow distinguishes them, so a held Escape is
+delivered by `vt_tick` from the timer after two ticks of silence. Without that, Escape in an
+editor would not arrive until the next keystroke.
 
 Two new `INT 10h` functions, 12h (`BL=10h`, EGA information) and 1Ah (display combination),
 both answering **VGA colour**. This is not what the hardware is. It is what stops a program

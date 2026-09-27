@@ -310,8 +310,8 @@ Routine Size: 97 bytes,    Routine Base: _TEXT + 0152
 0231    01 C0                     add         ax,ax 
 0233    8E 06 02 00               mov         es,word ptr _bda_ptr+0x2 
 0237    01 C3                     add         bx,ax 
-0239    26 0F B6 87 EE 00         movzx       ax,byte ptr es:0xee[bx] 
-023F    26 0F B6 9F EF 00         movzx       bx,byte ptr es:0xef[bx] 
+0239    26 0F B6 87 EF 00         movzx       ax,byte ptr es:0xef[bx] 
+023F    26 0F B6 9F F0 00         movzx       bx,byte ptr es:0xf0[bx] 
 0245    3D 01 00                  cmp         ax,0x0001 
 0248    72 47                     jb          L$20 
 024A    3D FF 00                  cmp         ax,0x00ff 

@@ -146,12 +146,19 @@ typedef struct _BDA {
 
 /* */
 /* Miscellaneous */
-	byte	rsvd_network[7];	/* reserved for network adapters */
+	byte	vt_state;	/* VT100 escape translation: 0 idle, 1 ESC, 2 CSI, 3 SS3 */
+	byte	vt_digit;	/* the number accumulating in an ESC [ n ~ sequence */
+	byte	vt_timer;	/* ticks left before a lone ESC is delivered as itself */
+	byte	rsvd_network[4];	/* reserved for network adapters */
 	dword	ptr_ega_save;		/* far pointer to EGA parameter control block */
 
 /* */
 /*	byte	rsvd_unused[84];	/* reserved for 386EX usage */
 	word	errno;				/* library error flag (errno.h) */
+/* NOT SPARE: hdinit.c casts this to T_DISKTAB[2] for the INT 41h and 46h
+   parameter tables, which need 40 of its 41 bytes.  It checks at POST and
+   says so, which is how three bytes taken from here for something else
+   were caught.  Take spare bytes from rsvd_network instead. */
 	byte	rsvd_unused[41];	/* reserved for 386EX usage */
 	byte	serial_flags[4];	/* flags for each serial device */
 	word	extended_memory;	/* size of Extended Memory in Kilobytes */
@@ -165,7 +172,8 @@ typedef struct _BDA {
 	byte	floppy_tab[2];		/* floppy disk driver table */
 	byte	disk_tab[8];  		/* hard disk driver table */
 	byte	boot_order;		/* which device INT 19h tries, and in what order */
-	byte	nvram_unused[16];
+	byte	console_sel;		/* which console SETUP was told to use */
+	byte	nvram_unused[15];
 	word	nvram_checksum;	/* 31st byte of the NVRAM info */
  /* end of 31 bytes of NVRAM information */
 /* */

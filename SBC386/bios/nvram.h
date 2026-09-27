@@ -67,6 +67,30 @@ enum {	BOOT_AC,	/* 0  floppy, then the fixed disk -- the PC's order */
 	};
 
 
+/* Which console INT 10h drives, in bda.console_sel and inside the same
+ * NVRAM checksum, carved from nvram_unused for the same reason: zero is
+ * what every NVRAM written before this field existed carries, so zero has
+ * to mean what the board did before there was a choice -- both at once.
+ *
+ * The choice is worth having because the two consoles are not equal in
+ * cost.  With both selected every character also goes out the UART, and at
+ * 9600 baud that is a millisecond each, so the display runs no faster than
+ * the serial line however quick the video path is.  Selecting video alone
+ * is the way to get the board's real speed; selecting serial alone is for
+ * running headless with a transcript.
+ *
+ * CONSEL_VIDEO falls back to serial when no board answers.  Without that,
+ * choosing it and then pulling the card would leave a machine with no
+ * console at all and no way into SETUP to undo it.
+ */
+enum {	CONSEL_BOTH,	/* 0  video and serial together -- what it did before */
+	CONSEL_SERIAL,	/* 1  serial only, even with a board fitted           */
+	CONSEL_VIDEO,	/* 2  video only, when a board answered              */
+
+	CONSEL_END
+	};
+
+
 typedef
 struct _NVRAM {
 	T_CONFIG_SERIAL sio0;

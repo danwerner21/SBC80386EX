@@ -10,7 +10,7 @@ own.** It boots MS-DOS 6 to a prompt from either a floppy or the fixed disk, for
 disks, and drives an 80x25 colour display and a PS/2 keyboard on the ECB VGA3 board — with
 the serial console still live alongside it. Nothing on this list blocks anything else on it.
 
-**The ROM is the constraint now.** 63,968 bytes of 65,536 are used: 2.4% free, down from 24%
+**The ROM is the constraint now.** 59,536 bytes of 65,536 are used: 9.2% free, down from 24%
 when item 7 was measured. See item 15.
 
 ---
@@ -119,22 +119,45 @@ stays debuggable from another room. `INT 10h` gates the entire ANSI path on one 
 
 **What is left of item 12:**
 
-- **VT100 escape translation** — arrow keys and Home/End arriving from a terminal as escape
-  sequences and leaving as scan codes. Unchanged from before; the PS/2 keyboard now produces
-  proper scan codes, so this is only about the serial path.
+- **VT100 escape translation. Done 2026-09-26.** `vt_in` in `16h_kbd.asm` is a state machine
+  across interrupts — `ESC`, then `[` (CSI) or `O` (SS3), then digits, then a letter or `~` —
+  turning what a terminal sends into the scan codes a PC program expects. Three bytes of
+  state in the BDA, taken from the reserved block. A sequence the BIOS does not know is
+  dropped rather than delivered as letters.
+
+  **A lone Escape is the hard case**, and the reason `vt_tick` is called from the timer: the
+  character that opens every sequence is also a keystroke, and nothing tells them apart but
+  what does or does not follow. A held Escape is delivered after two ticks of silence.
+  Without that, Escape in an editor would not arrive until the next keystroke.
+
+  This closes Phase 3, which had said "complete except for VT100 escape translation" since
+  the plan was written.
 - **A SETUP entry to choose the console.** The byte and the switch exist; the menu entry does
   not, so today the video board is used whenever it answers.
-- **Keyboard LEDs.** Caps, Num and Scroll *state* is tracked correctly in `kbd_flag`; the
-  lights do not follow. It needs `ED` sent to the keyboard and its `FA` acknowledgements
-  handled in the ISR — a small state machine, deferred so that it would not be debugged at
-  the same time as the basic path.
+- **Keyboard LEDs. Done 2026-09-26.** `kbd_leds` in `16h_kbd.asm` runs after every make
+  code and sends `ED` plus the lamp mask when the lock bits have changed, taking both `FA`
+  acknowledgements itself so they never reach the scan-code path. `kbd_flag2` records what
+  the lamps were last set to.
 - **Item 16**, below, which is about DOS programs rather than about the BIOS.
 
 ## Also now — what the console brought with it
 
-**15 · The ROM is nearly full.** 63,968 of 65,536 bytes, 1,568 free. The largest modules are
-`debugmon.o` at 17,406 bytes of code, `vga3.o` at 6,191, and `set1302.o` at 2,475; string
-constants are 18,832 bytes, two thirds of them the monitor's.
+**15 · The ROM is nearly full. Eased 2026-09-26; still the constraint.** 59,360 of 65,536
+bytes, **6,176 free (9.4%)**. It was 1,568 free before the VGA3 bring-up commands came out.
+
+The cut was the one this item predicted: `V3CRTC`, `V3BEAM`, `V3RDCHK`, `V3DUMP`, `VIDEO` and
+`V3KBD`'s scan-code and interrupt-hunting modes, plus the helpers only they used — **4,608
+bytes**, of which 2,096 were string constants. The board had been proven rung by rung and
+section 10 of `0BRINGUP.md` records what each rung established, so the scaffolding had done
+its job; it is in the history if it is ever wanted again.
+
+`VGA3` stayed: its address-dependent march over all 32K is the only thing that would catch a
+failing RAM chip on that board, which is a live failure mode for socketed parts. `V3KBD`'s
+basic probe stayed: a keyboard going quiet has already cost one long session, and it names
+the cause in five lines.
+
+The largest modules are now `debugmon.o`, `vga3.o` at 6,191 bytes and `set1302.o` at 2,475;
+string constants are 16,736 bytes, most of them still the monitor's.
 
 This is not yet an emergency, because **`MONITOR=0` still reclaims about 25K** and takes the
 free space to roughly 40%. That switch was built in item 14 for exactly this moment. But it
@@ -148,9 +171,9 @@ Cheaper savings, in the order they should be taken:
   rather than stored — but it is permanent BIOS content that `INT 10h` needs, so it is not
   really overhead.
 - The monitor's help and error strings are the single largest block of text in the tree. The
-  Phase 6 probes that are now closed have already gone (`WDTSET`, `IOTIME1`, `IOWALL`); the
-  VGA3 bring-up probes (`VGA3`, `V3CRTC`, `V3KBD`, `V3DUMP`, `V3BEAM`, `V3RDCHK`, `VIDEO`)
-  are the next candidates, and should go when the board stops being new.
+  Phase 6 and VGA3 probes have now gone. What remains is in use; the next candidates would be
+  the floppy bring-up commands (`FDC`, `FDID`, `FDREAD`, `FDWRITE`, `FDFMT`, `FD13`) on the
+  same argument, once the floppy stops being new.
 - `set1302.o` is 2,475 bytes for a SETUP screen that runs once.
 
 **16 · DOS programs that drive the screen themselves.** Three were tried. Turbo Pascal's IDE

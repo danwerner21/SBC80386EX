@@ -589,36 +589,41 @@
    149 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
    150                              <1> ; */
    151                              <1> ; Miscellaneous */
-   152 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
-   153 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
-   154                              <1> ; */
-   155                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
-   156 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
-   157 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
-   158 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
-   159 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
-   160                              <1> ; this size is stored in CMOS on the PC/AT */
-   161 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
-   162 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
-   163                              <1> ; */
-   164                              <1> ; start of 31 bytes of NVRAM informaiion */
-   165 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
-   166                              <1> ; starts with 2 bytes of SIO0 params */
-   167 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
-   168 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
-   169 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
-   170 000000EE <res 10h>           <1> nvram_unused	resb	16
-   171 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
-   172                              <1> ; end of 31 bytes of NVRAM information */
-   173                              <1> ; */
-   174 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
-   175                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
-   176 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
-   177                              <1> ; */
-   178                              <1> ; Extentsion to BDA during BIOS startup */
-   179                              <1> ; */
-   180                              <1> endstruc
-   180          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+   152 000000A1 ??                  <1> vt_state	resb	1	; VT100 escape translation: 0 idle, 1 ESC, 2 CSI, 3 SS3 */
+   153 000000A2 ??                  <1> vt_digit	resb	1	; the number accumulating in an ESC [ n ~ sequence */
+   154 000000A3 ??                  <1> vt_timer	resb	1	; ticks left before a lone ESC is delivered as itself */
+   155 000000A4 ????????            <1> rsvd_network	resb	4	; reserved for network adapters */
+   156 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   157                              <1> ; */
+   158                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   159 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   160                              <1> ; NOT SPARE: hdinit.c casts this to T_DISKTAB[2] -- 40 of its 41 bytes. */
+   161 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   162 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   163 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   164                              <1> ; this size is stored in CMOS on the PC/AT */
+   165 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   166 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   167                              <1> ; */
+   168                              <1> ; start of 31 bytes of NVRAM informaiion */
+   169 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   170                              <1> ; starts with 2 bytes of SIO0 params */
+   171 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   172 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   173 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   174 000000EE ??                  <1> console_sel	resb	1		; which console SETUP was told to use */
+   175 000000EF <res Fh>            <1> nvram_unused	resb	15
+   176 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   177                              <1> ; end of 31 bytes of NVRAM information */
+   178                              <1> ; */
+   179 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   180                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   181 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   182                              <1> ; */
+   183                              <1> ; Extentsion to BDA during BIOS startup */
+   184                              <1> ; */
+   185                              <1> endstruc
+   185          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
     32                                  %include "macro.inc"
     33                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     34                              <1> ;
@@ -957,21 +962,21 @@
    108 00000035 90                      	align	2
    109                                  dispatch0:
    110 00000036 [6C00]                  	dw	get_tick_count
-   111 00000038 [EA00]                  	dw	set_tick_count
-   112 0000003A [0001]                  	dw	get_time
-   113 0000003C [3201]                  	dw	set_time
-   114 0000003E [6301]                  	dw	get_date
-   115 00000040 [9901]                  	dw	set_date
+   111 00000038 [ED00]                  	dw	set_tick_count
+   112 0000003A [0301]                  	dw	get_time
+   113 0000003C [3501]                  	dw	set_time
+   114 0000003E [6601]                  	dw	get_date
+   115 00000040 [9C01]                  	dw	set_date
    116 00000042 [5000]                  	dw	set_alarm
    117 00000044 [5000]                  	dw	reset_alarm
    118                                  len_dispatch0	equ	$-dispatch0
    119                                  
    120                                  dispatch20:
-   121 00000046 [DC01]                  	dw	ds_read		; 20h
-   122 00000048 [4602]                  	dw	ds_write	; 21h
-   123 0000004A [7602]                  	dw	wr_protect	; 22h
-   124 0000004C [8B02]                  	dw	ds_set_charge	; 23h
-   125 0000004E [9B02]                  	dw	ds_get_charge	; 24h
+   121 00000046 [DF01]                  	dw	ds_read		; 20h
+   122 00000048 [4902]                  	dw	ds_write	; 21h
+   123 0000004A [7902]                  	dw	wr_protect	; 22h
+   124 0000004C [8E02]                  	dw	ds_set_charge	; 23h
+   125 0000004E [9E02]                  	dw	ds_get_charge	; 24h
    126                                  len_dispatch20	equ	$-dispatch20
    127                                  
    128                                  set_alarm:
@@ -989,11 +994,11 @@
    140 00000052 52                      	pushm	dx
    141 00000053 88C4                    	mov	ah,al			; move command to position
    142 00000055 80CC81                  	or	ah,1000_0001B
-   143 00000058 E85902                  	call	ds_reset_on
-   144 0000005B E86702                  	call	ds_reset_off
-   145 0000005E E87102                  	call	ds_outb
-   146 00000061 E88402                  	call	ds_inb
-   147 00000064 E84D02                  	call	ds_reset_on
+   143 00000058 E85B02                  	call	ds_reset_on
+   144 0000005B E86902                  	call	ds_reset_off
+   145 0000005E E87302                  	call	ds_outb
+   146 00000061 E88602                  	call	ds_inb
+   147 00000064 E84F02                  	call	ds_reset_on
    148 00000067 C1E808                  	shr	ax,8			; return byte value
    149 0000006A 5A                      	popm	dx
    150 0000006B C3                      	ret
@@ -1125,314 +1130,314 @@
    252 000000BA E8(0000)                	call	FDC_stop_motor
    253                                  .3:
    254                                  ; handle the printer & serial line timeouts
-   255 000000BD BB7800                  	mov	bx,printer_timeout	; 4 printer, 4 serial timeouts
-   256 000000C0 382F                    .4:	cmp	byte [bx],ch
-   257 000000C2 7402                    	je	.5
-   258 000000C4 FE0F                    	dec	byte [bx]
-   259 000000C6 43                      .5:	inc	bx
-   260 000000C7 E2F7                    	loop	.4
-   261                                  
-   262                                  ; restore before clearing the interrupt
-   263 000000C9 5B591F                  	popm	bx,cx,ds
+   255                                  	extern	vt_tick			; 16h_kbd.asm -- the held Escape
+   256 000000BD E8(0000)                	call	vt_tick
+   257                                  
+   258 000000C0 BB7800                  	mov	bx,printer_timeout	; 4 printer, 4 serial timeouts
+   259 000000C3 382F                    .4:	cmp	byte [bx],ch
+   260 000000C5 7402                    	je	.5
+   261 000000C7 FE0F                    	dec	byte [bx]
+   262 000000C9 43                      .5:	inc	bx
+   263 000000CA E2F7                    	loop	.4
    264                                  
-   265                                  	extern	clear_irq0	; currently in stub.asm
-   266 000000CC E9(0000)                	jmp	clear_irq0
+   265                                  ; restore before clearing the interrupt
+   266 000000CC 5B591F                  	popm	bx,cx,ds
    267                                  
-   268                                  
-   269                                  ; Timer 0 constants
-   270                                  ;
-   271                                  divide	equ	MS18 		; 50619
-   272                                  tick	equ	CLKIN0*86400/divide
-   273                                  ttime	equ	(divide*1000000)/(CLKIN0)
-   274                                  
-   275                                  
-   276                                  t0tab:
-   277                                  	binit	TMRCON, CTR0 + CWR01 + MODE2 + ZBIT0	;binary
-   111 000000CF 43F0                <1>  dw %1
-   112 000000D1 34                  <1>  db %2
-   278                                  	binit	TMR0, MS18LO	;low byte
-   111 000000D2 40F0                <1>  dw %1
-   112 000000D4 BB                  <1>  db %2
-   279                                  	binit	TMR0, MS18HI	;high byte = 46080
+   268                                  	extern	clear_irq0	; currently in stub.asm
+   269 000000CF E9(0000)                	jmp	clear_irq0
+   270                                  
+   271                                  
+   272                                  ; Timer 0 constants
+   273                                  ;
+   274                                  divide	equ	MS18 		; 50619
+   275                                  tick	equ	CLKIN0*86400/divide
+   276                                  ttime	equ	(divide*1000000)/(CLKIN0)
+   277                                  
+   278                                  
+   279                                  t0tab:
+   280                                  	binit	TMRCON, CTR0 + CWR01 + MODE2 + ZBIT0	;binary
+   111 000000D2 43F0                <1>  dw %1
+   112 000000D4 34                  <1>  db %2
+   281                                  	binit	TMR0, MS18LO	;low byte
    111 000000D5 40F0                <1>  dw %1
-   112 000000D7 C5                  <1>  db %2
-   280                                  	binit	TMRCFG, TIMER_STOP + BIT1		; start timer 0
-   111 000000D8 34F8                <1>  dw %1
-   112 000000DA 43                  <1>  db %2
-   281 000000DB FFFF                            dw      -1
-   282                                  
-   283                                  ; Timer 0 startup
-   284                                  ;
-   285                                  	global	start_timer0_
-   286                                  	extern	initb			; in start.asm
-   287                                  start_timer0_:
-   288 000000DD 561E                    	pushm	ds,si
-   289 000000DF 0E                      	push	cs
-   290 000000E0 1F                      	pop	ds
-   291 000000E1 BE[CF00]                	mov	si,t0tab
-   292 000000E4 E8(0000)                	call	initb
-   293 000000E7 1F5E                    	popm	ds,si
-   294 000000E9 C3                      	ret
-   295                                  
-   296                                  
-   297                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   298                                  ; INT 1A
-   299                                  ; function 01	set_tick_count
-   300                                  ;
-   301                                  ;    Enter with:
-   302                                  ;	AH	01h
-   303                                  ;	CX:DX	tick count
-   304                                  ;
-   305                                  ;    Exit with:
-   306                                  ;	nothing
-   307                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   308                                  set_tick_count:
-   309 000000EA 1E                      	push	ds
-   310 000000EB 6A401F                  	get_bda	DS	;address BDA
-   311 000000EE FA                      	cli		;disable interrupts
-   312 000000EF 89166C00                	mov	[timer_count_low],dx
-   313 000000F3 890E6E00                	mov	[timer_count_high],cx
-   314 000000F7 C606700000              	mov	byte [timer_overflow],0	; 'byte' qualifier needed
-   315 000000FC FB                      	sti		;interrupts back on
-   316 000000FD F8                      	clc
-   317 000000FE 1F                      	pop	ds
-   318 000000FF C3                      	ret
-   319                                  
-   320                                  
-   321                                  
+   112 000000D7 BB                  <1>  db %2
+   282                                  	binit	TMR0, MS18HI	;high byte = 46080
+   111 000000D8 40F0                <1>  dw %1
+   112 000000DA C5                  <1>  db %2
+   283                                  	binit	TMRCFG, TIMER_STOP + BIT1		; start timer 0
+   111 000000DB 34F8                <1>  dw %1
+   112 000000DD 43                  <1>  db %2
+   284 000000DE FFFF                            dw      -1
+   285                                  
+   286                                  ; Timer 0 startup
+   287                                  ;
+   288                                  	global	start_timer0_
+   289                                  	extern	initb			; in start.asm
+   290                                  start_timer0_:
+   291 000000E0 561E                    	pushm	ds,si
+   292 000000E2 0E                      	push	cs
+   293 000000E3 1F                      	pop	ds
+   294 000000E4 BE[D200]                	mov	si,t0tab
+   295 000000E7 E8(0000)                	call	initb
+   296 000000EA 1F5E                    	popm	ds,si
+   297 000000EC C3                      	ret
+   298                                  
+   299                                  
+   300                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   301                                  ; INT 1A
+   302                                  ; function 01	set_tick_count
+   303                                  ;
+   304                                  ;    Enter with:
+   305                                  ;	AH	01h
+   306                                  ;	CX:DX	tick count
+   307                                  ;
+   308                                  ;    Exit with:
+   309                                  ;	nothing
+   310                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   311                                  set_tick_count:
+   312 000000ED 1E                      	push	ds
+   313 000000EE 6A401F                  	get_bda	DS	;address BDA
+   314 000000F1 FA                      	cli		;disable interrupts
+   315 000000F2 89166C00                	mov	[timer_count_low],dx
+   316 000000F6 890E6E00                	mov	[timer_count_high],cx
+   317 000000FA C606700000              	mov	byte [timer_overflow],0	; 'byte' qualifier needed
+   318 000000FF FB                      	sti		;interrupts back on
+   319 00000100 F8                      	clc
+   320 00000101 1F                      	pop	ds
+   321 00000102 C3                      	ret
    322                                  
-   323                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   324                                  ;
-   325                                  ; INT 1A
-   326                                  ; function 02   Get Time
+   323                                  
+   324                                  
+   325                                  
+   326                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    327                                  ;
-   328                                  ; Enter with:
-   329                                  ;       AH      0x02
+   328                                  ; INT 1A
+   329                                  ; function 02   Get Time
    330                                  ;
-   331                                  ; Exit with:
-   332                                  ;	CH	hours in BCD
-   333                                  ;	CL	minutes in BCD
-   334                                  ;	DH	seconds in BCD
-   335                                  ;	DL	daylight savings time flag
-   336                                  ;		  00=not DST, 01==DST
-   337                                  ;	
-   338                                  ;       Carry clear	if clock is running
-   339                                  ;
-   340                                  ; Error:
-   341                                  ;       Carry set	if clock is stopped
+   331                                  ; Enter with:
+   332                                  ;       AH      0x02
+   333                                  ;
+   334                                  ; Exit with:
+   335                                  ;	CH	hours in BCD
+   336                                  ;	CL	minutes in BCD
+   337                                  ;	DH	seconds in BCD
+   338                                  ;	DL	daylight savings time flag
+   339                                  ;		  00=not DST, 01==DST
+   340                                  ;	
+   341                                  ;       Carry clear	if clock is running
    342                                  ;
-   343                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   344                                  	global	get_time
-   345                                  get_time:
-   346 00000100 50                      	pushm	ax
-   347 00000101 31DB                    	xor	bx,bx		; saved at a higher level
-   348 00000103 B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
-   349 00000106 88C2                    	mov	dl,al		; DST off
-   350 00000108 E80D01                  	call	byte_read
-   351 0000010B 88E6                    	mov	dh,ah		; save seconds
-   352                                  
-   353 0000010D 52                      .1:	push	dx
-   354 0000010E B80181                  	mov	ax, 1000_0001B << 8 | 1		; minutes
-   355 00000111 E80401                  	call	byte_read
-   356 00000114 88E1                    	mov	cl,ah		; save minutes
-   357 00000116 B80281                  	mov	ax, 1000_0001B << 8 | 2		; hours
-   358 00000119 E8FC00                  	call	byte_read
-   359 0000011C 88E5                    	mov	ch,ah		; save hours
-   360 0000011E B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
-   361 00000121 E8F400                  	call	byte_read
-   362 00000124 5A                      	pop	dx
-   363 00000125 86F4                    	xchg	dh,ah
-   364 00000127 38F4                    	cmp	ah,dh
-   365 00000129 75E2                    	jne	.1		; loop back
-   366                                  
-   367 0000012B 80E67F                  	and	dh,0x7F		; mask clock halt bit
-   368 0000012E 00E4                    	add	ah,ah		; set carry if halted
+   343                                  ; Error:
+   344                                  ;       Carry set	if clock is stopped
+   345                                  ;
+   346                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   347                                  	global	get_time
+   348                                  get_time:
+   349 00000103 50                      	pushm	ax
+   350 00000104 31DB                    	xor	bx,bx		; saved at a higher level
+   351 00000106 B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
+   352 00000109 88C2                    	mov	dl,al		; DST off
+   353 0000010B E80D01                  	call	byte_read
+   354 0000010E 88E6                    	mov	dh,ah		; save seconds
+   355                                  
+   356 00000110 52                      .1:	push	dx
+   357 00000111 B80181                  	mov	ax, 1000_0001B << 8 | 1		; minutes
+   358 00000114 E80401                  	call	byte_read
+   359 00000117 88E1                    	mov	cl,ah		; save minutes
+   360 00000119 B80281                  	mov	ax, 1000_0001B << 8 | 2		; hours
+   361 0000011C E8FC00                  	call	byte_read
+   362 0000011F 88E5                    	mov	ch,ah		; save hours
+   363 00000121 B80081                  	mov	ax, 1000_0001B << 8 | 0		;seconds
+   364 00000124 E8F400                  	call	byte_read
+   365 00000127 5A                      	pop	dx
+   366 00000128 86F4                    	xchg	dh,ah
+   367 0000012A 38F4                    	cmp	ah,dh
+   368 0000012C 75E2                    	jne	.1		; loop back
    369                                  
-   370 00000130 58                      	popm	ax
-   371 00000131 C3                      	ret
+   370 0000012E 80E67F                  	and	dh,0x7F		; mask clock halt bit
+   371 00000131 00E4                    	add	ah,ah		; set carry if halted
    372                                  
-   373                                  
-   374                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   375                                  ;
-   376                                  ; INT 1A
-   377                                  ; function 03   Set Time
+   373 00000133 58                      	popm	ax
+   374 00000134 C3                      	ret
+   375                                  
+   376                                  
+   377                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    378                                  ;
-   379                                  ; Enter with:
-   380                                  ;       AH      0x03
+   379                                  ; INT 1A
+   380                                  ; function 03   Set Time
    381                                  ;
-   382                                  ;	CH	hours in BCD
-   383                                  ;	CL	minutes in BCD
-   384                                  ;	DH	seconds in BCD
-   385                                  ;	DL	daylight savings time flag (ignored)
-   386                                  ;		  00=not DST, 01==DST
-   387                                  ;	
-   388                                  ; Exit with:
-   389                                  ;       Carry clear	if clock is running
-   390                                  ;
-   391                                  ; Error:
-   392                                  ;       Carry set	if clock is stopped
+   382                                  ; Enter with:
+   383                                  ;       AH      0x03
+   384                                  ;
+   385                                  ;	CH	hours in BCD
+   386                                  ;	CL	minutes in BCD
+   387                                  ;	DH	seconds in BCD
+   388                                  ;	DL	daylight savings time flag (ignored)
+   389                                  ;		  00=not DST, 01==DST
+   390                                  ;	
+   391                                  ; Exit with:
+   392                                  ;       Carry clear	if clock is running
    393                                  ;
-   394                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   395                                  	global	set_time
-   396                                  set_time:
-   397 00000132 5250                    	pushm	ax,dx
-   398                                  
-   399 00000134 5251                    	pushm	cx,dx		;protect the parameters
-   400                                  
-   401 00000136 B000                    	mov	al,0		;disable write protect
-   402 00000138 E83B01                  	call	wr_protect	;**
-   403                                  %if 0
-   404                                  	mov	ax, 1000_0000B << 8 | 0		;seconds
-   405                                  	mov	cl,80h			; stop the clock
-   406                                  	call	byte_write
-   407                                  %endif
-   408 0000013B 5B                      	popm	bx		; was CX
-   409                                  
-   410 0000013C B80280                  	mov	ax, 1000_0000B << 8 | 2		;hours
-   411 0000013F 88F9                    	mov	cl,bh		; **
-   412 00000141 80E17F                  	and	cl,0x7F		; 24-hr format
-   413 00000144 E8E700                  	call	byte_write
-   414                                  
-   415 00000147 B80180                  	mov	ax, 1000_0000B << 8 | 1		;minutes
-   416 0000014A 88D9                    	mov	cl,bl		; **
-   417 0000014C E8DF00                  	call	byte_write
-   418                                  
-   419 0000014F 5B                      	popm	bx		; was DX
-   420                                  
-   421 00000150 B80080                  	mov	ax, 1000_0000B << 8 | 0		;seconds
-   422 00000153 88F9                    	mov	cl,bh
-   423 00000155 80E17F                  	and	cl,0x7F			; enable the clock
-   424 00000158 E8D300                  	call	byte_write
-   425                                  
-   426 0000015B B080                    	mov	al,80h		;set Write Protect
-   427 0000015D E81601                  	call	wr_protect
+   394                                  ; Error:
+   395                                  ;       Carry set	if clock is stopped
+   396                                  ;
+   397                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   398                                  	global	set_time
+   399                                  set_time:
+   400 00000135 5250                    	pushm	ax,dx
+   401                                  
+   402 00000137 5251                    	pushm	cx,dx		;protect the parameters
+   403                                  
+   404 00000139 B000                    	mov	al,0		;disable write protect
+   405 0000013B E83B01                  	call	wr_protect	;**
+   406                                  %if 0
+   407                                  	mov	ax, 1000_0000B << 8 | 0		;seconds
+   408                                  	mov	cl,80h			; stop the clock
+   409                                  	call	byte_write
+   410                                  %endif
+   411 0000013E 5B                      	popm	bx		; was CX
+   412                                  
+   413 0000013F B80280                  	mov	ax, 1000_0000B << 8 | 2		;hours
+   414 00000142 88F9                    	mov	cl,bh		; **
+   415 00000144 80E17F                  	and	cl,0x7F		; 24-hr format
+   416 00000147 E8E700                  	call	byte_write
+   417                                  
+   418 0000014A B80180                  	mov	ax, 1000_0000B << 8 | 1		;minutes
+   419 0000014D 88D9                    	mov	cl,bl		; **
+   420 0000014F E8DF00                  	call	byte_write
+   421                                  
+   422 00000152 5B                      	popm	bx		; was DX
+   423                                  
+   424 00000153 B80080                  	mov	ax, 1000_0000B << 8 | 0		;seconds
+   425 00000156 88F9                    	mov	cl,bh
+   426 00000158 80E17F                  	and	cl,0x7F			; enable the clock
+   427 0000015B E8D300                  	call	byte_write
    428                                  
-   429 00000160 E98B00                  	jmp	ds_full_exit
-   430                                  
+   429 0000015E B080                    	mov	al,80h		;set Write Protect
+   430 00000160 E81601                  	call	wr_protect
    431                                  
-   432                                  
-   433                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   434                                  ;
-   435                                  ; INT 1A
-   436                                  ; function 04   Get Date
+   432 00000163 E98B00                  	jmp	ds_full_exit
+   433                                  
+   434                                  
+   435                                  
+   436                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    437                                  ;
-   438                                  ; Enter with:
-   439                                  ;       AH      0x04
+   438                                  ; INT 1A
+   439                                  ; function 04   Get Date
    440                                  ;
-   441                                  ; Exit with:
-   442                                  ;	CH	century in BCD
-   443                                  ;	CL	year in BCD
-   444                                  ;	DH	month in BCD
-   445                                  ;	DL	day in BCD
-   446                                  ;	
-   447                                  ;       Carry clear	if clock is running
-   448                                  ;
-   449                                  ; Error:
-   450                                  ;       Carry set	if clock is stopped
+   441                                  ; Enter with:
+   442                                  ;       AH      0x04
+   443                                  ;
+   444                                  ; Exit with:
+   445                                  ;	CH	century in BCD
+   446                                  ;	CL	year in BCD
+   447                                  ;	DH	month in BCD
+   448                                  ;	DL	day in BCD
+   449                                  ;	
+   450                                  ;       Carry clear	if clock is running
    451                                  ;
-   452                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   453                                  	global	get_date
-   454                                  get_date:
-   455 00000163 B80681                  	mov	ax,1000_0001B << 8 | 6	;year
-   456 00000166 E8AF00                  	call	byte_read
-   457 00000169 88E1                    	mov	cl,ah		; return in CL
-   458                                  
-   459 0000016B B80481                  	mov	ax,1000_0001B << 8 | 4	;month
-   460 0000016E E8A700                  	call	byte_read
-   461 00000171 88E7                    	mov	bh,ah		; save in BH
-   462                                  
-   463 00000173 B80381                  	mov	ax,1000_0001B << 8 | 3	;day of month (DATE)
-   464 00000176 E89F00                  	call	byte_read
-   465 00000179 88E3                    	mov	bl,ah
-   466                                  	
-   467 0000017B B80581                  	mov	ax,1000_0001B << 8 | 5	;day of week (DAY)
-   468 0000017E E89700                  	call	byte_read
-   469 00000181 88E5                    	mov	ch,ah		; save in Century byte
-   470                                  
-   471 00000183 B80081                  	mov	ax,1000_0001B << 8 | 0	;clock halt flag
-   472 00000186 E88F00                  	call	byte_read
-   473                                  ; clock halt flag is in AH
-   474                                  
-   475 00000189 89DA                    	mov	dx,bx		;
-   476 0000018B 88E8                    	mov	al,ch		; Day-of-Week flag to AL
-   477 0000018D B519                    	mov	ch,0x19		; 20th century in CH
-   478 0000018F 80F970                  	cmp	cl,0x70		; year less than '70 sets carry
-   479                                  %if 0
-   480                                  	adc	al,0		; add in the carry if CL<70h
-   481                                  	daa			; correct (DAA doesn't work???)
-   482                                  %else
-   483 00000192 7302                    	jnb	.8
-   484 00000194 B520                    	mov	ch,0x20		; carry is set
-   485                                  .8:
-   486                                  %endif
-   487 00000196 D0E4                    	shl	ah,1		; clock halt to carry
-   488 00000198 C3                      	ret
-   489                                  
-   490                                  
-   491                                  
-   492                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   493                                  ;
-   494                                  ; INT 1A
-   495                                  ; function 05   Set Date
+   452                                  ; Error:
+   453                                  ;       Carry set	if clock is stopped
+   454                                  ;
+   455                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   456                                  	global	get_date
+   457                                  get_date:
+   458 00000166 B80681                  	mov	ax,1000_0001B << 8 | 6	;year
+   459 00000169 E8AF00                  	call	byte_read
+   460 0000016C 88E1                    	mov	cl,ah		; return in CL
+   461                                  
+   462 0000016E B80481                  	mov	ax,1000_0001B << 8 | 4	;month
+   463 00000171 E8A700                  	call	byte_read
+   464 00000174 88E7                    	mov	bh,ah		; save in BH
+   465                                  
+   466 00000176 B80381                  	mov	ax,1000_0001B << 8 | 3	;day of month (DATE)
+   467 00000179 E89F00                  	call	byte_read
+   468 0000017C 88E3                    	mov	bl,ah
+   469                                  	
+   470 0000017E B80581                  	mov	ax,1000_0001B << 8 | 5	;day of week (DAY)
+   471 00000181 E89700                  	call	byte_read
+   472 00000184 88E5                    	mov	ch,ah		; save in Century byte
+   473                                  
+   474 00000186 B80081                  	mov	ax,1000_0001B << 8 | 0	;clock halt flag
+   475 00000189 E88F00                  	call	byte_read
+   476                                  ; clock halt flag is in AH
+   477                                  
+   478 0000018C 89DA                    	mov	dx,bx		;
+   479 0000018E 88E8                    	mov	al,ch		; Day-of-Week flag to AL
+   480 00000190 B519                    	mov	ch,0x19		; 20th century in CH
+   481 00000192 80F970                  	cmp	cl,0x70		; year less than '70 sets carry
+   482                                  %if 0
+   483                                  	adc	al,0		; add in the carry if CL<70h
+   484                                  	daa			; correct (DAA doesn't work???)
+   485                                  %else
+   486 00000195 7302                    	jnb	.8
+   487 00000197 B520                    	mov	ch,0x20		; carry is set
+   488                                  .8:
+   489                                  %endif
+   490 00000199 D0E4                    	shl	ah,1		; clock halt to carry
+   491 0000019B C3                      	ret
+   492                                  
+   493                                  
+   494                                  
+   495                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    496                                  ;
-   497                                  ; Enter with:
-   498                                  ;       AH      0x05
+   497                                  ; INT 1A
+   498                                  ; function 05   Set Date
    499                                  ;
-   500                                  ;	CH	century in BCD	(used for Day Of Week calculation)
-   501                                  ;	CL	year in BCD
-   502                                  ;	DH	month in BCD
-   503                                  ;	DL	day in BCD
-   504                                  ;	
-   505                                  ; Exit with:
-   506                                  ;	Nothing
-   507                                  ;
-   508                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   509                                  	global	set_date
-   510                                  set_date:
-   511 00000199 5250                    	pushm	ax,dx		;usual 2 register save
-   512 0000019B 80FD20                  	cmp	ch,0x20		; century must be 21st
-   513 0000019E 7405                    	je	.1
-   514 000001A0 80FD19                  	cmp 	ch,0x19		; century may be 20th
-   515 000001A3 754D                    	jne	ds_error
-   516                                  .1:
-   517 000001A5 5152                    	pushm	dx,cx
-   518                                  
-   519 000001A7 E86401                  	call	day_of_week_
-   520                                  
-   521 000001AA 5B59                    	popm	bx,cx		; was DX,CX
-   522 000001AC 51                      	pushm	cx		; save CX
+   500                                  ; Enter with:
+   501                                  ;       AH      0x05
+   502                                  ;
+   503                                  ;	CH	century in BCD	(used for Day Of Week calculation)
+   504                                  ;	CL	year in BCD
+   505                                  ;	DH	month in BCD
+   506                                  ;	DL	day in BCD
+   507                                  ;	
+   508                                  ; Exit with:
+   509                                  ;	Nothing
+   510                                  ;
+   511                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   512                                  	global	set_date
+   513                                  set_date:
+   514 0000019C 5250                    	pushm	ax,dx		;usual 2 register save
+   515 0000019E 80FD20                  	cmp	ch,0x20		; century must be 21st
+   516 000001A1 7405                    	je	.1
+   517 000001A3 80FD19                  	cmp 	ch,0x19		; century may be 20th
+   518 000001A6 754D                    	jne	ds_error
+   519                                  .1:
+   520 000001A8 5152                    	pushm	dx,cx
+   521                                  
+   522 000001AA E86301                  	call	day_of_week_
    523                                  
-   524 000001AD 88C5                    	mov	ch,al		; DOW to CH
-   525                                  
-   526 000001AF B000                    	mov	al,0		;disable write protect
-   527 000001B1 E8C200                  	call	wr_protect
+   524 000001AD 5B59                    	popm	bx,cx		; was DX,CX
+   525 000001AF 51                      	pushm	cx		; save CX
+   526                                  
+   527 000001B0 88C5                    	mov	ch,al		; DOW to CH
    528                                  
-   529 000001B4 B80680                  	mov	ax,1000_0000B << 8 | 6	;year
-   530 000001B7 E87400                  	call	byte_write	; year is in CL already
+   529 000001B2 B000                    	mov	al,0		;disable write protect
+   530 000001B4 E8C200                  	call	wr_protect
    531                                  
-   532 000001BA B80480                  	mov	ax,1000_0000B << 8 | 4	;month
-   533 000001BD 88F9                    	mov	cl,bh			; was in DH
-   534 000001BF E86C00                  	call	byte_write
-   535                                  
-   536 000001C2 B80380                  	mov	ax,1000_0000B << 8 | 3	;day (DATE)
-   537 000001C5 88D9                    	mov	cl,bl			; was in DL
-   538 000001C7 E86400                  	call	byte_write
-   539                                  
-   540 000001CA B80580                  	mov	ax,1000_0000B << 8 | 5	;day of week (DOW)
-   541 000001CD 88E9                    	mov	cl,ch
-   542 000001CF FEC1                    	inc	cl		; DS1302 is 1..7, not 0..6
-   543 000001D1 E85A00                  	call	byte_write
-   544                                  
-   545 000001D4 B080                    	mov	al,80h		;set Write Protect
-   546 000001D6 E89D00                  	call	wr_protect
+   532 000001B7 B80680                  	mov	ax,1000_0000B << 8 | 6	;year
+   533 000001BA E87400                  	call	byte_write	; year is in CL already
+   534                                  
+   535 000001BD B80480                  	mov	ax,1000_0000B << 8 | 4	;month
+   536 000001C0 88F9                    	mov	cl,bh			; was in DH
+   537 000001C2 E86C00                  	call	byte_write
+   538                                  
+   539 000001C5 B80380                  	mov	ax,1000_0000B << 8 | 3	;day (DATE)
+   540 000001C8 88D9                    	mov	cl,bl			; was in DL
+   541 000001CA E86400                  	call	byte_write
+   542                                  
+   543 000001CD B80580                  	mov	ax,1000_0000B << 8 | 5	;day of week (DOW)
+   544 000001D0 88E9                    	mov	cl,ch
+   545 000001D2 FEC1                    	inc	cl		; DS1302 is 1..7, not 0..6
+   546 000001D4 E85A00                  	call	byte_write
    547                                  
-   548 000001D9 59                      	popm	cx
-   549 000001DA EB12                    	jmp	ds_full_exit
+   548 000001D7 B080                    	mov	al,80h		;set Write Protect
+   549 000001D9 E89D00                  	call	wr_protect
    550                                  
-   551                                  
-   552                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   553                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   554                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   551 000001DC 59                      	popm	cx
+   552 000001DD EB12                    	jmp	ds_full_exit
+   553                                  
+   554                                  
    555                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    556                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    557                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1441,509 +1446,512 @@
    560                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    561                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    562                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   563                                  
-   564                                  
-   565                                  
+   563                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   564                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   565                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    566                                  
    567                                  
    568                                  
    569                                  
    570                                  
-   571                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   572                                  ;
-   573                                  ; INT 1A
-   574                                  ; function 20   Get NVRAM byte
+   571                                  
+   572                                  
+   573                                  
+   574                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    575                                  ;
-   576                                  ; Enter with:
-   577                                  ;       AH      0x20
-   578                                  ;       AL      byte number ( 0 <= AL <= 30) 
-   579                                  ;   (single byte read)
-   580                                  ;
-   581                                  ;       AH      0x20
-   582                                  ;       AL      31
-   583                                  ;       ES:BX   pointer to 31 byte buffer
-   584                                  ;   (burst read)
-   585                                  ;
-   586                                  ; Exit with:
-   587                                  ;       AL      byte read (single byte read)
-   588                                  ;       Carry clear
-   589                                  ;
-   590                                  ;       AL      byte NVRAM[30] (burst read)
-   591                                  ;       ES:BX buffer filled with bytes 0..30
+   576                                  ; INT 1A
+   577                                  ; function 20   Get NVRAM byte
+   578                                  ;
+   579                                  ; Enter with:
+   580                                  ;       AH      0x20
+   581                                  ;       AL      byte number ( 0 <= AL <= 30) 
+   582                                  ;   (single byte read)
+   583                                  ;
+   584                                  ;       AH      0x20
+   585                                  ;       AL      31
+   586                                  ;       ES:BX   pointer to 31 byte buffer
+   587                                  ;   (burst read)
+   588                                  ;
+   589                                  ; Exit with:
+   590                                  ;       AL      byte read (single byte read)
+   591                                  ;       Carry clear
    592                                  ;
-   593                                  ;       Carry clear
-   594                                  ;
-   595                                  ; Error:
-   596                                  ;       Carry set
+   593                                  ;       AL      byte NVRAM[30] (burst read)
+   594                                  ;       ES:BX buffer filled with bytes 0..30
+   595                                  ;
+   596                                  ;       Carry clear
    597                                  ;
-   598                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   599                                  	global	ds_read
-   600                                  ds_read:
-   601 000001DC 5250                            pushm   ax,dx
-   602                                  
-   603 000001DE 3C1F                    	cmp	al,31
-   604 000001E0 7314                    	jae	ds_burstr	; burst or error
-   605                                  	
-   606 000001E2 B4C1                    	mov	ah,1100_0001B	; NVRAM read
-   607 000001E4 E83100                   	call	byte_read
-   608                                  
-   609                                  ds_read_exit:
-   610 000001E7 88E0                    	mov	al,ah		;return in AL
-   611 000001E9 5A                      	pop	dx		;get old ax
-   612 000001EA 88F4                    	mov	ah,dh		;restore AH
-   613 000001EC EB01                    	jmp	ds_good_exit
-   614                                  
-   615                                  ds_full_exit:
-   616 000001EE 58                      	popm	ax
-   617                                  ds_good_exit:
-   618 000001EF F8                      	clc 			;signal good return
-   619 000001F0 5A                      	popm	dx
-   620 000001F1 C3                      	ret	
-   621                                  
-   622                                  ds_error:
-   623 000001F2 585A                    	popm	ax,dx
-   624 000001F4 F9                      	stc
-   625 000001F5 C3                      	ret
-   626                                  
-   627                                  
-   628                                  
+   598                                  ; Error:
+   599                                  ;       Carry set
+   600                                  ;
+   601                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   602                                  	global	ds_read
+   603                                  ds_read:
+   604 000001DF 5250                            pushm   ax,dx
+   605                                  
+   606 000001E1 3C1F                    	cmp	al,31
+   607 000001E3 7314                    	jae	ds_burstr	; burst or error
+   608                                  	
+   609 000001E5 B4C1                    	mov	ah,1100_0001B	; NVRAM read
+   610 000001E7 E83100                   	call	byte_read
+   611                                  
+   612                                  ds_read_exit:
+   613 000001EA 88E0                    	mov	al,ah		;return in AL
+   614 000001EC 5A                      	pop	dx		;get old ax
+   615 000001ED 88F4                    	mov	ah,dh		;restore AH
+   616 000001EF EB01                    	jmp	ds_good_exit
+   617                                  
+   618                                  ds_full_exit:
+   619 000001F1 58                      	popm	ax
+   620                                  ds_good_exit:
+   621 000001F2 F8                      	clc 			;signal good return
+   622 000001F3 5A                      	popm	dx
+   623 000001F4 C3                      	ret	
+   624                                  
+   625                                  ds_error:
+   626 000001F5 585A                    	popm	ax,dx
+   627 000001F7 F9                      	stc
+   628 000001F8 C3                      	ret
    629                                  
-   630                                  ;
-   631                                  ; handle burst read
-   632                                  ds_burstr:
-   633 000001F6 75FA                            jne	ds_error	;must be 31 exactly, else error
-   634                                  
-   635 000001F8 5153                    	pushm	bx,cx		;extra save
-   636                                  
-   637 000001FA E8B700                  	call	ds_reset_on	;reset before command byte
-   638 000001FD E8C500                  	call	ds_reset_off	;set for read
+   630                                  
+   631                                  
+   632                                  
+   633                                  ;
+   634                                  ; handle burst read
+   635                                  ds_burstr:
+   636 000001F9 75FA                            jne	ds_error	;must be 31 exactly, else error
+   637                                  
+   638 000001FB 5153                    	pushm	bx,cx		;extra save
    639                                  
-   640                                  
-   641 00000200 B4FF                    	mov	ah,1111_1111B	;burst read command
-   642 00000202 E8CD00                  	call	ds_outb		;output the command
+   640 000001FD E8B600                  	call	ds_reset_on	;reset before command byte
+   641 00000200 E8C400                  	call	ds_reset_off	;set for read
+   642                                  
    643                                  
-   644 00000205 B91F00                  	mov	cx,31		;
-   645                                  ds_read2:
-   646 00000208 E8DD00                  	call	ds_inb		;retrieve a byte in AH
-   647 0000020B 268827                    es	mov	byte [bx],ah	;save in the array
-   648 0000020E 43                        	inc	bx
-   649 0000020F E2F7                    	loop	ds_read2	;and loop back
-   650                                  
-   651 00000211 E8A000                  	call	ds_reset_on	;terminate read
-   652                                  
-   653 00000214 5B59                    	popm	bx,cx		;and restore
-   654 00000216 EBCF                            jmp	ds_read_exit	;return AH
-   655                                   
-   656                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   657                                  ;
-   658                                  ; byte read into AH
-   659                                  ;	AH = command bits
-   660                                  ;	AL = register number
-   661                                  ; byte read direct
-   662                                  ;	AH = command bits + (reg<<1)
-   663                                  ;
-   664                                  ; Exit with:
-   665                                  ;	AH is the byte read in
+   644 00000203 B4FF                    	mov	ah,1111_1111B	;burst read command
+   645 00000205 E8CC00                  	call	ds_outb		;output the command
+   646                                  
+   647 00000208 B91F00                  	mov	cx,31		;
+   648                                  ds_read2:
+   649 0000020B E8DC00                  	call	ds_inb		;retrieve a byte in AH
+   650 0000020E 268827                    es	mov	byte [bx],ah	;save in the array
+   651 00000211 43                        	inc	bx
+   652 00000212 E2F7                    	loop	ds_read2	;and loop back
+   653                                  
+   654 00000214 E89F00                  	call	ds_reset_on	;terminate read
+   655                                  
+   656 00000217 5B59                    	popm	bx,cx		;and restore
+   657 00000219 EBCF                            jmp	ds_read_exit	;return AH
+   658                                   
+   659                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   660                                  ;
+   661                                  ; byte read into AH
+   662                                  ;	AH = command bits
+   663                                  ;	AL = register number
+   664                                  ; byte read direct
+   665                                  ;	AH = command bits + (reg<<1)
    666                                  ;
-   667                                  ;  Uses AX, DX
-   668                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   669                                  byte_read:
-   670                                  ; single byte read
-   671 00000218 D0E0                    	shl	al,1		; shift by one
-   672 0000021A 08E0                            or      al,ah		; Clock or NVRAM read
-   673 0000021C 88C4                    	mov	ah,al		; command byte to AH
-   674                                  byte_read_direct:
-   675 0000021E E89300                  	call	ds_reset_on	;start of command, set AL & DX
-   676 00000221 E8A100                  	call	ds_reset_off	;remove the Reset
-   677                                  
-   678                                  ; output the command
-   679 00000224 E8AB00                          call    ds_outb
+   667                                  ; Exit with:
+   668                                  ;	AH is the byte read in
+   669                                  ;
+   670                                  ;  Uses AX, DX
+   671                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   672                                  byte_read:
+   673                                  ; single byte read
+   674 0000021B D0E0                    	shl	al,1		; shift by one
+   675 0000021D 08E0                            or      al,ah		; Clock or NVRAM read
+   676 0000021F 88C4                    	mov	ah,al		; command byte to AH
+   677                                  byte_read_direct:
+   678 00000221 E89200                  	call	ds_reset_on	;start of command, set AL & DX
+   679 00000224 E8A000                  	call	ds_reset_off	;remove the Reset
    680                                  
-   681 00000227 E8BE00                  	call	ds_inb		;input byte to AH
-   682                                  
-   683 0000022A E88700                  	call	ds_reset_on	;terminate command
-   684                                  
-   685 0000022D C3                      	ret
-   686                                  
-   687                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   688                                  ; byte write
-   689                                  ;	AH = command bits
-   690                                  ;	AL = register number
-   691                                  ;	CL = byte value to write
-   692                                  ;
-   693                                  ; byte_write_direct
-   694                                  ;	AH = command, register<<1 included
-   695                                  ;	CL = byte value to write
-   696                                  ;
-   697                                  ;  Uses AX, DX
-   698                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   699                                  byte_write:
-   700                                  ; single byte write
-   701 0000022E D0E0                    	shl	al,1		; prepare command
-   702 00000230 08E0                            or      al,ah		; clock or NVRAM write
-   703 00000232 88C4                    	mov	ah,al		; command byte to AH
-   704                                  byte_write_direct:
-   705 00000234 E87D00                  	call	ds_reset_on	;start of command, set AL & DX
-   706 00000237 E88B00                  	call	ds_reset_off	;prepare for read
-   707                                  
-   708                                  ; output the command, will turn Reset off
-   709 0000023A E89500                          call    ds_outb
+   681                                  ; output the command
+   682 00000227 E8AA00                          call    ds_outb
+   683                                  
+   684 0000022A E8BD00                  	call	ds_inb		;input byte to AH
+   685                                  
+   686 0000022D E88600                  	call	ds_reset_on	;terminate command
+   687                                  
+   688 00000230 C3                      	ret
+   689                                  
+   690                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   691                                  ; byte write
+   692                                  ;	AH = command bits
+   693                                  ;	AL = register number
+   694                                  ;	CL = byte value to write
+   695                                  ;
+   696                                  ; byte_write_direct
+   697                                  ;	AH = command, register<<1 included
+   698                                  ;	CL = byte value to write
+   699                                  ;
+   700                                  ;  Uses AX, DX
+   701                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   702                                  byte_write:
+   703                                  ; single byte write
+   704 00000231 D0E0                    	shl	al,1		; prepare command
+   705 00000233 08E0                            or      al,ah		; clock or NVRAM write
+   706 00000235 88C4                    	mov	ah,al		; command byte to AH
+   707                                  byte_write_direct:
+   708 00000237 E87C00                  	call	ds_reset_on	;start of command, set AL & DX
+   709 0000023A E88A00                  	call	ds_reset_off	;prepare for read
    710                                  
-   711 0000023D 88CC                            mov     ah,cl		;single byte to write
-   712 0000023F E89000                          call    ds_outb
+   711                                  ; output the command, will turn Reset off
+   712 0000023D E89400                          call    ds_outb
    713                                  
-   714 00000242 E86F00                  	call	ds_reset_on	;terminate the write
-   715 00000245 C3                      	ret
+   714 00000240 88CC                            mov     ah,cl		;single byte to write
+   715 00000242 E88F00                          call    ds_outb
    716                                  
-   717                                  
-   718                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   719                                  ;
-   720                                  ; INT 1A
-   721                                  ; function 21   Set NVRAM byte
+   717 00000245 E86E00                  	call	ds_reset_on	;terminate the write
+   718 00000248 C3                      	ret
+   719                                  
+   720                                  
+   721                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    722                                  ;
-   723                                  ; Enter with:
-   724                                  ;       AH      0x21
-   725                                  ;       AL      byte number ( 0 <= AL <= 30) 
-   726                                  ;   (single byte write)
-   727                                  ;       CL      byte value to write
-   728                                  ;
-   729                                  ;       AH      0x21
-   730                                  ;       AL      31
-   731                                  ;       ES:BX   pointer to 31 byte buffer
-   732                                  ;   (burst write)
-   733                                  ;
-   734                                  ; Exit with:
-   735                                  ;       Carry clear
+   723                                  ; INT 1A
+   724                                  ; function 21   Set NVRAM byte
+   725                                  ;
+   726                                  ; Enter with:
+   727                                  ;       AH      0x21
+   728                                  ;       AL      byte number ( 0 <= AL <= 30) 
+   729                                  ;   (single byte write)
+   730                                  ;       CL      byte value to write
+   731                                  ;
+   732                                  ;       AH      0x21
+   733                                  ;       AL      31
+   734                                  ;       ES:BX   pointer to 31 byte buffer
+   735                                  ;   (burst write)
    736                                  ;
-   737                                  ; Error:
-   738                                  ;       Carry set
+   737                                  ; Exit with:
+   738                                  ;       Carry clear
    739                                  ;
-   740                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   741                                  	global	ds_write
-   742                                  ds_write:
-   743 00000246 5250                            pushm   ax,dx
-   744                                  
-   745 00000248 3C1F                    	cmp	al,31
-   746 0000024A 7307                    	jae	ds_burstw	; burst or error
+   740                                  ; Error:
+   741                                  ;       Carry set
+   742                                  ;
+   743                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   744                                  	global	ds_write
+   745                                  ds_write:
+   746 00000249 5250                            pushm   ax,dx
    747                                  
-   748                                  ; single byte write
-   749                                  %if 1
-   750 0000024C B4C0                    	mov	ah,1100_0000B   ; RAM/WRITE
-   751 0000024E E8DDFF                  	call	byte_write
-   752                                  %else
-   753                                  	shl	al,1		; prepare command
-   754                                          or      al,1100_0000B   ; RAM/WRITE
-   755                                  	mov	ah,al		; command byte to AH
-   756                                  
-   757                                  	call	ds_reset_on	;start of command, set AL & DX
-   758                                  	call	ds_reset_off	;prepare for read
+   748 0000024B 3C1F                    	cmp	al,31
+   749 0000024D 7307                    	jae	ds_burstw	; burst or error
+   750                                  
+   751                                  ; single byte write
+   752                                  %if 1
+   753 0000024F B4C0                    	mov	ah,1100_0000B   ; RAM/WRITE
+   754 00000251 E8DDFF                  	call	byte_write
+   755                                  %else
+   756                                  	shl	al,1		; prepare command
+   757                                          or      al,1100_0000B   ; RAM/WRITE
+   758                                  	mov	ah,al		; command byte to AH
    759                                  
-   760                                  ; output the command, will turn Reset off
-   761                                          call    ds_outb
+   760                                  	call	ds_reset_on	;start of command, set AL & DX
+   761                                  	call	ds_reset_off	;prepare for read
    762                                  
-   763                                          mov     ah,cl		;single byte to write
+   763                                  ; output the command, will turn Reset off
    764                                          call    ds_outb
    765                                  
-   766                                  	call	ds_reset_on	;terminate the write
-   767                                  %endif
-   768 00000251 EB9B                    	jmp	ds_full_exit
-   769                                  	
-   770                                  	
-   771                                  ; burst write
-   772                                  ds_burstw:
-   773 00000253 759D                            jne	ds_error	;must be 31 exactly, else error
-   774                                  
-   775 00000255 5153                    	pushm	bx,cx		;extra save
-   776                                  
-   777 00000257 E85A00                  	call	ds_reset_on	;reset before command byte
-   778 0000025A E86800                  	call	ds_reset_off	;prepare for burst write
+   766                                          mov     ah,cl		;single byte to write
+   767                                          call    ds_outb
+   768                                  
+   769                                  	call	ds_reset_on	;terminate the write
+   770                                  %endif
+   771 00000254 EB9B                    	jmp	ds_full_exit
+   772                                  	
+   773                                  	
+   774                                  ; burst write
+   775                                  ds_burstw:
+   776 00000256 759D                            jne	ds_error	;must be 31 exactly, else error
+   777                                  
+   778 00000258 5153                    	pushm	bx,cx		;extra save
    779                                  
-   780 0000025D B4FE                    	mov	ah,1111_1110B	;burst write command
-   781 0000025F E87000                  	call	ds_outb		;output the command
+   780 0000025A E85900                  	call	ds_reset_on	;reset before command byte
+   781 0000025D E86700                  	call	ds_reset_off	;prepare for burst write
    782                                  
-   783 00000262 B91F00                  	mov	cx,31		;
-   784                                  ds_write2:
-   785 00000265 268A27                     es	mov	ah,byte [bx]	;get byte to write
-   786 00000268 E86700                     	call	ds_outb
-   787 0000026B 43                      	inc	bx		;increment
-   788 0000026C E2F7                    	loop	ds_write2
-   789                                  
-   790 0000026E E84300                  	call	ds_reset_on	;terminate the write
-   791                                  
-   792 00000271 5B59                    	popm	bx,cx
-   793 00000273 E978FF                  	jmp	ds_full_exit	;restore & return
+   783 00000260 B4FE                    	mov	ah,1111_1110B	;burst write command
+   784 00000262 E86F00                  	call	ds_outb		;output the command
+   785                                  
+   786 00000265 B91F00                  	mov	cx,31		;
+   787                                  ds_write2:
+   788 00000268 268A27                     es	mov	ah,byte [bx]	;get byte to write
+   789 0000026B E86600                     	call	ds_outb
+   790 0000026E 43                      	inc	bx		;increment
+   791 0000026F E2F7                    	loop	ds_write2
+   792                                  
+   793 00000271 E84200                  	call	ds_reset_on	;terminate the write
    794                                  
-   795                                  
-   796                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   797                                  ;
-   798                                  ; INT 1A
-   799                                  ; function 22   Enable/Disable write protect
+   795 00000274 5B59                    	popm	bx,cx
+   796 00000276 E978FF                  	jmp	ds_full_exit	;restore & return
+   797                                  
+   798                                  
+   799                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    800                                  ;
-   801                                  ; Enter with:
-   802                                  ;       AH      0x22
-   803                                  ;       AL      0x80 to set write protect
-   804                                  ;		0x00 to disable write protect
-   805                                  ;
-   806                                  ; Exit with:
-   807                                  ;       Carry clear
+   801                                  ; INT 1A
+   802                                  ; function 22   Enable/Disable write protect
+   803                                  ;
+   804                                  ; Enter with:
+   805                                  ;       AH      0x22
+   806                                  ;       AL      0x80 to set write protect
+   807                                  ;		0x00 to disable write protect
    808                                  ;
-   809                                  ; Error:
-   810                                  ;       Carry set
+   809                                  ; Exit with:
+   810                                  ;       Carry clear
    811                                  ;
-   812                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   813                                  wr_protect:
-   814 00000276 5250                    	pushm	ax,dx
-   815 00000278 A87F                    	test	al,0111_1111B	; only 00,80h allowed
-   816 0000027A 0F8574FF                	jnz	ds_error
-   817                                  
-   818 0000027E 51                      	pushm	cx
-   819 0000027F 88C1                    	mov	cl,al		; option to write
-   820 00000281 B80780                  	mov	ax, 1000_0000B << 8 | 7	; clock write, reg 7
-   821 00000284 E8A7FF                  	call	byte_write
-   822 00000287 59                      	popm	cx
-   823                                  
-   824 00000288 E963FF                  	jmp	ds_full_exit
-   825                                  
+   812                                  ; Error:
+   813                                  ;       Carry set
+   814                                  ;
+   815                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   816                                  wr_protect:
+   817 00000279 5250                    	pushm	ax,dx
+   818 0000027B A87F                    	test	al,0111_1111B	; only 00,80h allowed
+   819 0000027D 0F8574FF                	jnz	ds_error
+   820                                  
+   821 00000281 51                      	pushm	cx
+   822 00000282 88C1                    	mov	cl,al		; option to write
+   823 00000284 B80780                  	mov	ax, 1000_0000B << 8 | 7	; clock write, reg 7
+   824 00000287 E8A7FF                  	call	byte_write
+   825 0000028A 59                      	popm	cx
    826                                  
-   827                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   828                                  ;
-   829                                  ; INT 1A
-   830                                  ; function 23   Set charging parameters
+   827 0000028B E963FF                  	jmp	ds_full_exit
+   828                                  
+   829                                  
+   830                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    831                                  ;
-   832                                  ; Enter with:
-   833                                  ;       AH      0x23
-   834                                  ;       AL      charge parameter byte
-   835                                  ;
-   836                                  ; Exit with:
-   837                                  ;       Carry clear
+   832                                  ; INT 1A
+   833                                  ; function 23   Set charging parameters
+   834                                  ;
+   835                                  ; Enter with:
+   836                                  ;       AH      0x23
+   837                                  ;       AL      charge parameter byte
    838                                  ;
-   839                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   840                                  ds_set_charge:
-   841 0000028B 5250                    	pushm	ax,dx
-   842 0000028D 51                      	pushm	cx
-   843                                  
-   844 0000028E B480                    	mov	ah,1000_0000B	; clock write
-   845 00000290 88C1                    	mov	cl,al		; byte to write
-   846 00000292 B008                    	mov	al,8
-   847 00000294 E897FF                  	call	byte_write
-   848 00000297 59                      	popm	cx
-   849                                  
-   850 00000298 E953FF                  	jmp	ds_full_exit
-   851                                  
+   839                                  ; Exit with:
+   840                                  ;       Carry clear
+   841                                  ;
+   842                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   843                                  ds_set_charge:
+   844 0000028E 5250                    	pushm	ax,dx
+   845 00000290 51                      	pushm	cx
+   846                                  
+   847 00000291 B480                    	mov	ah,1000_0000B	; clock write
+   848 00000293 88C1                    	mov	cl,al		; byte to write
+   849 00000295 B008                    	mov	al,8
+   850 00000297 E897FF                  	call	byte_write
+   851 0000029A 59                      	popm	cx
    852                                  
-   853                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   854                                  ;
-   855                                  ; INT 1A
-   856                                  ; function 24   Get charging parameters
+   853 0000029B E953FF                  	jmp	ds_full_exit
+   854                                  
+   855                                  
+   856                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    857                                  ;
-   858                                  ; Enter with:
-   859                                  ;       AH      0x24
+   858                                  ; INT 1A
+   859                                  ; function 24   Get charging parameters
    860                                  ;
-   861                                  ; Exit with:
-   862                                  ;       AL      charge parameter byte
-   863                                  ;       Carry clear
-   864                                  ;
-   865                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   866                                  	global	ds_get_charge
-   867                                  ds_get_charge:
-   868 0000029B 5250                    	pushm	ax,dx
-   869                                  
-   870 0000029D B80881                  	mov	ax,1000_0001B << 8  | 8	; clock read
-   871 000002A0 E875FF                  	call	byte_read
-   872 000002A3 88E2                    	mov	dl,ah		; save in DL
-   873 000002A5 58                      	popm	ax
-   874 000002A6 88D0                    	mov	al,dl		; return in AL
-   875                                  
-   876 000002A8 E944FF                  	jmp	ds_good_exit
-   877                                  
+   861                                  ; Enter with:
+   862                                  ;       AH      0x24
+   863                                  ;
+   864                                  ; Exit with:
+   865                                  ;       AL      charge parameter byte
+   866                                  ;       Carry clear
+   867                                  ;
+   868                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   869                                  	global	ds_get_charge
+   870                                  ds_get_charge:
+   871 0000029E 5250                    	pushm	ax,dx
+   872                                  
+   873 000002A0 B80881                  	mov	ax,1000_0001B << 8  | 8	; clock read
+   874 000002A3 E875FF                  	call	byte_read
+   875 000002A6 88E2                    	mov	dl,ah		; save in DL
+   876 000002A8 58                      	popm	ax
+   877 000002A9 88D0                    	mov	al,dl		; return in AL
    878                                  
-   879                                  ;**********
-   880                                  ; N.B. These will move to P1 from P3 on the final board
-   881                                  ; Jan 2018 -- updated to P1 for rev 2.0 board
+   879 000002AB E944FF                  	jmp	ds_good_exit
+   880                                  
+   881                                  
    882                                  ;**********
-   883                                  DSLTC   equ     P1LTC           ; DS1302 latch
-   884                                  DSPIN   equ     P1PIN           ;   pin value
-   885                                  
-   886                                  DSDAT   equ     BIT0            ; Data must be bit 0 & idles high
-   887                                  DSCLK   equ     BIT2            ; Clock idles high
-   888                                  DSRST   equ     BIT3            ; Reset idles low (asserted)
-   889                                  
-   890                                  DSMSK   equ     DSRST+DSCLK+DSDAT
-   891                                  
+   883                                  ; N.B. These will move to P1 from P3 on the final board
+   884                                  ; Jan 2018 -- updated to P1 for rev 2.0 board
+   885                                  ;**********
+   886                                  DSLTC   equ     P1LTC           ; DS1302 latch
+   887                                  DSPIN   equ     P1PIN           ;   pin value
+   888                                  
+   889                                  DSDAT   equ     BIT0            ; Data must be bit 0 & idles high
+   890                                  DSCLK   equ     BIT2            ; Clock idles high
+   891                                  DSRST   equ     BIT3            ; Reset idles low (asserted)
    892                                  
-   893                                  %macro  us_delay 0
-   894                                  	jmp	$+2
-   895                                  	jmp	$+2
-   896                                  	jmp	$+2
-   897                                  %endmacro
-   898                                  
-   899                                  
-   900 000002AB 90                      	align	2
-   901                                  ds_out_latch:
-   902 000002AC EE                      	out	dx,al
-   903                                  	us_delay
-   894 000002AD EB00                <1>  jmp $+2
-   895 000002AF EB00                <1>  jmp $+2
-   896 000002B1 EB00                <1>  jmp $+2
-   904 000002B3 C3                      	ret
-   905                                  
-   906                                  ;
-   907                                  ; initializes the DSLTC in DX
-   908                                  ; sets the Clock low, then asserts Reset
+   893                                  DSMSK   equ     DSRST+DSCLK+DSDAT
+   894                                  
+   895                                  
+   896                                  %macro  us_delay 0
+   897                                  	jmp	$+2
+   898                                  	jmp	$+2
+   899                                  	jmp	$+2
+   900                                  %endmacro
+   901                                  
+   902                                  
+   903                                  	align	2
+   904                                  ds_out_latch:
+   905 000002AE EE                      	out	dx,al
+   906                                  	us_delay
+   897 000002AF EB00                <1>  jmp $+2
+   898 000002B1 EB00                <1>  jmp $+2
+   899 000002B3 EB00                <1>  jmp $+2
+   907 000002B5 C3                      	ret
+   908                                  
    909                                  ;
-   910                                  	global	ds_reset_on
-   911                                  ds_reset_on:
-   912 000002B4 BA62F8                  	mov	dx,DSLTC	;set I/O latch address in DX
-   913 000002B7 EC                      	in	al,dx		;get the latch value
-   914 000002B8 24FB                    	and	al,~DSCLK	;set the clock low (should be idle state)
-   915 000002BA E8EFFF                  	call	ds_out_latch
-   916 000002BD 0C01                    	or	al,DSDAT	;set data for input
-   917 000002BF 24F7                    	and	al,~DSRST	;assert RESET#
-   918 000002C1 E8E8FF                  	call	ds_out_latch
-   919 000002C4 C3                      	ret
-   920                                  
-   921                                  ;
-   922                                  ; sets the Clock low, then removes the Reset
-   923                                  ;
-   924                                  	global	ds_reset_off
-   925                                  ds_reset_off:		; assume DX is set
-   926 000002C5 24FB                    	and	al,~DSCLK	;set the clock low (idle)
-   927 000002C7 0C01                    	or	al,DSDAT	;set data for input
-   928 000002C9 E8E0FF                  	call	ds_out_latch
-   929 000002CC 0C08                    	or	al,DSRST	;deassert RESET#
-   930 000002CE E8DBFF                  	call	ds_out_latch
-   931 000002D1 C3                      	ret			;clock idles low
-   932                                  
-   933                                  ;
-   934                                  ; moves output bit into position, and then drops the clock low
-   935                                  ; pauses, then sets the clock high to clock in the data bit
-   936                                  ; loops back for all 8 bits
-   937                                  ; exits with the clock HIGH
-   938                                  ;
-   939                                  ds_outb:	;output the byte in AH
-   940 000002D2 51                      	pushm	cx
-   941 000002D3 B90800                  	mov	cx,8		;8 bits go out
-   942                                  
-   943 000002D6 24FB                    .1:	and	al,~DSCLK	;drop the clock
-   944 000002D8 D1E8                    	shr	ax,1		;LSB to AL
-   945 000002DA D0C0                    	rol	al,1		;data bit to position
-   946 000002DC E8CDFF                  	call	ds_out_latch
-   947 000002DF 0C04                    	or	al,DSCLK	
-   948 000002E1 E8C8FF                  	call	ds_out_latch
-   949 000002E4 E2F0                    	loop	.1
-   950                                  
-   951 000002E6 59                      	popm	cx
-   952 000002E7 C3                         	ret			;clock is high on exit
+   910                                  ; initializes the DSLTC in DX
+   911                                  ; sets the Clock low, then asserts Reset
+   912                                  ;
+   913                                  	global	ds_reset_on
+   914                                  ds_reset_on:
+   915 000002B6 BA62F8                  	mov	dx,DSLTC	;set I/O latch address in DX
+   916 000002B9 EC                      	in	al,dx		;get the latch value
+   917 000002BA 24FB                    	and	al,~DSCLK	;set the clock low (should be idle state)
+   918 000002BC E8EFFF                  	call	ds_out_latch
+   919 000002BF 0C01                    	or	al,DSDAT	;set data for input
+   920 000002C1 24F7                    	and	al,~DSRST	;assert RESET#
+   921 000002C3 E8E8FF                  	call	ds_out_latch
+   922 000002C6 C3                      	ret
+   923                                  
+   924                                  ;
+   925                                  ; sets the Clock low, then removes the Reset
+   926                                  ;
+   927                                  	global	ds_reset_off
+   928                                  ds_reset_off:		; assume DX is set
+   929 000002C7 24FB                    	and	al,~DSCLK	;set the clock low (idle)
+   930 000002C9 0C01                    	or	al,DSDAT	;set data for input
+   931 000002CB E8E0FF                  	call	ds_out_latch
+   932 000002CE 0C08                    	or	al,DSRST	;deassert RESET#
+   933 000002D0 E8DBFF                  	call	ds_out_latch
+   934 000002D3 C3                      	ret			;clock idles low
+   935                                  
+   936                                  ;
+   937                                  ; moves output bit into position, and then drops the clock low
+   938                                  ; pauses, then sets the clock high to clock in the data bit
+   939                                  ; loops back for all 8 bits
+   940                                  ; exits with the clock HIGH
+   941                                  ;
+   942                                  ds_outb:	;output the byte in AH
+   943 000002D4 51                      	pushm	cx
+   944 000002D5 B90800                  	mov	cx,8		;8 bits go out
+   945                                  
+   946 000002D8 24FB                    .1:	and	al,~DSCLK	;drop the clock
+   947 000002DA D1E8                    	shr	ax,1		;LSB to AL
+   948 000002DC D0C0                    	rol	al,1		;data bit to position
+   949 000002DE E8CDFF                  	call	ds_out_latch
+   950 000002E1 0C04                    	or	al,DSCLK	
+   951 000002E3 E8C8FF                  	call	ds_out_latch
+   952 000002E6 E2F0                    	loop	.1
    953                                  
-   954                                  ;
-   955                                  ; sets clock High and data bit for input
-   956                                  ; pauses, drops the clock, pauses, reads the data bit
-   957                                  ; shifts 8 bits into AH from the left, hence LSB ends up in AX bit 8
-   958                                  ; exits with the clock low
-   959                                  ;
-   960                                  ds_inb:		;input a byte to AH
-   961 000002E8 51                      	pushm	cx
-   962 000002E9 B90800                  	mov	cx,8
-   963                                  
-   964 000002EC 0C05                    .2:	or	al,DSCLK+DSDAT	;raise the clock, O.C. data set for input
-   965 000002EE E8BBFF                  	call	ds_out_latch
-   966 000002F1 24FB                    	and	al,~DSCLK	;drop the clock
-   967 000002F3 E8B6FF                  	call	ds_out_latch
-   968 000002F6 52                      	push	dx
-   969 000002F7 BA60F8                     	mov	dx,DSPIN	;set to read data bit
-   970 000002FA EC                      	in	al,dx		;data bit to LSB
-   971 000002FB 5A                      	pop	dx
-   972 000002FC D1C8                    	ror	ax,1		;data to AH MSB
-   973 000002FE D0E0                    	shl	al,1		;restore latch value just read in
-   974 00000300 E2EA                    	loop	.2
-   975                                  
-   976 00000302 59                      	popm	cx
-   977 00000303 C3                      	ret		; exit with clock Low
+   954 000002E8 59                      	popm	cx
+   955 000002E9 C3                         	ret			;clock is high on exit
+   956                                  
+   957                                  ;
+   958                                  ; sets clock High and data bit for input
+   959                                  ; pauses, drops the clock, pauses, reads the data bit
+   960                                  ; shifts 8 bits into AH from the left, hence LSB ends up in AX bit 8
+   961                                  ; exits with the clock low
+   962                                  ;
+   963                                  ds_inb:		;input a byte to AH
+   964 000002EA 51                      	pushm	cx
+   965 000002EB B90800                  	mov	cx,8
+   966                                  
+   967 000002EE 0C05                    .2:	or	al,DSCLK+DSDAT	;raise the clock, O.C. data set for input
+   968 000002F0 E8BBFF                  	call	ds_out_latch
+   969 000002F3 24FB                    	and	al,~DSCLK	;drop the clock
+   970 000002F5 E8B6FF                  	call	ds_out_latch
+   971 000002F8 52                      	push	dx
+   972 000002F9 BA60F8                     	mov	dx,DSPIN	;set to read data bit
+   973 000002FC EC                      	in	al,dx		;data bit to LSB
+   974 000002FD 5A                      	pop	dx
+   975 000002FE D1C8                    	ror	ax,1		;data to AH MSB
+   976 00000300 D0E0                    	shl	al,1		;restore latch value just read in
+   977 00000302 E2EA                    	loop	.2
    978                                  
-   979                                  ; convert packed BCD to binary int
-   980                                  ;
-   981                                  ;	arg in AL
-   982                                  ;
-   983                                  ;  int bcd2int(byte bcd);
-   984                                  ;
-   985                                  	global	bcd2int_
-   986                                  bcd2int_:
-   987 00000304 88C4                    	mov	ah,al
-   988 00000306 C0EC04                  	shr	ah,4		; AH is unpacked high decimal digit
-   989 00000309 240F                    	and	al,0x0F		; AL is unpacked low decimal digit
-   990 0000030B D50A                    	aad			; convert to integer in AX
-   991 0000030D C3                      	ret
-   992                                  
-   993                                  	global	day_of_week_
-   994                                  day_of_week_:	;parameters in BCD
-   995                                  ;	CH = century
-   996                                  ;	CL = year
-   997                                  ;	DH = month
-   998                                  ;	DL = day
-   999                                  ;
-  1000 0000030E 88E8                    	mov	al,ch		;century to AL
-  1001 00000310 E8F1FF                  	call	bcd2int_
-  1002 00000313 89C3                    	mov	bx,ax
-  1003                                  
-  1004 00000315 88C8                    	mov	al,cl		;year to AL
-  1005 00000317 E8EAFF                  	call	bcd2int_
-  1006 0000031A 89C1                    	mov	cx,ax
-  1007                                  
-  1008 0000031C 88F0                    	mov	al,dh		;month to AL
-  1009 0000031E E8E3FF                  	call	bcd2int_
-  1010 00000321 92                      	xchg	ax,dx		;month to DX, day to AL
-  1011 00000322 E8DFFF                  	call	bcd2int_
-  1012 00000325 92                      	xchg	ax,dx		;day to DX, month to AX
-  1013                                  
-  1014                                  ; fall into 'dow_'
-  1015                                  	global	dow_
-  1016                                  dow_:
-  1017                                  ;	AX = month
-  1018                                  ;	DX = day
-  1019                                  ;	BX = century
-  1020                                  ;	CX = year
-  1021                                  ; normalize for calendar starting in March
-  1022 00000326 83E803                  	sub	ax,3		;
-  1023 00000329 790A                    	jns	.4
-  1024 0000032B 83C00C                  	add	ax,12		; month went negative
-  1025 0000032E 49                      	dec	cx
-  1026 0000032F 7904                    	jns	.4
-  1027 00000331 83C164                  	add	cx,100		;
-  1028 00000334 4B                      	dec	bx		; year went negative
-  1029                                  .4:
-  1030                                  ; now calculate
-  1031 00000335 01CA                    	add	dx,cx		; D+Y
-  1032 00000337 C1E902                  	shr	cx,2		; Y/4
-  1033 0000033A 01CA                    	add	dx,cx		; + Y/4
-  1034 0000033C 01DA                    	add	dx,bx		; + C
-  1035 0000033E C1E302                  	shl	bx,2		; C*4
-  1036 00000341 01DA                    	add	dx,bx		; D+Y+Y/4+5*C
-  1037 00000343 C1EB04                  	shr	bx,4		; C/4
-  1038 00000346 01DA                    	add	dx,bx		; + C/4
-  1039 00000348 B90500                  	mov	cx,5		; CX = 5
-  1040 0000034B F6F1                    	div	cl		; M/5 to AL, Mrem to AH
-  1041 0000034D 88E3                    	mov	bl,ah		; BX = Mrem
-  1042 0000034F 2E8A9F[6503]               cs	mov	bl,[dow_tab+bx]
-  1043 00000354 01DA                       	add	dx,bx
-  1044 00000356 41                      	inc	cx		; CL = 6
-  1045 00000357 F6E1                    	mul	cl		; AX = (M/5)*6
-  1046 00000359 01D0                    	add	ax,dx		; AX = sum
-  1047 0000035B 31D2                    	xor	dx,dx
-  1048 0000035D 41                      	inc	cx		; CX = 7
-  1049 0000035E 40                      	inc	ax		; bias by 2
-  1050 0000035F 40                      	inc	ax		; **
-  1051 00000360 F7F1                    	div	cx		; SUM div 7
-  1052 00000362 89D0                    	mov	ax,dx		; result to AX
-  1053 00000364 C3                      	ret
-  1054                                  
-  1055                                  dow_tab:
-  1056 00000365 001F3D5C7A              	db	0,31,61,92,122;153
+   979 00000304 59                      	popm	cx
+   980 00000305 C3                      	ret		; exit with clock Low
+   981                                  
+   982                                  ; convert packed BCD to binary int
+   983                                  ;
+   984                                  ;	arg in AL
+   985                                  ;
+   986                                  ;  int bcd2int(byte bcd);
+   987                                  ;
+   988                                  	global	bcd2int_
+   989                                  bcd2int_:
+   990 00000306 88C4                    	mov	ah,al
+   991 00000308 C0EC04                  	shr	ah,4		; AH is unpacked high decimal digit
+   992 0000030B 240F                    	and	al,0x0F		; AL is unpacked low decimal digit
+   993 0000030D D50A                    	aad			; convert to integer in AX
+   994 0000030F C3                      	ret
+   995                                  
+   996                                  	global	day_of_week_
+   997                                  day_of_week_:	;parameters in BCD
+   998                                  ;	CH = century
+   999                                  ;	CL = year
+  1000                                  ;	DH = month
+  1001                                  ;	DL = day
+  1002                                  ;
+  1003 00000310 88E8                    	mov	al,ch		;century to AL
+  1004 00000312 E8F1FF                  	call	bcd2int_
+  1005 00000315 89C3                    	mov	bx,ax
+  1006                                  
+  1007 00000317 88C8                    	mov	al,cl		;year to AL
+  1008 00000319 E8EAFF                  	call	bcd2int_
+  1009 0000031C 89C1                    	mov	cx,ax
+  1010                                  
+  1011 0000031E 88F0                    	mov	al,dh		;month to AL
+  1012 00000320 E8E3FF                  	call	bcd2int_
+  1013 00000323 92                      	xchg	ax,dx		;month to DX, day to AL
+  1014 00000324 E8DFFF                  	call	bcd2int_
+  1015 00000327 92                      	xchg	ax,dx		;day to DX, month to AX
+  1016                                  
+  1017                                  ; fall into 'dow_'
+  1018                                  	global	dow_
+  1019                                  dow_:
+  1020                                  ;	AX = month
+  1021                                  ;	DX = day
+  1022                                  ;	BX = century
+  1023                                  ;	CX = year
+  1024                                  ; normalize for calendar starting in March
+  1025 00000328 83E803                  	sub	ax,3		;
+  1026 0000032B 790A                    	jns	.4
+  1027 0000032D 83C00C                  	add	ax,12		; month went negative
+  1028 00000330 49                      	dec	cx
+  1029 00000331 7904                    	jns	.4
+  1030 00000333 83C164                  	add	cx,100		;
+  1031 00000336 4B                      	dec	bx		; year went negative
+  1032                                  .4:
+  1033                                  ; now calculate
+  1034 00000337 01CA                    	add	dx,cx		; D+Y
+  1035 00000339 C1E902                  	shr	cx,2		; Y/4
+  1036 0000033C 01CA                    	add	dx,cx		; + Y/4
+  1037 0000033E 01DA                    	add	dx,bx		; + C
+  1038 00000340 C1E302                  	shl	bx,2		; C*4
+  1039 00000343 01DA                    	add	dx,bx		; D+Y+Y/4+5*C
+  1040 00000345 C1EB04                  	shr	bx,4		; C/4
+  1041 00000348 01DA                    	add	dx,bx		; + C/4
+  1042 0000034A B90500                  	mov	cx,5		; CX = 5
+  1043 0000034D F6F1                    	div	cl		; M/5 to AL, Mrem to AH
+  1044 0000034F 88E3                    	mov	bl,ah		; BX = Mrem
+  1045 00000351 2E8A9F[6703]               cs	mov	bl,[dow_tab+bx]
+  1046 00000356 01DA                       	add	dx,bx
+  1047 00000358 41                      	inc	cx		; CL = 6
+  1048 00000359 F6E1                    	mul	cl		; AX = (M/5)*6
+  1049 0000035B 01D0                    	add	ax,dx		; AX = sum
+  1050 0000035D 31D2                    	xor	dx,dx
+  1051 0000035F 41                      	inc	cx		; CX = 7
+  1052 00000360 40                      	inc	ax		; bias by 2
+  1053 00000361 40                      	inc	ax		; **
+  1054 00000362 F7F1                    	div	cx		; SUM div 7
+  1055 00000364 89D0                    	mov	ax,dx		; result to AX
+  1056 00000366 C3                      	ret
   1057                                  
-  1058                                  
-  1059                                  %if DEBUG
-  1060                                  segment CONST
-  1061 00000000 8DD6                    	dw	ttime		; 54925 == 0_D68Dh
-  1062 00000002 8DD6                    	dw	54925 ; ms.
-  1063 00000004 BA001800                	dd	tick		; 1573050
-  1064 00000008 BA001800                	dd	1573050 ; ticks/day
-  1065                                  %endif
+  1058                                  dow_tab:
+  1059 00000367 001F3D5C7A              	db	0,31,61,92,122;153
+  1060                                  
+  1061                                  
+  1062                                  %if DEBUG
+  1063                                  segment CONST
+  1064 00000000 8DD6                    	dw	ttime		; 54925 == 0_D68Dh
+  1065 00000002 8DD6                    	dw	54925 ; ms.
+  1066 00000004 BA001800                	dd	tick		; 1573050
+  1067 00000008 BA001800                	dd	1573050 ; ticks/day
+  1068                                  %endif

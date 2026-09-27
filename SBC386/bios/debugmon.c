@@ -175,43 +175,6 @@ static int is_cmd( char **pp, const char *kw )
  */
 /* Counter 1, latched and read low-then-high, exactly as t1_read in
    "15h_misc.asm" does it.  Counts down at 1mhz. */
-/* Seconds off the DS1302, as BCD in DH from INT 1Ah function 02h.
-   The only clock on this board that owes nothing to timer 0 or to
-   timer 1, which is the entire reason for using it. */
-static word rtc_sec( void )
-{
-	word	v;
-
-	ASM {
-		mov	ah,2
-		int	0x1A
-		mov	al,dh
-		xor	ah,ah
-		mov	[v],ax
-	}
-	return( (word)(((v >> 4) & 0x0F) * 10 + (v & 0x0F)) );
-}
-
-
-static word t1_sample( void )
-{
-	word	v;
-
-	ASM {
-		mov	al,0x40		; counter 1, latch
-		mov	dx,TMRCON
-		out	dx,al
-		mov	dx,TMR1
-		in	al,dx
-		mov	ah,al
-		in	al,dx
-		xchg	al,ah
-		mov	[v],ax
-	}
-	return( v );
-}
-
-
 static word io_read( word port, int wide )
 {
 	word	v;
@@ -310,50 +273,6 @@ static void v3_put( word addr, byte v )
 	io_write(V3_DATA,v,0);
 }
 
-/*
- * The CRTC, through whichever of the pair is the address register.
- *
- * The manual lists "I/O+2" and "I/O+3: addresses the 6445 CRTC" on
- * separate lines and does not say which is which.  A 6845-family part
- * takes a register number on one port and the value on the other, so
- * getting it backwards writes register numbers into whatever register
- * was last selected -- which on a CRTC means a garbage display rather
- * than an error.  Cheaper to try both and find out.
- */
-static byte v3_crtc_get( word ap, word dp, byte reg )
-{
-	io_write(ap,reg,0);
-	return( (byte)io_read(dp,0) );
-}
-
-static void v3_crtc_put( word ap, word dp, byte reg, byte val )
-{
-	io_write(ap,reg,0);
-	io_write(dp,val,0);
-}
-
-/* R14 and R15 hold the cursor address and are the readable pair on a
-   6845; R0-R13 are write only.  R14 carries the high half of a 14-bit
-   address, so only its low six bits are kept -- a test pattern has to
-   fit in them or it will "fail" correctly. */
-static int v3_crtc_try( word ap, word dp )
-{
-	v3_crtc_put(ap,dp,14,0x12);
-	v3_crtc_put(ap,dp,15,0x5A);
-	if( v3_crtc_get(ap,dp,14) != 0x12 )	return( 0 );
-	if( v3_crtc_get(ap,dp,15) != 0x5A )	return( 0 );
-
-	/* A second pattern, inverted where it can be.  One pattern agrees
-	   with a stuck bus as readily as with a working register. */
-	v3_crtc_put(ap,dp,14,0x2D);
-	v3_crtc_put(ap,dp,15,0xA5);
-	if( v3_crtc_get(ap,dp,14) != 0x2D )	return( 0 );
-	if( v3_crtc_get(ap,dp,15) != 0xA5 )	return( 0 );
-
-	return( 1 );
-}
-
-
 /* Depends on all fifteen address bits, so a dead or undecoded address
    line shows up as a mismatch rather than as a pattern that happens to
    agree with its own alias. */
@@ -361,48 +280,6 @@ static byte v3_pat( word addr )
 {
 	return( (byte)(((addr >> 8) ^ addr ^ 0x5A) & 0xFF) );
 }
-
-/* INT 10h from C, for the VIDEO test screen: place the cursor, write a
-   cell without moving it, set the mode.  The mode set is 3 with bit 7
-   clear, so the screen is cleared and the cursor homed. */
-static void v10_goto( word row, word col )
-{
-	ASM {
-		mov	ah,2
-		xor	bh,bh
-		mov	dh,byte ptr [row]
-		mov	dl,byte ptr [col]
-		int	0x10
-	}
-}
-
-static void v10_cell( word row, word col, byte chr, byte attr )
-{
-	v10_goto(row,col);
-	ASM {
-		mov	ah,9
-		mov	al,[chr]
-		xor	bh,bh
-		mov	bl,[attr]
-		mov	cx,1
-		int	0x10
-	}
-}
-
-static void v10_text( word row, word col, const char *t, byte attr )
-{
-	while( *t )
-		v10_cell(row,col++,(byte)*t++,attr);
-}
-
-static void v10_mode( void )
-{
-	ASM {
-		mov	ax,0x0003
-		int	0x10
-	}
-}
-
 
 /*
  * The 8242 keyboard controller: an 8042 with the PC/AT firmware in it,
@@ -2281,19 +2158,6 @@ void debugmon(void)
  *	VGA3 <addr> <val>	write one byte and read it back
  */
 /*
- * V3CRTC -- is the CRTC there, and which port is the address register?
- *
- * Second rung of the video phase.  Still nothing that can reach a
- * monitor: CFG is zero from RESET so video is blanked, and the cursor
- * address registers do not affect anything that is not displayed.
- *
- * Proving the CRTC answers is worth a rung of its own because the
- * failure it guards against is silent.  Program the whole register set
- * through the wrong port and there is no error -- just a display that
- * never syncs, which looks exactly like a bad font, bad timing values,
- * a dead monitor, or a board that was never selected.
- */
-/*
  * V3KBD -- the keyboard controller, rung by rung.
  *
  * The first four need no keyboard plugged in: they are the controller
@@ -2301,126 +2165,21 @@ void debugmon(void)
  * then is the keyboard itself asked to reset, and a silence there is
  * reported as a missing keyboard, not a fault.
  *
- *	V3KBD		status, self-test, interface test, command byte,
- *			keyboard reset
- *	V3KBD SCAN	print scan codes as keys are struck, until a key
- *			arrives on the serial console
- *	V3KBD IRQ	which ICU input the controller raises: hold a key,
- *			it is not read, and the request stays up to be seen
+ * Status, self-test, interface test, command byte, keyboard reset.
+ * Kept past the bring-up because a keyboard going quiet is a recurring
+ * failure and this names the cause in five lines.  The scan-code and
+ * interrupt-hunting modes went when the board stopped being new; they
+ * are in the history if they are wanted again.
  */
 		if( is_cmd(&cp,"V3KBD") )
 		{
 			byte	st, v, cmdb;
-			word	i, start, base_m, base_s, new_m, new_s;
-			word	omask;
-
-			while( *cp == ' ' || *cp == 0x09 ) ++cp;
+			word	i;
 
 			/* The interface comes up disabled after a power cycle and
-			   stays so until told otherwise.  SCAN and IRQ must not
-			   depend on the full probe having run first. */
+			   stays so until told otherwise. */
 			v3_kbd_put(V3_KBD_CMD,K8_ENABLE);
 
-			/* INT 09h is live and would take every code first.  SCAN
-			   and IRQ hold IR1 masked while they run; the ISR gets
-			   it back, and any code left waiting, when they finish. */
-			omask = io_read(0x21,0);
-			io_write(0x21,omask | 0x02,0);
-
-			if( is_cmd(&cp,"SCAN") ) {
-				printf("V3KBD: scan codes.  Any key on the serial console ends it.\n");
-				while( bda.buffer_head == bda.buffer_tail )
-					if( io_read(V3_KBD_CMD,0) & K8_OBF )
-						printf("%02X ",(word)io_read(V3_KBD_DATA,0));
-				KBD_getchar();
-				printf("\n");
-				io_write(0x21,omask,0);
-				continue;
-			}
-
-			if( is_cmd(&cp,"IRQ") ) {
-				word	hi0, lo0, hi1, lo1;
-
-				/* IRQFIND's method, twice refined.
-
-				   The ECB sheet ties ~INT and ~IR1 together into the
-				   386EX INT0 pin, master IR1 -- the PC keyboard line.
-				   IR1 is masked and edge-triggered, so a key held
-				   with its code unread LATCHES in the request register
-				   and needs no luck to see.  IR0 is the timer, pending
-				   a few hundred nanoseconds a tick: it comes and goes
-				   by chance and is ignored.
-
-				   INT0 is also P3.2, and P3PIN reads the pin whatever
-				   mode it is in.  Its level is sampled both ways -- OR
-				   for ever-high, AND for ever-low -- because a line
-				   with the polarity backwards rests HIGH and DIPS for
-				   a key, and an OR alone cannot see a dip.  The bus
-				   lines are active low and inverted on the way in, so
-				   a card that drives an active-high request onto one
-				   does exactly that, and the ICU, wanting a rising
-				   edge, gets one at power-up and never again. */
-				while( io_read(V3_KBD_CMD,0) & K8_OBF )
-					io_read(V3_KBD_DATA,0);
-				base_m = base_s = hi0 = 0;	lo0 = 0xFF;
-				start = bda.timer_count_low;
-				do {
-					io_write(0x20,0x0A,0);	base_m |= io_read(0x20,0);
-					io_write(0xA0,0x0A,0);	base_s |= io_read(0xA0,0);
-					i = io_read(P3PIN,0);	hi0 |= i;	lo0 &= i;
-				} while( (word)(bda.timer_count_low - start) < 18 );
-				printf("idle      IRR master %02X slave %02X   INT0 %s\n"
-				       "NOW PRESS AND HOLD A KEY on the PS/2 keyboard.  Five seconds ...\n",
-					base_m, base_s,
-					(lo0 & 4) ? "HIGH" : (hi0 & 4) ? "toggling" : "low");
-				new_m = new_s = hi1 = 0;	lo1 = 0xFF;
-				start = bda.timer_count_low;
-				do {
-					io_write(0x20,0x0A,0);	new_m |= io_read(0x20,0);
-					io_write(0xA0,0x0A,0);	new_s |= io_read(0xA0,0);
-					i = io_read(P3PIN,0);	hi1 |= i;	lo1 &= i;
-				} while( (word)(bda.timer_count_low - start) < 5*18 );
-				st = (byte)io_read(V3_KBD_CMD,0);
-				while( io_read(V3_KBD_CMD,0) & K8_OBF )
-					io_read(V3_KBD_DATA,0);
-				printf("with key  IRR master %02X slave %02X   INT0 %s   8242 status %02X\n",
-					new_m, new_s,
-					(lo1 & 4) ? "HIGH" : (hi1 & 4) ? "went high" : "low",
-					(word)st);
-
-				if( !(st & K8_OBF) ) {
-					printf("OBF never set: no scan code arrived.  Is a keyboard plugged in?\n");
-					io_write(0x21,omask,0);
-					continue;
-				}
-				if( lo0 & 4 ) {
-					printf("INT0 rests HIGH with no key.  %s\n"
-					       "The card drives the line asserted at rest: polarity is backwards\n"
-					       "for this bus.  Try the /INT position, which is active low by\n"
-					       "definition and reaches the same INT0 pin.\n",
-						(lo1 & 4) ? "It stayed high with a key held."
-							  : "It DIPPED while a key was held.");
-					io_write(0x21,omask,0);
-					continue;
-				}
-				new_m &= ~base_m & 0xFE;	/* not IR0: the timer */
-				new_s &= ~base_s;
-				if( !new_m && !new_s && !(hi1 & 4) )
-					printf("A code is waiting, but INT0 never rose and nothing latched.\n"
-					       "The card is not driving /INT or IR1.\n");
-				else if( !new_m && !new_s )
-					printf("INT0 rose but nothing latched in the ICU: the pin reaches the\n"
-					       "CPU and INTCFG or ICW1 is not taking it.\n");
-				else
-					for( i = 0; i < 16; i++ )
-						if( (i < 8 ? new_m : new_s) & (1 << (i & 7)) )
-							printf("keyboard raises IR%u%s\n", i,
-								i == 1 ? " -- the PC keyboard line; INT 09h with ICW2 = 08h" : "");
-				io_write(0x21,omask,0);
-				continue;
-			}
-
-			io_write(0x21,omask,0);	/* the full probe runs with it live */
 			st = (byte)io_read(V3_KBD_CMD,0);
 			printf("V3KBD: status %02X",(word)st);
 			if( st == 0xFF ) {
@@ -2474,221 +2233,6 @@ void debugmon(void)
 				printf(" %02X",(word)v);
 			printf(v == KB_BAT_OK ? " -- keyboard passed its self-test\n"
 						: " -- expected FA then AA\n");
-			printf("       V3KBD SCAN shows codes; V3KBD IRQ finds the interrupt.\n");
-			continue;
-		}
-
-		if( is_cmd(&cp,"V3CRTC") )
-		{
-			word	ap, dp;
-			int	ok;
-
-			ap = V3_CRTC_ADR;
-			dp = V3_CRTC_DAT;
-			ok = v3_crtc_try(ap,dp);
-
-			if( !ok ) {
-				printf("V3CRTC: %04X as address did not answer; trying it the other\n"
-				       "        way round.\n", ap);
-				ap = V3_CRTC_DAT;
-				dp = V3_CRTC_ADR;
-				ok = v3_crtc_try(ap,dp);
-			}
-
-			if( !ok ) {
-				printf("V3CRTC: neither order answers.  R14/R15 read back %02X/%02X\n",
-					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,14),
-					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,15));
-				printf("        The 32K answered, so the board is selected and the\n"
-				       "        fault is the CRTC itself or its own decode -- not the\n"
-				       "        I/O block.\n");
-				continue;
-			}
-
-			printf("V3CRTC: address register %04X, data register %04X\n", ap, dp);
-			printf("        R14/R15 hold two patterns.  The CRTC is there.\n");
-
-			/* R16 and R17 are the light pen, read only, and on a
-			   board with no light pen they are whatever the part
-			   powers up holding.  Printed as information, not as
-			   a test -- there is no right answer to check. */
-			printf("        R14 %02X  R15 %02X  R16 %02X  R17 %02X\n",
-				(word)v3_crtc_get(ap,dp,14),
-				(word)v3_crtc_get(ap,dp,15),
-				(word)v3_crtc_get(ap,dp,16),
-				(word)v3_crtc_get(ap,dp,17));
-
-			/* Leave the cursor somewhere harmless rather than at
-			   the test pattern. */
-			v3_crtc_put(ap,dp,14,0);
-			v3_crtc_put(ap,dp,15,0);
-			continue;
-		}
-
-/*
- * VIDEO -- paint the test screen through INT 10h.
- *
- * The rulers, the frame, the character set and the attribute bars that
- * V3FONT once wrote straight into the board, now drawn by the driver:
- * fn 02 to place the cursor, fn 09 to write a cell.  What it proves is
- * the driver, not the board -- the board was proved before the driver
- * existed.  The top-right ruler must read 79; the frame must be
- * unbroken; the cursor lands after the pangram.
- */
-		if( is_cmd(&cp,"VIDEO") )
-		{
-			word	r, c, i;
-
-			if( !(bda.console & CON_VIDEO) ) {
-				printf("VIDEO: the VGA3 is not on.  Is the board in?\n");
-				continue;
-			}
-			v10_mode();
-			for( c = 0; c < 80; c++ ) {
-				v10_cell(0, c, (byte)('0' + c / 10), 0x07);
-				v10_cell(1, c, (byte)('0' + c % 10), 0x07);
-				v10_cell(24,c, (byte)('0' + c % 10), 0x07);
-				if( c && c < 79 ) {
-					v10_cell(2, c, 0xCD, 0x07);
-					v10_cell(23,c, 0xCD, 0x07);
-				}
-			}
-			for( r = 3; r < 23; r++ ) {
-				v10_cell(r, 0, 0xBA, 0x07);
-				v10_cell(r, 79,0xBA, 0x07);
-			}
-			v10_cell(2, 0, 0xC9, 0x07);	v10_cell(2, 79,0xBB, 0x07);
-			v10_cell(23,0, 0xC8, 0x07);	v10_cell(23,79,0xBC, 0x07);
-
-			for( r = 0; r < 16; r++ )
-				for( c = 0; c < 16; c++ )
-					v10_cell((word)(4 + r), (word)(3 + c*2),
-						(byte)(r*16 + c), 0x07);
-
-			for( i = 0; i < 16; i++ ) {
-				v10_text((word)(4+i), 40, "fg", (byte)i);
-				v10_cell((word)(4+i), 43, "0123456789ABCDEF"[i], (byte)i);
-				v10_text((word)(4+i), 48, "bg", (byte)((i << 4) | (i == 7 ? 0 : 7)));
-				v10_cell((word)(4+i), 51, "0123456789ABCDEF"[i],
-					(byte)((i << 4) | (i == 7 ? 0 : 7)));
-			}
-			v10_text(4, 56, "blink or bright?", 0x8F);
-			v10_text(6, 56, "IBM 3270 face",    0x0F);
-			v10_text(7, 56, "via INT 10h",      0x0F);
-			v10_text(9, 56, "reverse",          0x70);
-
-			v10_text(21, 3, "The quick brown fox jumps over the lazy dog"
-				" 0123456789", 0x07);
-			v10_goto(21, 58);
-			printf("VIDEO: test screen painted through INT 10h.\n");
-			continue;
-		}
-
-/*
- * V3RDCHK -- are CPU reads of the displayed RAM clean while the beam is
- * on it?  Fills the screen through the memory window with a pattern that
- * differs byte to byte, then reads it back eight times, comparing, with
- * nothing printed until the end so the console cannot scroll under the
- * test.  Mismatches would mean the CRTC wins the bus during its fetch
- * and a program copying screen to screen -- a scrolling editor -- picks
- * up garbage.  None means the CPU wins, as on a CGA, and only the
- * picture suffers.  vga3_init restores the screen afterwards.
- */
-		if( is_cmd(&cp,"V3RDCHK") )
-		{
-			word	i, pass, bad, first;
-			byte	far *v;
-			union { byte far *p; struct { word off; word seg; } fp; } m;
-
-			if( !(bda.console & CON_VIDEO) ) {
-				printf("V3RDCHK: the VGA3 is not on.\n");
-				continue;
-			}
-			m.fp.seg = 0xB800;	m.fp.off = 0;	v = m.p;
-			for( i = 0; i < 4000; i++ )
-				v[i] = (byte)(i ^ (i >> 7));
-			bad = 0;	first = 0xFFFF;
-			for( pass = 0; pass < 8; pass++ )
-				for( i = 0; i < 4000; i++ )
-					if( v[i] != (byte)(i ^ (i >> 7)) ) {
-						if( first == 0xFFFF )	first = i;
-						bad++;
-					}
-			vga3_init();
-			if( !bad )
-				printf("V3RDCHK: 32000 reads of the live screen, all correct.\n"
-				       "         The CPU wins the RAM; reads are clean.\n");
-			else
-				printf("V3RDCHK: %u of 32000 reads WRONG, first at offset %04X.\n"
-				       "         Reads during display return the CRTC's data.\n",
-					bad, first);
-			continue;
-		}
-
-/*
- * V3BEAM -- measure the beam clock against the CRTC's own word.
- *
- * Bit 1 of HD6445 register 31, read through the data port, is vertical
- * blanking -- learned from the SBC-188 BIOS, which scrolled on it.  With
- * counter 1 (1mhz) this measures the frame, the blanking window, and the
- * line the retrace interrupt actually marks, which is what vga3.asm
- * writes in.  vga3.asm waits on this same bit before every write.
- */
-		if( is_cmd(&cp,"V3BEAM") )
-		{
-			word	t_on, t_off, t_on2, frame, blank, n;
-			dword	lines;
-
-			if( !(bda.console & CON_VIDEO) ) {
-				printf("V3BEAM: the VGA3 is not on.\n");
-				continue;
-			}
-
-			/* Find an edge, then time a whole cycle from it.  Bounded so
-			   a status bit that never moves is reported, not waited for. */
-			for( n = 0; n < 60000U && (v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
-			for( n = 0; n < 60000U && !(v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
-			t_on = t1_sample();
-			for( n = 0; n < 60000U && (v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
-			t_off = t1_sample();
-			for( n = 0; n < 60000U && !(v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
-			t_on2 = t1_sample();
-			if( n >= 60000U ) {
-				printf("V3BEAM: R31 bit 1 never changed (R31 = %02X).  No blanking status here.\n",
-					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31));
-				continue;
-			}
-
-			frame = (word)(t_on - t_on2);		/* counter 1 counts down */
-			blank = (word)(t_on - t_off);
-			lines = ((dword)frame * 1000UL + 15890UL) / 31780UL;
-			printf("V3BEAM: frame %u us = %lu lines, blanking %u us = %lu lines\n",
-				frame, lines, blank, ((dword)blank * 1000UL + 15890UL) / 31780UL);
-
-			continue;
-		}
-
-/*
- * V3DUMP <addr> [<count>] -- the board's RAM through the register path,
- * which passed a 32K march and is the truth about what it holds.  The
- * memory window at B800:0000 is the same RAM; DUMP B800:xxxx sees it too.
- */
-		if( is_cmd(&cp,"V3DUMP") )
-		{
-			dword	v;
-			word	a, n, i;
-
-			if( !parse_val(&cp,&v) ) {
-				printf("usage: V3DUMP <addr> [<count>]\n");
-				continue;
-			}
-			a = (word)(v & (V3_SIZE - 1));
-			n = parse_val(&cp,&v) ? (word)v : 64;
-			for( i = 0; i < n; i++ ) {
-				if( (i & 15) == 0 )	printf("%s%04X ", i ? "\n" : "", (word)(a + i));
-				printf(" %02X", (word)v3_get((word)(a + i)));
-			}
-			printf("\n");
 			continue;
 		}
 

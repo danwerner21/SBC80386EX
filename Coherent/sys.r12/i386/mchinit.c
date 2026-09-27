@@ -303,7 +303,16 @@ mchinit ()
 	/* Record total memory for later use.  */
 	total_mem = ctob (sysmem.lo) + lo + hi;
 
-#if 0
+/*
+ * SBC-386EX: enabled.  Memory is not zero at start on the SBC -- a cold
+ * boot leaves the BIOS memory march's patterns in it -- and at least
+ * SLEEP_ALLOC() relies on kmem_alloc() memory being zero: it never sets
+ * sl_locked or sl_holder, and LOCK_TESTS() panicked "Lock primitives
+ * not functional" on the board while passing in QEMU, whose RAM starts
+ * zeroed.  Clearing everything, as a PC BIOS effectively did, answers
+ * the whole class of such assumptions rather than the one found.
+ */
+#if 1
 	/*
 	 * Clear base memory above the kernel.  93/12/09 - hal
 	 *

@@ -2992,6 +2992,13 @@ int		flag;
 					       flag)) != NULL) {
 		INIT_LNODE (& lockp->sl_node, lkinfop, & sleep_locks, flag);
 		PLIST_INIT (lockp->sl_plist);
+		/*
+		 * SBC-386EX: kmem_alloc () memory is not zeroed.  Unset, these
+		 * read as whatever was there, and a new lock can look held --
+		 * LOCK_TESTS () failed on the SBC, whose RAM is not zero at boot.
+		 */
+		ATOMIC_CLEAR_UCHAR (lockp->sl_locked);
+		lockp->sl_holder = NULL;
 	}
 
 	return lockp;

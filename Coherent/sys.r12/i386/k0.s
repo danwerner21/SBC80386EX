@@ -1137,6 +1137,18 @@ bios_mem_lo:	mov	%cs:bios_lomem,%eax
 bios_mem_ext:	mov	%cs:bios_extmem,%eax
 		ret
 
+/ SBC-386EX: early_con, when nonzero, is the base port of a UART that
+/ chirps and printf output before the console driver starts are also
+/ written to, polled (die.c: early_putc).  Without it nothing at all is
+/ seen between the "!" above and the kernel banner, because printf holds
+/ its output until the devices are up.  Zero leaves a stock kernel.  In
+/ code, like val11, so that it can be read before the data segment is.
+		.globl	early_con
+early_con:	.long	0
+		.globl	early_con_port
+early_con_port:	mov	%cs:early_con,%eax
+		ret
+
 aicode:
 		push	$envp - aicode		/ Empty environment
 		push	$argl - aicode		/ Argument list for init

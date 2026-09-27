@@ -20,6 +20,7 @@ unsigned total_mem;		/* Total physical memory in bytes.  */
 
 unsigned long	bios_mem_lo ();		/* k0.s: KB below 640K, from INT 12h */
 unsigned long	bios_mem_ext ();	/* k0.s: KB above 1 MB, from INT 15h */
+void		early_putc (), early_hex ();	/* die.c */
 
 #define	SPLASH	3
 #define	NDATA	4	/* process data segments			*/
@@ -293,6 +294,11 @@ mchinit ()
 
 	if (hi > HACK_LIMIT)
 		hi = HACK_LIMIT;
+
+	/* SBC-386EX: say what was found, if early_con is set. */
+	early_putc ('['); early_hex ((unsigned long) lo);
+	early_putc (' '); early_hex ((unsigned long) hi);
+	early_putc (']');
 	
 	/* Record total memory for later use.  */
 	total_mem = ctob (sysmem.lo) + lo + hi;

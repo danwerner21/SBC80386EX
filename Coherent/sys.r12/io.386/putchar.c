@@ -48,6 +48,9 @@ static int	p_off;	/* Offset into p_buff.  */
 int ok_to_use_dev = 0;	/* Can we use the console device yet?  */
 
 int coninit = 0;
+
+unsigned long	early_con_port ();	/* SBC-386EX: k0.s */
+void		early_putc ();		/* SBC-386EX: die.c */
 dev_t condev = makedev(2,0);
 
 void
@@ -64,6 +67,17 @@ __putchar(c);
 	 * keep as many characters as we can until we can print them.
 	 */
 	if (!ok_to_use_dev) {
+		/*
+		 * SBC-386EX: with early_con set, write it out now, polled,
+		 * instead of keeping it -- so that a kernel which stops before
+		 * its drivers are up still says how far it got.
+		 */
+		if (early_con_port ()) {
+			if (c == '\n')
+				early_putc ('\r');
+			early_putc (c);
+			return;
+		}
 		if (p_off == P_LEN) {
 			p_buf [P_LEN - 1] = '*';	/* Mark an overrun.  */
 		} else {

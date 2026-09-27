@@ -9,6 +9,7 @@
 # then patches what is not a tunable:
 #   condev	(5,128) = /dev/com1l, so kernel messages go to the serial port
 #   pit_count	9216, for the SBC's 921600 Hz timer 0
+#   early_con	0x3F8: progress markers and early printf straight to COM1
 #
 # /coh.sbc is the board kernel.  /coh.sbcq is the same with AT_8BIT=0 and
 # pit_count=11932, for booting in QEMU, whose IDE is 16-bit and whose
@@ -22,7 +23,9 @@ K=/coh.sbc
 C=/u/sbc/kconf
 rm -f $C/drvbld.mak $C/conf.c $C/conf.h $C/obj/*.o $K /coh.sbcq
 /u/sbc/kconf/bin/idmkcoh -o $K || exit 1
-/conf/patch -v $K condev=0x0580 pit_count=9216 || exit 1
+/conf/patch -v $K condev=0x0580 pit_count=9216 early_con=0x3F8 || exit 1
 cp $K /coh.sbcq
 /conf/patch -v /coh.sbcq AT_8BIT=0 pit_count=11932 || exit 1
-ls -l $K /coh.sbcq
+# Relinking replaced the file, so point /autoboot at the new one.
+ln -f $K /autoboot
+ls -li $K /coh.sbcq /autoboot

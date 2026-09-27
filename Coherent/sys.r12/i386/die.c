@@ -38,6 +38,41 @@
 static int chirp_off;
 
 /*
+ * SBC-386EX: polled output to the UART at early_con (k0.s), if set, for
+ * chirps and for printf before the console driver is up.  No statics:
+ * like _chirp, this runs before the data segment is usable.  The THRE
+ * wait is bounded so that a wrong port cannot hang the kernel.
+ */
+unsigned long early_con_port ();
+
+void
+early_putc (c)
+char c;
+{
+	unsigned port = early_con_port ();
+	int i;
+
+	if (port == 0)
+		return;
+	for (i = 0; i < 20000 && (inb (port + 5) & 0x20) == 0; i ++)
+		;
+	outb (port, c);
+}
+
+/* Print n in hex, early_putc style. */
+void
+early_hex (n)
+unsigned long n;
+{
+	int i, d;
+
+	for (i = 28; i >= 0; i -= 4) {	/* no string table: it is in .data */
+		d = (n >> i) & 15;
+		early_putc (d < 10 ? '0' + d : 'A' + d - 10);
+	}
+}
+
+/*
  * void _chirp(char c, off);
  * Put character 'c' directly in video memory at offset 'off';
  *
@@ -52,6 +87,7 @@ int off;
 #if SERIAL_CONSOLE
 	__putchar(c);
 #else
+	early_putc (c);		/* SBC-386EX */
 	if (!paging()) {
 		*(COLOR + off) = c;
 		*(MONO + off) = c;

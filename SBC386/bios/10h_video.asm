@@ -1,5 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; 10h_video.asm -- INT 10h, the video interface, on a serial terminal
+; 10h_video.asm -- INT 10h, the video interface: a serial terminal, the
+;                  VGA3 board, or both at once
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ; Copyright (C) 2026 Dan Werner.  All rights reserved.
@@ -20,16 +21,21 @@
 ; directory.  If not, see <http://www.gnu.org/licenses/>.
 ;
 ;
-; There is no display buffer.  Output goes to the serial console as
-; ANSI/VT100, and the only state kept is the cursor and mode fields in
-; the BDA -- deliberately, because real memory-mapped video is coming to
-; this board later and a pretend buffer at B800:0000 would just have to
-; be torn out again.
+; Two outputs, chosen by bda.console.  The serial one is ANSI/VT100 down
+; SIO0, and every byte of it passes through vputc, which is where that
+; console is switched.  The video one is the ECB VGA3 board, through the
+; primitives in vga3.asm, hooked in at the points below where something
+; is drawn or the cursor moves.  With both bits set the screen is
+; mirrored down the serial line, which is how a board with a monitor
+; stays debuggable from another room.
 ;
-; The consequence, stated plainly: function 08h cannot report what is on
-; the screen, and 09h/0Ah write to the terminal and put the cursor back
-; rather than editing a buffer.  Everything DOS actually leans on --
-; teletype, cursor, mode, scroll -- is honest.
+; The BDA cursor is the one cursor.  The serial side keeps it in step
+; with what the terminal has done; the video side draws where it says.
+; That is what lets both run from one set of functions.
+;
+; Function 08h reads the VGA3 when it is on and returns a space when it
+; is not: a terminal cannot be asked.  Serial-only, 09h/0Ah write to the
+; terminal and put the cursor back rather than editing a buffer.
 ;
 ; Assembly by NASM 2.08 is preferred
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -42,6 +48,9 @@
 %undef XXX
 
 	global	int_10h
+
+	extern	vga3_putc, vga3_cells, vga3_getcell, vga3_cursor
+	extern	vga3_shape, vga3_scroll_up, vga3_scroll_dn, vga3_clear
 
 segment	_TEXT
 
@@ -100,6 +109,17 @@ v_tab:
 	dw	v_done		; 0D read pixel  -- text only
 	dw	v_fn0E		; 0E teletype
 	dw	v_fn0F		; 0F get mode
+	dw	v_done		; 10 palette -- nothing to set
+	dw	v_done		; 11 character generator -- one font, in ROM
+	dw	v_fn12		; 12 alternate select: the EGA information call
+	dw	v_done		; 13 write string -- not yet
+	dw	v_done		; 14..19
+	dw	v_done
+	dw	v_done
+	dw	v_done
+	dw	v_done
+	dw	v_done
+	dw	v_fn1A		; 1A display combination code
 len_v_tab	equ	($-v_tab)/2
 
 
@@ -111,12 +131,14 @@ len_v_tab	equ	($-v_tab)/2
 ; a loop.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 vputc:
+	test	byte [console],CON_SERIAL
+	jz	.9			; the serial console is off
 	pushm	ax,bx,cx,dx,si,di
 	mov	ah,1			; write character
 	xor	dx,dx			; COM1
 	int	0x14
 	popm	ax,bx,cx,dx,si,di
-	ret
+.9:	ret
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -174,7 +196,10 @@ vsetcur:
 	xor	bh,bh
 	add	bx,bx
 	mov	[bx+vid_cursor],ax
-	popm	bx
+	test	byte [console],CON_VIDEO
+	jz	.9
+	call	vga3_cursor		; AH row, AL column
+.9:	popm	bx
 	ret
 
 
@@ -201,6 +226,21 @@ vgoto:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; g_scroll1 -- the whole board up one line, for the cursor falling off
+; the bottom.  The terminal did the same by itself.
+g_scroll1:
+	test	byte [console],CON_VIDEO
+	jz	.9
+	pushm	ax,bx,cx,dx
+	xor	cx,cx			; from 0,0
+	mov	dx,((VID_ROWS-1)<<8)|(VID_COLS-1)
+	mov	al,1
+	mov	bh,VID_ATTR
+	call	vga3_scroll_up
+	popm	ax,bx,cx,dx
+.9:	ret
+
+
 ; Cursor movement, tracked in the BDA.  The terminal does the real work
 ; -- it wraps and scrolls by itself -- so these only keep our idea of
 ; where the cursor is in step with what the terminal has done.
@@ -216,7 +256,8 @@ v_advance:				; one column right, wrapping
 	cmp	ah,VID_ROWS
 	jb	.9
 	mov	ah,VID_ROWS-1		; the terminal scrolled; stay on the
-.9:					;  bottom row
+	call	g_scroll1		;  bottom row, and scroll the board too
+.9:
 	call	vsetcur
 	popm	ax,bx,cx
 	ret
@@ -236,6 +277,7 @@ v_nextrow:				; line feed
 	cmp	ah,VID_ROWS
 	jb	.9
 	mov	ah,VID_ROWS-1
+	call	g_scroll1
 .9:
 	call	vsetcur
 	popm	ax,bx
@@ -266,6 +308,9 @@ v_fn00:
 
 	mov	word [vid_columns],VID_COLS
 	mov	byte [ega_rows],VID_ROWS-1
+	mov	word [ega_points],16		; 16 lines a character
+	mov	byte [ega_info],0x60		; EGA active, colour, 256K -- see fn 12
+	mov	byte [ega_info_3],0x09		; switches: colour 80x25
 	mov	word [vid_buf_len],VID_COLS*VID_ROWS*2
 	mov	word [vid_start],0
 	mov	byte [vid_active_page],0
@@ -288,16 +333,24 @@ v_fn00:
 	call	vputc
 	mov	al,'J'
 	call	vputc
-	call	vgoto
+	test	byte [console],CON_VIDEO
+	jz	.2
+	call	vga3_clear
+.2:	call	vgoto
 	jmp	v_done
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; fn 01 -- set cursor shape.  Recorded and ignored: a terminal has one.
+; fn 01 -- set cursor shape.  Recorded; the board takes it, a terminal
+; has one of its own.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 v_fn01:
 	mov	ax,[bp+offset_cx]
 	mov	[vid_cursor_mode],ax
+	test	byte [console],CON_VIDEO
+	jz	v_done
+	mov	cx,ax
+	call	vga3_shape
 	jmp	v_done
 
 
@@ -368,6 +421,36 @@ v_fn0F:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; fn 12, BL = 10 -- EGA information;  fn 1A, AL = 00 -- display combination
+;
+; The two questions a program asks before writing the screen itself.  A
+; program that hears "CGA" -- which is what silence means -- avoids snow
+; the CGA way: it polls the status port at 3DAh before every write.  On
+; this board that port is undecoded, 209 ms a read and a floating bus,
+; so the program hangs or crawls.  One that hears "VGA" writes B800
+; directly and moves the cursor through fn 02, both of which work.  So:
+; VGA, colour, 256K -- the answers, not the hardware, but the answers a
+; program acts on correctly.  Other subfunctions are left untouched, as
+; the convention is for an unsupported call.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+v_fn12:
+	mov	bx,[bp+offset_bx]
+	cmp	bl,0x10
+	jne	v_done
+	mov	word [bp+offset_bx],0x0003	; BH 0 colour, BL 3 = 256K
+	mov	word [bp+offset_cx],0x0009	; CH feature bits, CL switches: colour 80x25
+	jmp	v_done
+
+v_fn1A:
+	mov	ax,[bp+offset_ax]
+	or	al,al
+	jnz	v_done			; only the read form
+	mov	byte [bp+offset_ax],0x1A	; "supported"
+	mov	word [bp+offset_bx],0x0008	; BL 8 VGA colour, BH 0 no second display
+	jmp	v_done
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; fn 0E -- teletype output.  AL = character.
 ;
 ; The one function DOS leans on hardest.  Printable characters go out
@@ -391,7 +474,10 @@ v_fn0E:
 	jb	.bell			; any other control: emit, do not track
 
 	call	vputc
-	call	v_advance
+	test	byte [console],CON_VIDEO
+	jz	.adv
+	call	vga3_putc
+.adv:	call	v_advance
 	jmp	v_done
 .cr:
 	call	vputc
@@ -427,7 +513,15 @@ v_fn0A:
 	or	cx,cx
 	jz	v_done			; a count of zero writes nothing
 
-	mov	al,[bp+offset_ax]
+	mov	ax,[bp+offset_ax]	; AL character, AH the function
+	test	byte [console],CON_VIDEO
+	jz	.1
+	mov	bl,[bp+offset_bx]	; the attribute, for 09
+	xor	dl,dl
+	cmp	ah,0x09
+	jne	.v
+	inc	dl			; 09 writes the attribute too
+.v:	call	vga3_cells
 .1:
 	push	cx
 	call	vputc
@@ -450,7 +544,10 @@ v_fn0A:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 v_fn08:
 	mov	ax,(VID_ATTR<<8) | ASCII_SP
-	mov	[bp+offset_ax],ax
+	test	byte [console],CON_VIDEO
+	jz	.1
+	call	vga3_getcell		; the board can be asked
+.1:	mov	[bp+offset_ax],ax
 	jmp	v_done
 
 
@@ -479,6 +576,17 @@ v_scroll:
 	mov	dx,[bp+offset_dx]	; DH = bottom row, DL = right column
 	mov	al,[bp+offset_ax]	; lines
 
+	test	byte [console],CON_VIDEO
+	jz	.serial
+	push	bx
+	mov	bh,[bp+offset_bx+1]	; the attribute for the blanked lines
+	cmp	bl,'S'
+	jne	.dn
+	call	vga3_scroll_up
+	jmp	short .vd
+.dn:	call	vga3_scroll_dn
+.vd:	pop	bx
+.serial:
 ; A count of zero, or a count covering the window, blanks it.
 	or	al,al
 	jz	.blank

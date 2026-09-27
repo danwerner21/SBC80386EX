@@ -1,6 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; 16h_kbd.asm -- INT 16h keyboard services over the serial console,
-;                fed by the SIO0 receive interrupt
+; 16h_kbd.asm -- INT 16h keyboard services, fed by two interrupts:
+;                the SIO0 receive (IRQ4) for the serial console, and
+;                the 8242 on the VGA3 board (IRQ1) for a PS/2 keyboard.
+;                Both feed the one ring buffer at 40:1E; INT 16h does
+;                not know or care which a key came from.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ; Copyright (C) 2026 Dan Werner.  All rights reserved.
@@ -43,6 +46,7 @@
 
 	global	int_16h
 	global	int_irq4
+	global	int_irq1
 	global	kbd_init_
 
 	extern	reboot_			; 19h_boot.asm -- restarts the board
@@ -63,9 +67,9 @@ segment	_TEXT
 ; SIGQUIT to a Unix terminal.  Nothing in common use binds Ctrl-^.
 ;
 ; The count lives in alt_input, which on a PC accumulates Alt+numpad digits
-; and here has nothing to do: there is no Alt and no numpad.  If real
-; keyboard hardware ever arrives, this moves to a real Ctrl-Alt-Del and the
-; field goes back to its proper job.
+; and here has nothing to do: the serial console has no Alt and no numpad.
+; The PS/2 keyboard, which has both, has a real Ctrl-Alt-Del in kbd_scan1
+; and does not use this field.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 RESET_KEY	equ	0x1E		; Ctrl-^
 RESET_COUNT	equ	3		; how many in a row
@@ -96,6 +100,8 @@ kbd_init_:
 	mov	byte [kbd_flag],0
 	mov	byte [kbd_flag1],0
 	mov	byte [alt_input],0	; the console reset sequence counter
+	mov	byte [kbd_flag2],0
+	mov	byte [kbd_flag3],0	; no scan code prefix outstanding
 
 	mov	dx,IER0			; receive data available
 	mov	al,0x01
@@ -106,6 +112,8 @@ kbd_init_:
 	mov	ax,4			; IRQ4 -- SIO0 receive
 	extern	unmask_interrupt_
 	call	unmask_interrupt_
+
+	call	kbc_init		; and the PS/2 keyboard, if the board is in
 	ret
 
 
@@ -178,6 +186,7 @@ kbd_stuff:
 	movzx	bx,al
    cs	mov	ah,[bx+kbd_scan]	; synthesise the scan code
 	mov	cx,ax			; CX is the word to store
+kbd_stuff_word:				; entered from kbd_stuff_ax with CX made
 
 	mov	bx,[buffer_tail]
 	mov	ax,bx
@@ -350,3 +359,535 @@ kbd_scan:
 ;	  x    y    z    {    |    }    ~    DEL
 	db 0x2D,0x15,0x2C,0x1A,0x2B,0x1B,0x29,0x53
 len_kbd_scan	equ	$ - kbd_scan
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; The PS/2 keyboard on the ECB VGA3 board
+;
+; The board carries an Intel 8242 -- an 8042 with the PC/AT keyboard
+; firmware in it -- at the first two ports of its I/O block, which P3 on
+; the board puts at 4E0h.  That makes this the port 60h/64h protocol at a
+; different address and nothing else: translation is on, so scan codes
+; arrive in set 1 exactly as INT 09h on a PC receives them.
+;
+; The interrupt goes out on the bus line K4 selects; both positions reach
+; the 386EX INT0 pin, which is master IR1, which with ICW2 = 08h is INT 09h.
+; K1 puts the video interrupt on INT5 (slave IR1, INT 71h) so the two never
+; share a line; nothing enables it.
+;
+; Established with V3KBD in the monitor before a line of this was written.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+KBC_DATA	equ	0x4E0		; 8242 data, read and write
+KBC_STAT	equ	0x4E1		; status on read, command on write
+
+KBC_OBF		equ	0x01		; a byte is waiting at KBC_DATA
+KBC_IBF		equ	0x02		; the last byte written is not yet taken
+
+KBC_SELFTEST	equ	0xAA		; resets the controller; replies 55
+KBC_WRCMD	equ	0x60		; write the command byte
+KBC_ENABLE	equ	0xAE		; keyboard interface on
+KB_RESET	equ	0xFF		; to the keyboard; replies FA, then AA
+KBC_CMDBYTE	equ	0x41		; IRQ on, set-2-to-1 translation on,
+				; interface enabled, no system flag
+
+; kbd_flag, 40:17, PC layout
+KF_RSHIFT	equ	0x01
+KF_LSHIFT	equ	0x02
+KF_CTRL		equ	0x04
+KF_ALT		equ	0x08
+KF_SCROLL	equ	0x10
+KF_NUM		equ	0x20
+KF_CAPS		equ	0x40
+KF_INS		equ	0x80
+
+; kbd_flag3, 40:96, PC layout: the prefix state between interrupts
+KF3_E1		equ	0x01		; last code was E1 (Pause)
+KF3_E0		equ	0x02		; last code was E0
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; kbc_init -- bring the controller up, if it is there
+;
+; Called from kbd_init.  The board may be absent, in which case the port
+; floats and reads FF; that case leaves quietly and IR1 stays masked.  The
+; timer is not running yet when this is called, so waits are counted, not
+; timed: 64K reads of a port at seven wait states is some 30 ms, which is
+; more than an 8042 ever needs and short enough not to notice at POST.
+;
+; The sequence is the PC/AT one, in full, because a shorter one did not
+; work: drain, write the command byte and enable left the keyboard silent
+; until the monitor's V3KBD -- self-test, enable, keyboard reset -- was
+; run by hand.  The self-test resets the controller; the keyboard reset
+; resets the keyboard.  Its replies, FA then AA, take up to half a second
+; and are not waited for: IR1 is unmasked before they arrive and the ISR
+; takes them as the break codes of 7A and 2A, which mean nothing.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+kbc_init:
+	pushm	ax,cx,dx
+
+	mov	dx,KBC_STAT
+	in	al,dx
+	cmp	al,0xFF
+	je	.9			; nothing there
+
+; Whatever the controller has been holding since power-up goes.
+	mov	cx,16
+.drain:
+	in	al,dx
+	test	al,KBC_OBF
+	jz	.drained
+	mov	dx,KBC_DATA
+	in	al,dx
+	mov	dx,KBC_STAT
+	loop	.drain
+.drained:
+	mov	al,KBC_SELFTEST		; reset the controller ...
+	call	kbc_put_cmd
+	call	kbc_take		; ... and take its 55, or give up
+	mov	al,KBC_WRCMD
+	call	kbc_put_cmd
+	mov	al,KBC_CMDBYTE
+	call	kbc_put_data
+	mov	al,KBC_ENABLE
+	call	kbc_put_cmd
+	mov	al,KB_RESET		; and reset the keyboard; see above
+	call	kbc_put_data
+
+	popm	ax,cx,dx
+	mov	ax,1			; IRQ1 -- the keyboard
+	call	unmask_interrupt_
+	ret
+.9:
+	popm	ax,cx,dx
+	ret
+
+; Wait, bounded, for the controller to offer a byte, and take it.  The
+; value is not wanted; the point is that the controller has finished
+; what it was asked before it is asked the next thing.
+kbc_take:
+	pushm	ax,cx,dx
+	mov	dx,KBC_STAT
+	xor	cx,cx
+.w:	in	al,dx
+	test	al,KBC_OBF
+	loopz	.w
+	jz	.9			; gave up
+	mov	dx,KBC_DATA
+	in	al,dx
+.9:	popm	ax,cx,dx
+	ret
+
+; Write AL to the controller (command) or to the keyboard (data), once
+; the input buffer is free.  Gives up rather than hangs.
+kbc_put_cmd:
+	push	dx
+	mov	dx,KBC_STAT
+	jmp	short kbc_put
+kbc_put_data:
+	push	dx
+	mov	dx,KBC_DATA
+kbc_put:
+	pushm	ax,cx
+	mov	cx,0			; 64K tries
+.wait:
+	push	dx
+	mov	dx,KBC_STAT
+	in	al,dx
+	pop	dx
+	test	al,KBC_IBF
+	loopnz	.wait
+	popm	ax,cx
+	out	dx,al
+	pop	dx
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; int_irq1 -- INT 09h, a scan code from the 8242
+;
+; One byte per interrupt: the 8042 holds the keyboard off until the byte
+; is read, then lets the next one through, which raises the line again.
+; The line is edge-triggered, so the byte is taken before EOI and nothing
+; is left to re-arm.
+;
+; An interrupt with no byte waiting is spurious and is simply
+; acknowledged.  The VGA3's retrace interrupt is not used (vga3.asm
+; reads the CRTC's blanking bit instead), so K1 belongs on 2-3, off
+; this line.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+int_irq1:
+	pushm	ax,bx,cx,dx,ds
+
+	mov	dx,KBC_STAT
+	in	al,dx
+	test	al,KBC_OBF
+	jz	.eoi			; no byte: spurious, acknowledge only
+	mov	dx,KBC_DATA
+	in	al,dx
+
+	get_bda	DS
+	call	kbd_scan1
+.eoi:
+	mov	al,NS_EOI
+	out	OCW2M_AT,al
+
+	popm	ax,bx,cx,dx,ds
+	iret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; kbd_scan1 -- one set-1 scan code in AL, DS the BDA
+;
+; Shift-state keys change kbd_flag and produce nothing.  Everything else
+; is looked up by the shift state in force and stored as the PC word,
+; scan in AH and ASCII in AL, through kbd_stuff_ax.
+;
+; Prefixes: E0 marks the keys that were added to the 101-key board --
+; the cursor cluster, the right Ctrl and Alt, keypad Enter and /.  It is
+; remembered in kbd_flag3 across the interrupt boundary and consumed by
+; the next code.  E1 opens the six-byte Pause sequence, which is thrown
+; away in its entirety.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+kbd_scan1:
+	cmp	al,0xE0
+	je	.pfx_e0
+	cmp	al,0xE1
+	je	.pfx_e1
+	test	byte [kbd_flag3],KF3_E1
+	jnz	.in_pause
+
+	mov	bl,[kbd_flag3]		; BL bit 1: this code had an E0
+	and	byte [kbd_flag3],~KF3_E0
+
+	test	al,0x80
+	jnz	.release
+	call	.shifter		; a shift-state key?
+	jc	.done			;   yes, and it has been handled
+
+	cmp	al,0x53			; Del
+	jne	.lookup
+	mov	ah,[kbd_flag]
+	and	ah,KF_CTRL+KF_ALT
+	cmp	ah,KF_CTRL+KF_ALT
+	jne	.lookup
+	jmp	reboot_			; Ctrl-Alt-Del: does not return
+
+.lookup:
+	call	kbd_lookup		; AX = the word, or CF if nothing
+	jc	.done
+	call	kbd_stuff_ax
+.done:
+	ret
+
+.pfx_e0:
+	or	byte [kbd_flag3],KF3_E0
+	ret
+.pfx_e1:
+	or	byte [kbd_flag3],KF3_E1
+	ret
+.in_pause:
+	cmp	al,0xC5			; the sequence ends with the break of 45
+	jne	.done
+	and	byte [kbd_flag3],~(KF3_E1+KF3_E0)
+	ret
+
+.release:
+	and	al,0x7F
+	cmp	al,0x1D
+	je	.rel_ctrl
+	cmp	al,0x38
+	je	.rel_alt
+	test	bl,KF3_E0		; E0 AA, E0 B6: the fake shifts (below)
+	jnz	.done
+	cmp	al,0x2A
+	je	.rel_ls
+	cmp	al,0x36
+	je	.rel_rs
+	ret				; the release of an ordinary key
+.rel_ls:
+	and	byte [kbd_flag],~KF_LSHIFT
+	ret
+.rel_rs:
+	and	byte [kbd_flag],~KF_RSHIFT
+	ret
+.rel_ctrl:
+	and	byte [kbd_flag],~KF_CTRL
+	ret
+.rel_alt:
+	and	byte [kbd_flag],~KF_ALT
+	ret
+
+; The make of a shift-state key.  CF set if AL was one.  Caps, Num and
+; Scroll toggle on make.  The LEDs are not yet driven: that wants a small
+; state machine for the keyboard's acknowledgements, and belongs with the
+; first thing that needs it.
+;
+; E0 2A and E0 36 are not shifts.  With Num Lock on, the keyboard brackets
+; every cursor-cluster key in them so that a host which knows nothing of
+; E0 still gets a cursor key rather than a digit.  This host does know,
+; so they are swallowed, or they would flip the keypad the wrong way.
+.shifter:
+	cmp	al,0x2A
+	je	.set_ls
+	cmp	al,0x36
+	je	.set_rs
+	cmp	al,0x1D
+	je	.set_ctrl
+	cmp	al,0x38
+	je	.set_alt
+	cmp	al,0x3A
+	je	.tog_caps
+	cmp	al,0x45
+	je	.tog_num
+	cmp	al,0x46
+	je	.tog_scroll
+	clc
+	ret
+.set_ls:	test	bl,KF3_E0
+		jnz	.fake
+		or	byte [kbd_flag],KF_LSHIFT
+		stc
+		ret
+.set_rs:	test	bl,KF3_E0
+		jnz	.fake
+		or	byte [kbd_flag],KF_RSHIFT
+		stc
+		ret
+.fake:		stc			; eaten, nothing changes
+		ret
+.set_ctrl:	or	byte [kbd_flag],KF_CTRL
+		stc
+		ret
+.set_alt:	or	byte [kbd_flag],KF_ALT
+		stc
+		ret
+.tog_caps:	xor	byte [kbd_flag],KF_CAPS
+		stc
+		ret
+.tog_num:	test	bl,KF3_E0		; E0 45 is not Num Lock
+		jnz	.not_shifter
+		xor	byte [kbd_flag],KF_NUM
+		stc
+		ret
+.tog_scroll:	xor	byte [kbd_flag],KF_SCROLL
+		stc
+		ret
+.not_shifter:	clc
+		ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; kbd_lookup -- scan code AL, E0 flag in BL bit 1, shift state in kbd_flag
+;
+; Returns the PC key word in AX, or CF set for a code with no meaning.
+; Three regions of the set-1 space, each with its own rule:
+;
+;    01..39   the typewriter keys, four tables' worth
+;    3B..44   F1..F10, plus 57 and 58 for F11 and F12: no ASCII, and the
+;             scan code moves by a fixed amount per shift state
+;    47..53   the keypad: digits when Num Lock says so and no E0 says
+;             otherwise, cursor keys with no ASCII when not
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+kbd_lookup:
+	mov	ah,al			; AH: the scan code, kept for the word
+	mov	dh,bl			; DH: the E0 flag; BL becomes an index
+	mov	cl,[kbd_flag]
+
+	cmp	al,0x39
+	jbe	.typewriter
+	cmp	al,0x3B
+	jb	.none
+	cmp	al,0x44
+	jbe	.fkey
+	cmp	al,0x47
+	jb	.none
+	cmp	al,0x53
+	jbe	.keypad
+	cmp	al,0x57
+	je	.fkey
+	cmp	al,0x58
+	je	.fkey
+.none:
+	stc
+	ret
+
+; --- the typewriter keys ---------------------------------------------
+.typewriter:
+	movzx	bx,al
+	dec	bx			; tables begin at scan code 01
+	test	cl,KF_ALT
+	jnz	.alt
+	test	cl,KF_CTRL
+	jnz	.ctrl
+	test	cl,KF_LSHIFT+KF_RSHIFT
+	jnz	.shifted
+   cs	mov	al,[bx+kt_normal]
+	jmp	short .caps
+.shifted:
+   cs	mov	al,[bx+kt_shift]
+.caps:
+	test	cl,KF_CAPS
+	jz	.tw_done
+; Caps Lock inverts shift for letters and nothing else
+	cmp	al,'a'
+	jb	.caps_upper
+	cmp	al,'z'
+	ja	.tw_done
+	sub	al,'a'-'A'
+	jmp	short .tw_done
+.caps_upper:
+	cmp	al,'A'
+	jb	.tw_done
+	cmp	al,'Z'
+	ja	.tw_done
+	add	al,'a'-'A'
+.tw_done:
+	clc
+	ret
+.ctrl:
+   cs	mov	al,[bx+kt_ctrl]
+	cmp	al,0xFF			; FF marks a key with no Ctrl meaning
+	je	.none
+	clc
+	ret
+.alt:
+	xor	al,al			; Alt+key: no ASCII, the scan code says which
+	clc
+	ret
+
+; --- the function keys -----------------------------------------------
+.fkey:
+	cmp	al,0x57
+	jb	.f10
+	sub	al,0x57-0x0A		; F11, F12 follow F10 in the numbering
+.f10:
+	sub	al,0x3B			; 0..11
+	test	cl,KF_ALT
+	jnz	.f_alt
+	test	cl,KF_CTRL
+	jnz	.f_ctrl
+	test	cl,KF_LSHIFT+KF_RSHIFT
+	jnz	.f_shift
+	add	al,0x3B			; F1..F10 are 3B..44, F11 and F12 85, 86
+	cmp	al,0x45
+	jb	.f_out
+	add	al,0x85-0x45
+	jmp	short .f_out
+.f_shift:
+	add	al,0x54			; 54..5D, then 87, 88
+	cmp	al,0x5E
+	jb	.f_out
+	add	al,0x87-0x5E
+	jmp	short .f_out
+.f_ctrl:
+	add	al,0x5E			; 5E..67, then 89, 8A
+	cmp	al,0x68
+	jb	.f_out
+	add	al,0x89-0x68
+	jmp	short .f_out
+.f_alt:
+	add	al,0x68			; 68..71, then 8B, 8C
+	cmp	al,0x72
+	jb	.f_out
+	add	al,0x8B-0x72
+.f_out:
+	mov	ah,al
+	xor	al,al
+	clc
+	ret
+
+; --- the keypad ---------------------------------------------------------
+.keypad:
+	movzx	bx,al
+	sub	bx,0x47
+	test	cl,KF_ALT
+	jnz	.alt
+	test	cl,KF_CTRL
+	jnz	.kp_ctrl
+
+; Num Lock, an E0 (the cursor cluster), or Shift: each one flips it
+	test	cl,KF_NUM
+	setnz	dl
+	test	dh,KF3_E0
+	jz	.kp1
+	xor	dl,1
+.kp1:
+	test	cl,KF_LSHIFT+KF_RSHIFT
+	jz	.kp2
+	xor	dl,1
+.kp2:
+   cs	mov	al,[bx+kt_keypad]	; the digit, or '-' '+' regardless
+	cmp	al,'-'
+	je	.kp_out
+	cmp	al,'+'
+	je	.kp_out
+	test	dl,1
+	jnz	.kp_out			; digits wanted
+	xor	al,al			; a cursor key: no ASCII
+.kp_out:
+	clc
+	ret
+.kp_ctrl:
+   cs	mov	al,[bx+kt_kp_ctrl]
+	cmp	al,0xFF
+	je	.none
+	mov	ah,al			; Ctrl-cursor: the scan code is the meaning
+	xor	al,al
+	clc
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; kbd_stuff_ax -- AX is the complete word: scan in AH, ASCII in AL
+;
+; The tail of kbd_stuff, entered when the caller already knows the scan
+; code and does not want one synthesised from the ASCII.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+kbd_stuff_ax:
+	pushm	ax,bx,cx,dx
+	mov	cx,ax
+	jmp	kbd_stuff_word
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Set-1 scan code to ASCII, scan codes 01 to 39.  US layout.
+;
+; No line here may END with a backslash -- not even a comment.  NASM
+; takes that as a continuation and swallows the next line whole, which
+; is how the a..\ row once vanished and shifted every key after it by
+; fourteen places.  The listing shows it as a line number that skips.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	align	2
+kt_normal:
+;	  Esc  1    2    3    4    5    6    7    8    9    0    -    =    BS   Tab
+	db 0x1B,'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08,0x09
+;	  q    w    e    r    t    y    u    i    o    p    [    ]    Ent  Ctl
+	db 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D,0x00
+;	  a    s    d    f    g    h    j    k    l    ;    '    `    LSh  backslash
+	db 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 0x27,'`', 0x00,'\'
+;	  z    x    c    v    b    n    m    ,    .    /    RSh  *    Alt  Sp
+	db 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00,'*', 0x00,' '
+
+kt_shift:
+	db 0x1B,'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0x08,0x00
+	db 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0x0D,0x00
+	db 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0x00,'|'
+	db 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0x00,'*', 0x00,' '
+
+; FF: no Ctrl meaning.  Ctrl-BS is DEL, Ctrl-Enter is LF, Ctrl-[ ESC,
+; Ctrl-\ FS, Ctrl-] GS, Ctrl-- US, Ctrl-6 RS, as on a PC.
+kt_ctrl:
+	db 0x1B,0xFF,0xFF,0xFF,0xFF,0xFF,0x1E,0xFF,0xFF,0xFF,0xFF,0x1F,0xFF,0x7F,0xFF
+	db 0x11,0x17,0x05,0x12,0x14,0x19,0x15,0x09,0x0F,0x10,0x1B,0x1D,0x0A,0xFF
+	db 0x01,0x13,0x04,0x06,0x07,0x08,0x0A,0x0B,0x0C,0xFF,0xFF,0xFF,0xFF,0x1C
+	db 0x1A,0x18,0x03,0x16,0x02,0x0E,0x0D,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,' '
+
+; The keypad, scan codes 47 to 53, as digits
+kt_keypad:
+;	  7    8    9    -    4    5    6    +    1    2    3    0    .
+	db '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
+
+; The keypad with Ctrl: the extended scan codes a PC returns, FF for none
+kt_kp_ctrl:
+;	  Home Up   PgUp -    Left 5    Rght +    End  Down PgDn Ins  Del
+	db 0x77,0xFF,0x84,0xFF,0x73,0xFF,0x74,0xFF,0x75,0xFF,0x76,0xFF,0xFF

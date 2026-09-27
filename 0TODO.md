@@ -5,9 +5,13 @@ got here and why things are the way they are; this is the shorter question of wh
 Numbering is stable — items keep their number as they are done, so "item 9" means the same
 thing in a commit message next month as it does here.
 
-**All six phases of the bring-up plan are complete.** The board boots MS-DOS 6 to a prompt
-over the serial console from either a floppy or the fixed disk, formats its own disks, and
-nothing on this list blocks anything else on it.
+**All six phases of the bring-up plan are complete, and the board now has a console of its
+own.** It boots MS-DOS 6 to a prompt from either a floppy or the fixed disk, formats its own
+disks, and drives an 80x25 colour display and a PS/2 keyboard on the ECB VGA3 board — with
+the serial console still live alongside it. Nothing on this list blocks anything else on it.
+
+**The ROM is the constraint now.** 63,968 bytes of 65,536 are used: 2.4% free, down from 24%
+when item 7 was measured. See item 15.
 
 ---
 
@@ -42,9 +46,11 @@ is `41h`-`48h` — and rejecting it is what a non-PS/2 BIOS is supposed to do.
 
 **4 · Boot-device byte in NVRAM. Done 2026-09-20.** See Done, below.
 
-**5 · `INT 10h 08h` cannot report screen contents. Genuinely blocked on item 12**, not
-merely waiting for attention: it needs a display buffer, and whether there is one depends
-on what the video hardware turns out to be. Carried into item 12 rather than left here.
+**5 · `INT 10h 08h` cannot report screen contents. Closed 2026-09-26 by item 12.** The VGA3's
+memory is the display buffer, so fn 08 reads the cell under the cursor off the board and
+returns what is actually there. It still answers a space in the normal attribute when the
+video board is absent and only the serial console is running, because a terminal cannot be
+asked — that part was never solvable and is not a defect.
 
 ### Why item 1 is deferred
 
@@ -82,35 +88,103 @@ that it should stay unsupported, because unsupported is at least honest.
 
 ## Then — the console, item 12
 
-**12 · Video card and keyboard.** New hardware, not yet chosen. Expect more than one
-candidate to evaluate, and expect the evaluation to be part of the work rather than
-something settled beforehand.
+**12 · Video card and keyboard. Largely done 2026-09-26.** The hardware turned out to be the
+**ECB VGA3** — an HD6445 CRTC with 32K of display memory and an Intel 8242 keyboard
+controller on one card. `0BRINGUP.md` section 07 is the full record; the facts that matter
+for future work are these.
 
-**There is room for it.** The ROM is at 24% free, which is not much, but `MONITOR=0`
-reclaims about 25K and takes that to roughly 75% — see item 14. The switch exists so the
-space is available without a decision having to be made in a hurry partway through.
+| | |
+|---|---|
+| I/O block | `04E0`–`04E7`, P3 jumpered to `E0h`, inside the window CS0 already decodes |
+| `+0` `+1` | 8242 keyboard controller — the PC/AT `60h`/`64h` protocol at another address |
+| `+2` `+3` | HD6445 address and data registers |
+| `+4` | CFG, write only, cleared by RESET |
+| `+5`–`+7` | address-register path to the 32K — used only by the monitor now |
+| Memory window | CFG bit 7 set puts the 32K at `B8000`, which is where DOS expects it |
+| K4 | 8242 interrupt: either position reaches 386EX INT0 = master IR1 = `INT 09h` |
+| K1 | video interrupt: unused, so either position. See below |
+| Sync jumpers | H negative, V positive for 80x25 |
 
-**VT100/ANSI over the serial line stays a first-class console, not a stepping stone.** This
-is a change from how `0BRINGUP.md` has been describing it, and the distinction matters for
-how the console layer gets built:
+**The display is written only during vertical blanking**, which the CRTC reports in bit 1 of
+register 31. That is the whole snow-avoidance strategy and it is deliberately dull: the RAM
+is not arbitrated, so any CPU access during a fetch corrupts the fetch. Two faster designs
+were built and both failed — see `vga3.asm`'s header and section 07 — and the second failure
+was never explained. Do not re-attempt beam tracking without new evidence.
 
-- The serial console is what makes this board debuggable. Everything found in Phases 4
-  through 6 was found down that wire, and a board whose only console is a video card it
-  shares with the fault under investigation is a worse board to work on.
-- It is also the only console that works headless, over a cable, from another room, with a
-  transcript. None of that stops being useful once a video card exists.
-- So the right shape is a console layer that can drive **more than one output**, chosen at
-  configuration time, rather than an INT 10h that assumes a frame buffer and a serial path
-  bolted alongside it. If several video candidates are in play, that indirection has to
-  exist anyway to evaluate them.
+**Both consoles are first-class, as this file said they should be.** `bda.console` carries
+`CON_SERIAL` and `CON_VIDEO`; POST sets serial, and `vga3_init` adds video if the board
+answers. With both set the screen is mirrored down the serial line, which is how the board
+stays debuggable from another room. `INT 10h` gates the entire ANSI path on one test in
+`vputc` and hooks the video path at the points where something is drawn.
 
-**VT100 escape translation** — arrow keys, Home and End arriving as escape sequences and
-leaving as scan codes — belongs to this item. It was deferred through Phases 3 to 6 on the
-grounds that the hardware transition would change what needed translating. That reasoning
-still holds for *when*; it no longer implies the serial path is temporary.
+**What is left of item 12:**
 
-Item 5 lands here too: a display buffer is what lets `INT 10h 08h` report screen contents,
-and whether there is one depends on what the video hardware turns out to be.
+- **VT100 escape translation** — arrow keys and Home/End arriving from a terminal as escape
+  sequences and leaving as scan codes. Unchanged from before; the PS/2 keyboard now produces
+  proper scan codes, so this is only about the serial path.
+- **A SETUP entry to choose the console.** The byte and the switch exist; the menu entry does
+  not, so today the video board is used whenever it answers.
+- **Keyboard LEDs.** Caps, Num and Scroll *state* is tracked correctly in `kbd_flag`; the
+  lights do not follow. It needs `ED` sent to the keyboard and its `FA` acknowledgements
+  handled in the ISR — a small state machine, deferred so that it would not be debugged at
+  the same time as the basic path.
+- **Item 16**, below, which is about DOS programs rather than about the BIOS.
+
+## Also now — what the console brought with it
+
+**15 · The ROM is nearly full.** 63,968 of 65,536 bytes, 1,568 free. The largest modules are
+`debugmon.o` at 17,406 bytes of code, `vga3.o` at 6,191, and `set1302.o` at 2,475; string
+constants are 18,832 bytes, two thirds of them the monitor's.
+
+This is not yet an emergency, because **`MONITOR=0` still reclaims about 25K** and takes the
+free space to roughly 40%. That switch was built in item 14 for exactly this moment. But it
+is a one-shot escape: spending it leaves the board without the tool that found every defect
+in Phases 4 through 7, so it should be spent on shipping a ROM, not on making room for
+development.
+
+Cheaper savings, in the order they should be taken:
+
+- The 4K font could be dropped to the 8x8 set for a 43-line mode only, or generated at POST
+  rather than stored — but it is permanent BIOS content that `INT 10h` needs, so it is not
+  really overhead.
+- The monitor's help and error strings are the single largest block of text in the tree. The
+  Phase 6 probes that are now closed have already gone (`WDTSET`, `IOTIME1`, `IOWALL`); the
+  VGA3 bring-up probes (`VGA3`, `V3CRTC`, `V3KBD`, `V3DUMP`, `V3BEAM`, `V3RDCHK`, `VIDEO`)
+  are the next candidates, and should go when the board stops being new.
+- `set1302.o` is 2,475 bytes for a SETUP screen that runs once.
+
+**16 · DOS programs that drive the screen themselves.** Three were tried. Turbo Pascal's IDE
+works. Turbo C's IDE locks the machine up. WordPerfect Program Editor displays badly and does
+not get past its startup screen, though it is fine on the serial console.
+
+The likely mechanism, not yet proven, is the **CGA status port at `3DAh`**. A program that
+decides it is talking to a CGA polls that port to avoid snow. No chip select on this board
+claims `3B0`–`3DF`, so the cycle matches nothing, nothing terminates it, and the bus monitor
+times out — 209 ms a read, returning a floating bus. A wait-for-retrace loop then never
+finishes. The BIOS now answers `INT 10h 12h BL=10h` and `1Ah` as VGA colour, which is what
+stops a well-behaved program from going down that path; Turbo C was still locking up when
+last tried, so either it does not ask or something else is wrong.
+
+Two possible answers, and they are not equivalent:
+
+- **Cheap:** claim `3B0`–`3DF` with a spare chip select (the PLD notes CS5 as an unused second
+  window) so those cycles finish in wait states instead of stalling. This fixes programs that
+  merely *probe* the ports. It does **not** fix retrace polling, because a claimed but empty
+  port reads `FF` forever and the loop still never exits.
+- **Real:** run DOS in virtual-8086 mode with a monitor in the BIOS that traps I/O to
+  `3B0`–`3DF` and answers it — `3DAh`'s retrace bits from the CRTC's own status, `3D4h`/`3D5h`
+  cursor writes forwarded to the HD6445. This fixes everything and is a genuine project with
+  its own bring-up ladder. It is also the mechanism that would let any other PC hardware this
+  board lacks be emulated, which may matter for item 13.
+
+Do not start either until it is known how many programs that are actually wanted fall into
+which category. One program that matters is worth the emulator; three that do not are worth
+nothing.
+
+**17 · Nothing verifies the font table.** `mkfont.py` regenerates `font3270.inc` from
+`3270.SFD`, and hand edits to the output would be silently lost on the next run. If any glyph
+is ever adjusted by hand, add an overrides table to the generator rather than editing the
+generated file.
 
 ---
 
@@ -136,8 +210,10 @@ will exercise paths DOS never touches.
 
   `getline.c` is deliberately **not** in the switch: SETUP uses it too.
 
-- **7 · Retake the metrics table.** 2026-09-20. 49,648 B of 65,536, 24% free, 14 vectors,
-  measured from `start.map`.
+- **7 · Retake the metrics table.** 2026-09-20: 49,648 B of 65,536, 24% free, 14 vectors,
+  measured from `start.map`. **Retaken 2026-09-26: 63,968 B, 2.4% free** — the video console
+  cost about 14K, of which 4K is the font. Superseded by item 15, which is the same number
+  treated as a problem rather than a record.
 
 - **8 · Remove the source files that never reach the ROM.** 2026-09-20. Thirty files — the
   twenty-seven already quarantined in `unused/` plus three root duplicates — and the dead

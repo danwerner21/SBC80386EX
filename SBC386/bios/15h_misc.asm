@@ -305,6 +305,7 @@ T1_GATES	equ	0x4B	; timer.inc TIMER_RUN: gates for counters 0 and 1
 ; operation: an interrupt that latched again between them would leave the
 ; two halves coming from different samples.
 ;-----------------------------------------------------------------------------
+	global	t1_read			; vga3.asm times the beam with it
 t1_read:
 	push	dx
 	pushf

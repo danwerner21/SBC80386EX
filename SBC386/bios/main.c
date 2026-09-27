@@ -41,6 +41,7 @@ int install_SIO0(int);
 void unmask_interrupt(int);
 void testmain(void);
 void kbd_init(void);	/* in 16h_kbd.asm */
+int  vga3_init(void);	/* in vga3.asm: 1 if the VGA3 board answered */
 void *ebda_alloc(word nbytes);
 word uart_det(word sio_dev);
 
@@ -113,6 +114,12 @@ void delay(word tsec)	/* delay in tenths of a second */
 int _main_(int code)
 {
 	int i;
+
+	/* The BDA is not cleared at POST, so this is whatever the last run
+	   left.  Serial only until the video board has been found: nothing
+	   may print before this line. */
+	bda.console = CON_SERIAL;
+
 jleds(code);
 
 /* The drive registration that used to sit here was inverted: it ran
@@ -142,6 +149,12 @@ jleds(code);
 	   equip_flag bits 5:4 say which display the machine came up in;
 	   10b is 80x25 colour, which is what INT 10h presents.  DOS reads
 	   it to choose its initial mode. */
+	/* The VGA3 first, if it is in: it programs the CRTC, loads the font,
+	   clears its screen and adds CON_VIDEO to bda.console, so the mode
+	   set below and everything after it reach the monitor as well as
+	   the serial line.  Absent, nothing changes. */
+	vga3_init();
+
 	ASM {
 		mov	ax,0x0083
 		int	0x10

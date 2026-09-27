@@ -1,6 +1,12 @@
 XXX
 ; bda.h -- definitions of the BIOS Data Area at 0040:0000 (0x400)  */
 %define BDA_segment 0x40
+; bda.console -- which consoles INT 10h drives.  Set before the first */
+; printf of POST; vga3_init adds the video bit when the board answers. */
+; Both at once mirrors the screen down the serial line.  One comment  */
+; per line here: bda.rul turns this file into bda.inc a line at a time. */
+%define CON_SERIAL	0x01
+%define CON_VIDEO	0x02
 struc _BDA
 ; first items at 0x40:0	*/
 serial_dev	resw	4	; serial port device codes */
@@ -89,7 +95,8 @@ ega_rows	resb	1		; rows on the active screen (less 1)**/
 ega_points	resw	1		; bytes per charateer	*/
 ega_info	resb	1		; mode options ????*//
 ega_info_3	resb	1		; switch settings*//
-ega_rsvd	resb	2	; reserved for adapter mfgrs */
+console	resb	1	; CON_SERIAL, CON_VIDEO, or both: where INT 10h writes**/
+ega_rsvd	resb	1	; reserved for adapter mfgrs */
 ; */
 ; Disk / Diskette media data */
 fd_last_data_rate	resb	1	; last data rate selected */

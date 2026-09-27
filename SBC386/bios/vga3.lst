@@ -1,0 +1,1912 @@
+     1                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; vga3.asm -- the ECB VGA3 board: 80x25 text on an HD6445, memory mapped
+     3                                  ;             at B8000, written wherever the beam is not
+     4                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     5                                  ;
+     6                                  ; Copyright (C) 2026 Dan Werner.  All rights reserved.
+     7                                  ; Provided for hobbyist use on the RetroBrew SBC-386EX board.
+     8                                  ;
+     9                                  ; This program is free software: you can redistribute it and/or modify
+    10                                  ; it under the terms of the GNU General Public License as published by
+    11                                  ; the Free Software Foundation, either version 3 of the License, or
+    12                                  ; (at your option) any later version.
+    13                                  ;
+    14                                  ; This program is distributed in the hope that it will be useful,
+    15                                  ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    16                                  ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    17                                  ; GNU General Public License for more details.
+    18                                  ;
+    19                                  ; You should have received a copy of the GNU General Public License
+    20                                  ; along with this program in the file COPYING in the topmost source
+    21                                  ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    22                                  ;
+    23                                  ;
+    24                                  ; THE BOARD
+    25                                  ;
+    26                                  ; Eight I/O ports at 4E0h (P3 jumpered E0h): an 8242 keyboard controller
+    27                                  ; at +0/+1, the HD6445 CRTC at +2/+3, the CFG register at +4, and at
+    28                                  ; +5..+7 a pair of address registers and a data port that reach the 32K
+    29                                  ; of video RAM a byte at a time.  CFG bit 7 also puts that 32K on the
+    30                                  ; ECB memory bus, at B0000 (clear) or B8000 (set).  The SBC's CS3 maps
+    31                                  ; B0000..BFFFF to the bus with DRAM suppressed there, 8-bit, five wait
+    32                                  ; states, READY generated internally -- so the RAM is simply memory at
+    33                                  ; B800:0000, one bus cycle a byte, and a program that writes the screen
+    34                                  ; directly, as DOS programs do, is writing the board.
+    35                                  ;
+    36                                  ; THE RAM IS NOT ARBITRATED.  A CPU access while the CRTC is fetching
+    37                                  ; corrupts that fetch and the screen sparkles -- by either path; both
+    38                                  ; were measured.  The CPU's own read or write is not harmed: V3RDCHK
+    39                                  ; read the live screen 32,000 times without an error.  Confining writes
+    40                                  ; to vertical blanking was tried and is far too slow: blanking is 11%
+    41                                  ; of the frame, and a scroll took four frames.
+    42                                  ;
+    43                                  ; THE DESIGN: WRITE DURING BLANKING
+    44                                  ;
+    45                                  ; Bit 1 of HD6445 register 31, read through the data port, is vertical
+    46                                  ; blanking -- the SBC-188 BIOS scrolled on it.  Every write to the board
+    47                                  ; waits for it, then goes.  Blanking is 1553 usec of the 14271 usec frame
+    48                                  ; (measured with V3BEAM), which is about thirteen row copies, so a
+    49                                  ; whole-screen scroll takes two frames, near 28 ms.  Single characters
+    50                                  ; wait at most one frame and usually far less.
+    51                                  ;
+    52                                  ; Two cleverer schemes were built and both failed, which is why this one
+    53                                  ; is deliberately dull.  Queueing the work for a retrace interrupt was
+    54                                  ; four frames a scroll and unusably slow.  Computing the beam position
+    55                                  ; from a blanking edge and the 1 mhz counter -- write to any row the beam
+    56                                  ; is not on -- was fast but flickered, and went on flickering after the
+    57                                  ; counter-wrap bug in it was fixed, for a reason never established.  The
+    58                                  ; CRTC status bit needs no model of the hardware to be right.
+    59                                  ;
+    60                                  ; The board's retrace interrupt is not used either: the status bit is
+    61                                  ; exact and free of interrupt latency, and it leaves INT0 to the
+    62                                  ; keyboard.  K1 may sit in either position.  Should R31 never change --
+    63                                  ; no CRTC clock, say -- writes go ahead blind rather than hang.
+    64                                  ;
+    65                                  ; Layout of the 32K: screen at 0000, 4000 bytes, character then
+    66                                  ; attribute; font in the last 4K page, which CFG selects.  The CRTC
+    67                                  ; start address stays at 0 so that B800:0000 is the top-left cell.
+    68                                  ;
+    69                                  ; Assembly by NASM 2.08 is preferred
+    70                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    71                                  %include "seg_def.inc"
+    72                              <1> ; SEG_DEF.inc
+    73                              <1> ;
+    74                              <1> %ifndef SEG_DEF
+    75                              <1> %define SEG_DEF 1
+    76                              <1> 
+    77                              <1> segment _TEXT	use16 	align=16	class=CODE	public
+    78                              <1> 
+    79                              <1> segment CONST		align=16	class=DATA	public
+    80                              <1> segment CONST2		align=2		class=DATA	public
+    81                              <1> segment _DATA		align=16	class=DATA	public
+    82                              <1> segment _BSS		align=16	class=DATA	public
+    83                              <1> ;group DGROUP CONST2 CONST _DATA _BSS
+    84                              <1> 
+    85                              <1> group DGROUP  _TEXT CONST2 CONST _DATA _BSS
+    86                              <1> 
+    87                              <1> 
+    88                              <1> segment BOOT at 0xFFFF	align=16	class=BOOT	use16
+    89                              <1> 
+    90                              <1> %define XXX
+    91                              <1> %endif
+    92                              <1> ;
+    93                              <1> ; end SEG_DEF.inc
+    72                                  %include "i386ex.inc"
+    73                              <1> ;/*;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    74                              <1> ; i386EX.inc  --  register definitions for the Intel 80386EX processor
+    75                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    76                              <1> ;
+    77                              <1> ; Copyright (C) 2018 John R. Coffman.  All rights reserved.
+    78                              <1> ; Provided for hobbyist use on the RetroBrew SBC-386 board.
+    79                              <1> ;
+    80                              <1> ; This program is free software: you can redistribute it and/or modify
+    81                              <1> ; it under the terms of the GNU General Public License as published by
+    82                              <1> ; the Free Software Foundation, either version 3 of the License, or
+    83                              <1> ; (at your option) any later version.
+    84                              <1> ;
+    85                              <1> ; This program is distributed in the hope that it will be useful,
+    86                              <1> ; but WITHOUT ANY WARRANTY; without even the implied warranty of
+    87                              <1> ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    88                              <1> ; GNU General Public License for more details.
+    89                              <1> ;
+    90                              <1> ; You should have received a copy of the GNU General Public License
+    91                              <1> ; along with this program in the file COPYING in the topmost source
+    92                              <1> ; directory.  If not, see <http://www.gnu.org/licenses/>.
+    93                              <1> ;
+    94                              <1> ;
+    95                              <1> ; SBC-386 board revisions:
+    96                              <1> ;       SBC386-0   prototype / concept testing
+    97                              <1> ;	SBC386EX 2.0 production board (Jan 2018, not 2017 as labeled)
+    98                              <1> ;
+    99                              <1> ; Assembly by NASM 2.08 is preferred
+   100                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;*/
+   101                              <1> 
+   102                              <1> ;/* i386EX.inc  --  register definitions for the Intel 80386EX processor
+   103                              <1> ;
+   104                              <1> %define defb
+   105                              <1> %define defw
+   106                              <1> %define defd
+   107                              <1> ;*/
+   108                              <1> 
+   109                              <1> ;/* The component identifier the 386EX leaves in DX after a hardware reset:
+   110                              <1> ;*  DH is the device (23h, 386EX) and DL the stepping.  POST tests it as the
+   111                              <1> ;*  first thing it does, so anything that restarts the board in software has
+   112                              <1> ;*  to present it too -- see reboot_ in 19h_boot.asm, which learned that the
+   113                              <1> ;*  hard way.
+   114                              <1> ;*/
+   115                              <1> defw    DEVICE_ID equ   0x2309
+   116                              <1> 
+   117                              <1> ;/* The Address Configuration register
+   118                              <1> ;*/
+   119                              <1> defb REMAPCFGH  equ     0x0023
+   120                              <1> defb REMAPCFGL  equ     0x0022
+   121                              <1> defw REMAPCFG   equ     0x0022
+   122                              <1> 
+   123                              <1> ;/* The A20gate and fast CPU Reset
+   124                              <1> ;*/
+   125                              <1> defb PORT92     equ     0xF092
+   126                              <1> defb PORT92_AT  equ     0x0092
+   127                              <1> 
+   128                              <1> ;
+   129                              <1> ;/* The DMA Controller and Bus Arbiter
+   130                              <1> ;*/
+   131                              <1> defb DMA0TAR    equ     0xF000
+   132                              <1> defb DMA0TAR_AT equ     0x0000
+   133                              <1> defb DMA0BYC    equ     0xF001
+   134                              <1> defb DMA0BYC_AT equ     0x0001
+   135                              <1> defb DMA1TAR    equ     0xF002
+   136                              <1> defb DMA1TAR_AT equ     0x0002
+   137                              <1> defb DMA1BYC    equ     0xF003
+   138                              <1> defb DMA1BYC_AT equ     0x0003
+   139                              <1> defb DMACMD1    equ     0xF008
+   140                              <1> defb DMACMD1_AT equ     0x0008
+   141                              <1> defb DMASTS     equ     0xF008
+   142                              <1> defb DMASTS_AT  equ     0x0008
+   143                              <1> defb DMASRR     equ     0xF009
+   144                              <1> defb DMASRR_AT  equ     0x0009
+   145                              <1> defb DMAMSK     equ     0xF00A
+   146                              <1> defb DMAMSK_AT  equ     0x000A
+   147                              <1> defb DMAMOD1    equ     0xF00B
+   148                              <1> defb DMAMOD1_AT equ     0x000B
+   149                              <1> defb DMACLRBP   equ     0xF00C
+   150                              <1> defb DMACLRBP_AT equ    0x000C
+   151                              <1> defb DMACLR     equ     0xF00D
+   152                              <1> defb DMACLR_AT  equ     0x000D
+   153                              <1> defb DMACLRMSK  equ     0xF00E
+   154                              <1> defb DMACLRMSK_AT equ   0x000E
+   155                              <1> defb DMAGRPMSK  equ     0xF00F
+   156                              <1> defb DMAGRPMSK_AT equ   0x000F
+   157                              <1> defb DMA0REQ0_1 equ     0xF010
+   158                              <1> defb DMA0REQ2_3 equ     0xF011
+   159                              <1> defb DMA1REQ0_1 equ     0xF012
+   160                              <1> defb DMA1REQ2_3 equ     0xF013
+   161                              <1> defb DMABSR     equ     0xF018
+   162                              <1> defb DMACHR     equ     0xF019
+   163                              <1> defb DMAIS      equ     0xF019
+   164                              <1> defb DMACMD2    equ     0xF01A
+   165                              <1> defb DMAMOD2    equ     0xF01B
+   166                              <1> defb DMAIEN     equ     0xF01C
+   167                              <1> defb DMAOVFE    equ     0xF01D
+   168                              <1> defb DMACLRTC   equ     0xF01E
+   169                              <1> ;
+   170                              <1> ;/* The DMA Page Registers
+   171                              <1> ;*/
+   172                              <1> defb DMA1TAR2    equ    0xF083
+   173                              <1> defb DMA1TAR2_AT equ    0x0083
+   174                              <1> defb DMA1TAR3    equ    0xF085
+   175                              <1> defb DMA1TAR3_AT equ    0x0085
+   176                              <1> defb DMA0TAR3    equ    0xF086
+   177                              <1> defb DMA0TAR3_AT equ    0x0086
+   178                              <1> defb DMA0TAR2    equ    0xF087
+   179                              <1> defb DMA0TAR2_AT equ    0x0087
+   180                              <1> ;
+   181                              <1> defb DMA0BYC2   equ     0xF098
+   182                              <1> defb DMA1BYC2   equ     0xF099
+   183                              <1> 
+   184                              <1> ;
+   185                              <1> ;/* The Master Interrupt Controller
+   186                              <1> ;*/
+   187                              <1> defb ICW1M_AT   equ     0x0020
+   188                              <1> defb ICW2M_AT   equ     0x0021
+   189                              <1> defb ICW3M_AT   equ     0x0021
+   190                              <1> defb ICW4M_AT   equ     0x0021
+   191                              <1> defb OCW1M_AT   equ     0x0021
+   192                              <1> defb OCW2M_AT   equ     0x0020
+   193                              <1> defb OCW3M_AT   equ     0x0020
+   194                              <1> 
+   195                              <1> defb ICW1M      equ     0xF020
+   196                              <1> defb ICW2M      equ     0xF021
+   197                              <1> defb ICW3M      equ     0xF021
+   198                              <1> defb ICW4M      equ     0xF021
+   199                              <1> defb OCW1M      equ     0xF021
+   200                              <1> defb OCW2M      equ     0xF020
+   201                              <1> defb OCW3M      equ     0xF020
+   202                              <1> defb IRR_M	equ	0xF020
+   203                              <1> 
+   204                              <1> ;
+   205                              <1> ;/* The Slave Interrupt Controller
+   206                              <1> ;*/
+   207                              <1> defb ICW1S_AT   equ     0x00A0
+   208                              <1> defb ICW2S_AT   equ     0x00A1
+   209                              <1> defb ICW3S_AT   equ     0x00A1
+   210                              <1> defb ICW4S_AT   equ     0x00A1
+   211                              <1> defb OCW1S_AT   equ     0x00A1
+   212                              <1> defb OCW2S_AT   equ     0x00A0
+   213                              <1> defb OCW3S_AT   equ     0x00A0
+   214                              <1> defb IRR_M_AT	equ	0x00A0
+   215                              <1> 
+   216                              <1> defb ICW1S      equ     0xF0A0
+   217                              <1> defb ICW2S      equ     0xF0A1
+   218                              <1> defb ICW3S      equ     0xF0A1
+   219                              <1> defb ICW4S      equ     0xF0A1
+   220                              <1> defb OCW1S      equ     0xF0A1
+   221                              <1> defb OCW2S      equ     0xF0A0
+   222                              <1> defb OCW3S      equ     0xF0A0
+   223                              <1> 
+   224                              <1> ;
+   225                              <1> ;/* The Timer/Counter Unit
+   226                              <1> ;*/
+   227                              <1> defb    TMR0    equ     0xF040
+   228                              <1> defb    TMR0_AT equ     0x0040
+   229                              <1> defb    TMR1    equ     0xF041
+   230                              <1> defb    TMR1_AT equ     0x0041
+   231                              <1> defb    TMR2    equ     0xF042
+   232                              <1> defb    TMR2_AT equ     0x0042
+   233                              <1> defb    TMRCON  equ     0xF043
+   234                              <1> defb    TMRCON_AT  equ  0x0043
+   235                              <1> 
+   236                              <1> ;
+   237                              <1> ;/* The Chip Select Unit
+   238                              <1> ;*/
+   239                              <1> defw    CS0ADL  equ     0xF400
+   240                              <1> defw    CS0ADH  equ     0xF402
+   241                              <1> defw    CS0MSKL equ     0xF404
+   242                              <1> defw    CS0MSKH equ     0xF406
+   243                              <1> defw    CS1ADL  equ     0xF408
+   244                              <1> defw    CS1ADH  equ     0xF40A
+   245                              <1> defw    CS1MSKL equ     0xF40C
+   246                              <1> defw    CS1MSKH equ     0xF40E
+   247                              <1> defw    CS2ADL  equ     0xF410
+   248                              <1> defw    CS2ADH  equ     0xF412
+   249                              <1> defw    CS2MSKL equ     0xF414
+   250                              <1> defw    CS2MSKH equ     0xF416
+   251                              <1> defw    CS3ADL  equ     0xF418
+   252                              <1> defw    CS3ADH  equ     0xF41A
+   253                              <1> defw    CS3MSKL equ     0xF41C
+   254                              <1> defw    CS3MSKH equ     0xF41E
+   255                              <1> defw    CS4ADL  equ     0xF420
+   256                              <1> defw    CS4ADH  equ     0xF422
+   257                              <1> defw    CS4MSKL equ     0xF424
+   258                              <1> defw    CS4MSKH equ     0xF426
+   259                              <1> defw    CS5ADL  equ     0xF428
+   260                              <1> defw    CS5ADH  equ     0xF42A
+   261                              <1> defw    CS5MSKL equ     0xF42C
+   262                              <1> defw    CS5MSKH equ     0xF42E
+   263                              <1> defw    CS6ADL  equ     0xF430
+   264                              <1> defw    CS6ADH  equ     0xF432
+   265                              <1> defw    CS6MSKL equ     0xF434
+   266                              <1> defw    CS6MSKH equ     0xF436
+   267                              <1> defw    UCSADL  equ     0xF438
+   268                              <1> defw    UCSADH  equ     0xF43A
+   269                              <1> defw    UCSMSKL equ     0xF43C
+   270                              <1> defw    UCSMSKH equ     0xF43E
+   271                              <1> 
+   272                              <1> ;
+   273                              <1> ;/* The Synchronous Serial I/O Unit
+   274                              <1> ;*/
+   275                              <1> defw    SSIOTBUF equ    0xF480
+   276                              <1> defw    SSIORBUF equ    0xF482
+   277                              <1> defw    SSIOBAUD equ    0xF484
+   278                              <1> defw    SSIOCON1 equ    0xF486
+   279                              <1> defw    SSIOCON2 equ    0xF488
+   280                              <1> defw    SSIOCTR  equ    0xF48A
+   281                              <1> 
+   282                              <1> ;
+   283                              <1> ;/* The Refresh Control Unit
+   284                              <1> ;*/
+   285                              <1> defw    RFSBAD  equ     0xF4A0
+   286                              <1> defw    RFSCIR  equ     0xF4A2
+   287                              <1> defw    RFSCON  equ     0xF4A4
+   288                              <1> defw    RFSADD  equ     0xF4A6
+   289                              <1> 
+   290                              <1> ;
+   291                              <1> ;/* The Watchdog Timer Unit
+   292                              <1> ;*/
+   293                              <1> defw    WDTRLDH equ     0xF4C0
+   294                              <1> defw    WDTRLDL equ     0xF4C2
+   295                              <1> defw    WDTCNTH equ     0xF4C4
+   296                              <1> defw    WDTCNTL equ     0xF4C6
+   297                              <1> defw    WDTCLR  equ     0xF4C8
+   298                              <1> defb    WDTSTATUS  equ  0xF4CA
+   299                              <1> 
+   300                              <1> ;
+   301                              <1> ;/* Clock Generation and Power Management
+   302                              <1> ;*/
+   303                              <1> defb    PWRCON  equ     0xF800
+   304                              <1> defw    CLKPRS  equ     0xF804
+   305                              <1> 
+   306                              <1> ;
+   307                              <1> ;/* Device Configuration Registers
+   308                              <1> ;*/
+   309                              <1> defb    P1CFG   equ     0xF820
+   310                              <1> defb    P2CFG   equ     0xF822
+   311                              <1> defb    P3CFG   equ     0xF824
+   312                              <1> defb    PINCFG  equ     0xF826
+   313                              <1> defb    DMACFG  equ     0xF830
+   314                              <1> defb    INTCFG  equ     0xF832
+   315                              <1> defb    TMRCFG  equ     0xF834
+   316                              <1> defb    SIOCFG  equ     0xF836
+   317                              <1> 
+   318                              <1> ;
+   319                              <1> ;/* Parallel I/O Ports
+   320                              <1> ;*/
+   321                              <1> defb    P1PIN   equ     0xF860
+   322                              <1> defb    P1LTC   equ     0xF862
+   323                              <1> defb    P1DIR   equ     0xF864
+   324                              <1> defb    P2PIN   equ     0xF868
+   325                              <1> defb    P2LTC   equ     0xF86A
+   326                              <1> defb    P2DIR   equ     0xF86C
+   327                              <1> defb    P3PIN   equ     0xF870
+   328                              <1> defb    P3LTC   equ     0xF872
+   329                              <1> defb    P3DIR   equ     0xF874
+   330                              <1> 
+   331                              <1> 
+   332                              <1> ; bits.inc
+   333                              <1> ;
+   334                              <1> ; assembly language bit definitions
+   335                              <1> ;
+   336                              <1> defb    BIT0    equ     0x01
+   337                              <1> defb    BIT1    equ     0x02
+   338                              <1> defb    BIT2    equ     0x04
+   339                              <1> defb    BIT3    equ     0x08
+   340                              <1> defb    BIT4    equ     0x10
+   341                              <1> defb    BIT5    equ     0x20
+   342                              <1> defb    BIT6    equ     0x40
+   343                              <1> defb    BIT7    equ     0x80
+   344                              <1> 
+   345                              <1> defw    BIT8    equ     0x0100
+   346                              <1> defw    BIT9    equ     0x0200
+   347                              <1> defw    BIT10   equ     0x0400
+   348                              <1> defw    BIT11   equ     0x0800
+   349                              <1> defw    BIT12   equ     0x1000
+   350                              <1> defw    BIT13   equ     0x2000
+   351                              <1> defw    BIT14   equ     0x4000
+   352                              <1> defw    BIT15   equ     0x8000
+   353                              <1> 
+   354                              <1> defd    BIT16   equ     0x00010000
+   355                              <1> defd    BIT31   equ     0x80000000
+   356                              <1> 
+   357                              <1> defb    ZBIT0    equ     0
+   358                              <1> defb    ZBIT1    equ     0
+   359                              <1> defb    ZBIT2    equ     0
+   360                              <1> defb    ZBIT3    equ     0
+   361                              <1> defb    ZBIT4    equ     0
+   362                              <1> defb    ZBIT5    equ     0
+   363                              <1> defb    ZBIT6    equ     0
+   364                              <1> defb    ZBIT7    equ     0
+   365                              <1> 
+   366                              <1> defw    ZBIT8    equ     0
+   367                              <1> defw    ZBIT9    equ     0
+   368                              <1> defw    ZBIT10   equ     0
+   369                              <1> defw    ZBIT11   equ     0
+   370                              <1> defw    ZBIT12   equ     0
+   371                              <1> defw    ZBIT13   equ     0
+   372                              <1> defw    ZBIT14   equ     0
+   373                              <1> defw    ZBIT15   equ     0
+   374                              <1> 
+   375                              <1> 
+   376                              <1> ;
+   377                              <1> ;/* Asynchronout Serial I/O channel 0  (COM1)
+   378                              <1> ;*/
+   379                              <1> defb    RBR0_F4 equ     0xF4F8
+   380                              <1> defb    TBR0_F4 equ     0xF4F8
+   381                              <1> defb    DLL0_F4 equ     0xF4F8
+   382                              <1> defb    DLH0_F4 equ     0xF4F9
+   383                              <1> defb    IER0_F4 equ     0xF4F9
+   384                              <1> defb    IIR0_F4 equ     0xF4FA
+   385                              <1> defb    LCR0_F4 equ     0xF4FB
+   386                              <1> defb    MCR0_F4 equ     0xF4FC
+   387                              <1> defb    LSR0_F4 equ     0xF4FD
+   388                              <1> defb    MSR0_F4 equ     0xF4FE
+   389                              <1> defb    SCR0_F4 equ     0xF4FF
+   390                              <1> 
+   391                              <1> %define MFPIC 0
+   392                              <1> %if MFPIC
+   393                              <1> defb    RBR0    equ     0x0448
+   394                              <1> defb    TBR0    equ     0x0448
+   395                              <1> defb    DLL0    equ     0x0448
+   396                              <1> defb    DLH0    equ     0x0449
+   397                              <1> defb    IER0    equ     0x0449
+   398                              <1> defb    IIR0    equ     0x044A
+   399                              <1> defb    LCR0    equ     0x044B
+   400                              <1> defb    MCR0    equ     0x044C
+   401                              <1> defb    LSR0    equ     0x044D
+   402                              <1> defb    MSR0    equ     0x044E
+   403                              <1> defb    SCR0    equ     0x044F
+   404                              <1> %else
+   405                              <1> defb    RBR0    equ     0x03F8
+   406                              <1> defb    TBR0    equ     0x03F8
+   407                              <1> defb    DLL0    equ     0x03F8
+   408                              <1> defb    DLH0    equ     0x03F9
+   409                              <1> defb    IER0    equ     0x03F9
+   410                              <1> defb    IIR0    equ     0x03FA
+   411                              <1> defb    LCR0    equ     0x03FB
+   412                              <1> defb    MCR0    equ     0x03FC
+   413                              <1> defb    LSR0    equ     0x03FD
+   414                              <1> defb    MSR0    equ     0x03FE
+   415                              <1> defb    SCR0    equ     0x03FF
+   416                              <1> %endif
+   417                              <1> 
+   418                              <1> ;
+   419                              <1> ;/* Asynchronout Serial I/O channel 1  (COM2)
+   420                              <1> ;*/
+   421                              <1> defb    RBR1_F8 equ     0xF8F8
+   422                              <1> defb    TBR1_F8 equ     0xF8F8
+   423                              <1> defb    DLL1_F8 equ     0xF8F8
+   424                              <1> defb    DLH1_F8 equ     0xF8F9
+   425                              <1> defb    IER1_F8 equ     0xF8F9
+   426                              <1> defb    IIR1_F8 equ     0xF8FA
+   427                              <1> defb    LCR1_F8 equ     0xF8FB
+   428                              <1> defb    MCR1_F8 equ     0xF8FC
+   429                              <1> defb    LSR1_F8 equ     0xF8FD
+   430                              <1> defb    MSR1_F8 equ     0xF8FE
+   431                              <1> defb    SCR1_F8 equ     0xF8FF
+   432                              <1> 
+   433                              <1> defb    RBR1    equ     0x02F8
+   434                              <1> defb    TBR1    equ     0x02F8
+   435                              <1> defb    DLL1    equ     0x02F8
+   436                              <1> defb    DLH1    equ     0x02F9
+   437                              <1> defb    IER1    equ     0x02F9
+   438                              <1> defb    IIR1    equ     0x02FA
+   439                              <1> defb    LCR1    equ     0x02FB
+   440                              <1> defb    MCR1    equ     0x02FC
+   441                              <1> defb    LSR1    equ     0x02FD
+   442                              <1> defb    MSR1    equ     0x02FE
+   443                              <1> defb    SCR1    equ     0x02FF
+   444                              <1> 
+   445                              <1> ;/* LSRx bits
+   446                              <1> ;*/
+   447                              <1> defb    LSR_TE  equ     BIT6
+   448                              <1> defb    LSR_TBE equ     BIT5
+   449                              <1> defb    LSR_BI  equ     BIT4
+   450                              <1> defb    LSR_FE  equ     BIT3
+   451                              <1> defb    LSR_PE  equ     BIT2
+   452                              <1> defb    LSR_OE  equ     BIT1
+   453                              <1> defb    LSR_RBF equ     BIT0
+   454                              <1> 
+   455                              <1> ;/* MSRx bits
+   456                              <1> ;*/
+   457                              <1> defb	MSR_DCD	equ	BIT7
+   458                              <1> defb	MSR_RI 	equ	BIT6
+   459                              <1> defb	MSR_DSR	equ	BIT5
+   460                              <1> defb	MSR_CTS	equ	BIT4
+   461                              <1> defb	MSR_deltaDCD	equ	BIT3
+   462                              <1> defb	MSR_deltaRI	equ	BIT2
+   463                              <1> defb	MSR_deltaDSR	equ	BIT1
+   464                              <1> defb	MSR_deltaCTS	equ	BIT0
+   465                              <1> 
+   466                              <1> ;/* Bits in CR0
+   467                              <1> ;*/
+   468                              <1> defb    CR0_PE  equ     BIT0
+   469                              <1> defb    CR0_MP  equ     BIT1
+   470                              <1> defb    CR0_EM  equ     BIT2
+   471                              <1> defb    CR0_TS  equ     BIT3
+   472                              <1> defd    CR0_WP  equ     BIT16
+   473                              <1> defd    CR0_PG  equ     BIT31
+   474                              <1> 
+   475                              <1> ;/* Some ASCII character codes
+   476                              <1> ;*/
+   477                              <1> defb    ASCII_NUL       equ     0x00
+   478                              <1> defb    ASCII_BS        equ     0x08
+   479                              <1> defb    ASCII_HT        equ     0x09
+   480                              <1> defb    ASCII_LF        equ     0x0A
+   481                              <1> defb    ASCII_NL        equ     0x0A
+   482                              <1> defb    ASCII_FF        equ     0x0C
+   483                              <1> defb    ASCII_CR        equ     0x0D
+   484                              <1> defb	ASCII_ESC	equ	0x1B
+   485                              <1> defb    ASCII_SP        equ     0x20
+   486                              <1> defb    ASCII_DEL       equ     0x7F
+   487                              <1> defb	ASCII_RUB	equ	0xFF
+   488                              <1> 
+   489                              <1> 
+   490                              <1> ;/* End of i386EX.inc */
+    73                                  %include "macro.inc"
+    74                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    75                              <1> ;
+    76                              <1> ; some useful macros:
+    77                              <1> ;
+    78                              <1> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    79                              <1> %define NREPEAT 0
+    80                              <1> 
+    81                              <1> %if NREPEAT
+    82                              <1> 
+    83                              <1> %macro	rep	1
+    84                              <1> %%loop:	%1
+    85                              <1> 	dec	cx
+    86                              <1> 	jnz	%%loop
+    87                              <1> %endm
+    88                              <1> 
+    89                              <1> %macro	repne	1
+    90                              <1> %%loop:	%1
+    91                              <1> 	je	%%e
+    92                              <1> 	dec	cx
+    93                              <1> 	jnz	%%loop
+    94                              <1> 	cmp	cx,1
+    95                              <1> 	jmp	%%done
+    96                              <1> %%e:	dec	cx
+    97                              <1> 	cmp	cx,cx
+    98                              <1> %%done:
+    99                              <1> %endm
+   100                              <1> 
+   101                              <1> %macro	repe	1
+   102                              <1> %%loop:	%1
+   103                              <1> 	jne	%%ne
+   104                              <1> 	dec	cx
+   105                              <1> 	jnz	%%loop
+   106                              <1> 	jmp	%%done
+   107                              <1> %%ne:	dec	cx
+   108                              <1> 	jcxz	%%cxz
+   109                              <1> 	jmp	%%done
+   110                              <1> %%cxz:	cmp	cx,1
+   111                              <1> %%done:
+   112                              <1> %endm
+   113                              <1> 
+   114                              <1> %macro	REP	1
+   115                              <1> %%loop:	%1
+   116                              <1> 	dec	ecx
+   117                              <1> 	jnz	%%loop
+   118                              <1> %endm
+   119                              <1> 
+   120                              <1> %macro	REPNE	1
+   121                              <1> %%loop:	%1
+   122                              <1> 	je	%%e
+   123                              <1> 	dec	ecx
+   124                              <1> 	jnz	%%loop
+   125                              <1> 	cmp	cl,1
+   126                              <1> 	jmp	%%done
+   127                              <1> %%e:	dec	ecx
+   128                              <1> 	cmp	cl,cl
+   129                              <1> %%done:
+   130                              <1> %endm
+   131                              <1> 
+   132                              <1> %macro	REPE	1
+   133                              <1> %%loop:	%1
+   134                              <1> 	jne	%%ne
+   135                              <1> 	dec	ecx
+   136                              <1> 	jnz	%%loop
+   137                              <1> 	jmp	%%done
+   138                              <1> %%ne:	dec	ecx
+   139                              <1> 	jecxz	%%cxz
+   140                              <1> 	jmp	%%done
+   141                              <1> %%cxz:	cmp	cl,1
+   142                              <1> %%done:
+   143                              <1> %endm
+   144                              <1> 
+   145                              <1> %endif
+   146                              <1> 
+   147                              <1> 
+   148                              <1> ;
+   149                              <1> ; format of the BYTE initialization table:  address, byte
+   150                              <1> ;
+   151                              <1> %imacro  binit 2
+   152                              <1>         dw      %1
+   153                              <1>         db      %2
+   154                              <1> %endmacro
+   155                              <1> ; end with DW -1
+   156                              <1> 
+   157                              <1> ;
+   158                              <1> ; format of the WORD initialization table:  address, word
+   159                              <1> ;
+   160                              <1> %imacro  winit 2
+   161                              <1>         dw      %1
+   162                              <1>         dw      %2
+   163                              <1> %endmacro
+   164                              <1> ; end with DW -1
+   165                              <1> 
+   166                              <1> 
+   167                              <1> ; get the BIOS Data Area segment pointer to a [segment] register
+   168                              <1> %imacro get_bda	1.nolist
+   169                              <1> 	push	0x0040
+   170                              <1> 	pop	%1
+   171                              <1> 	cnop
+   172                              <1> %endm
+   173                              <1> 
+   174                              <1> 
+   175                              <1> ; get the Location 0 (Interrupt Descriptor Table) pointer to a register
+   176                              <1> %imacro	get_loc0 1.nolist
+   177                              <1> 	push	0x0000
+   178                              <1> 	pop	%1
+   179                              <1> 	cnop
+   180                              <1> %endm
+   181                              <1> 
+   182                              <1> 
+   183                              <1> 
+   184                              <1> %imacro setloc  1.nolist
+   185                              <1>  times   (%1-($-$$)) db 0FFh
+   186                              <1> %endm
+   187                              <1> 
+   188                              <1> %imacro db_lo   1
+   189                              <1>  db (%1)&255
+   190                              <1> %endm
+   191                              <1> 
+   192                              <1> %imacro cnop    0.nolist
+   193                              <1> %ifdef SOFT_DEBUG
+   194                              <1> %if SOFT_DEBUG
+   195                              <1>         nop
+   196                              <1> %endif
+   197                              <1> %endif
+   198                              <1> %endm
+   199                              <1> 
+   200                              <1> %imacro popm 1-*.nolist
+   201                              <1> %rep %0
+   202                              <1> %ifidni %1,ALL
+   203                              <1>  popa
+   204                              <1> %elifidni %1,F
+   205                              <1>  popf
+   206                              <1> %else
+   207                              <1>  pop %1
+   208                              <1> %ifidni %1,DS
+   209                              <1>  cnop
+   210                              <1> %elifidni %1,ES
+   211                              <1>  cnop
+   212                              <1> %elifidni %1,FS
+   213                              <1>  cnop
+   214                              <1> %elifidni %1,GS
+   215                              <1>  cnop
+   216                              <1> %endif
+   217                              <1> %endif
+   218                              <1> %rotate 1
+   219                              <1> %endrep
+   220                              <1> %endm
+   221                              <1> 
+   222                              <1> %imacro pushm 1-*.nolist
+   223                              <1> %rep %0
+   224                              <1> %rotate -1
+   225                              <1> %ifidni %1,ALL
+   226                              <1>  pusha
+   227                              <1> %elifidni %1,F
+   228                              <1>  pushf
+   229                              <1> %else
+   230                              <1>  push %1
+   231                              <1> %endif
+   232                              <1> %endrep
+   233                              <1> %endm
+   234                              <1> 
+   235                              <1> %imacro descr_linear_data 2-3.nolist	; address, size [, E]  E!=0 means expand down
+   236                              <1> %assign __size__ (%2-1)	| 0xFF
+   237                              <1> %if (__size__ <= 0xFFFF)
+   238                              <1> %assign __gran__ 0
+   239                              <1> %else
+   240                              <1> %assign __gran__ 0xC0			; G B 0 0
+   241                              <1> %endif
+   242                              <1> %assign __expand__ 0
+   243                              <1> %if %0==3
+   244                              <1> %if %3
+   245                              <1> %assign __expand__ 4
+   246                              <1> %endif
+   247                              <1> %endif
+   248                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   249                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x93|__expand__)<<8)|(((%1)>>16)&0xFF)
+   250                              <1> %endm
+   251                              <1> 
+   252                              <1> %imacro descr_linear_code 2-3.nolist	; address, size [,C]  C!=0 means conforming
+   253                              <1> %assign __size__ (%2-1)	| 0xFF
+   254                              <1> %if (__size__ <= 0xFFFF)
+   255                              <1> %assign __gran__ 0
+   256                              <1> %else
+   257                              <1> %assign __gran__ 0xC0			; G D 0 0
+   258                              <1> %endif
+   259                              <1> %assign __conform__ 0
+   260                              <1> %if %0==3
+   261                              <1> %if %3
+   262                              <1> %assign __conform__ 4
+   263                              <1> %endif
+   264                              <1> %endif
+   265                              <1> dd (((%1)&0xFFFF)<<16)|(__size__&0xFFFF)
+   266                              <1> dd (((%1)>>24)&0xFF)|((__gran__|(__size__>>16)&0x0F)<<16)|((0x9B|__conform__)<<8)|(((%1)>>16)&0xFF)
+   267                              <1> %endm
+   268                              <1> 
+   269                              <1> ;/* End of macro.inc */
+    74                                  %define XXX
+    75                                  %include "bda.inc"
+    76                              <1> XXX
+    77                              <1> ; bda.h -- definitions of the BIOS Data Area at 0040:0000 (0x400)  */
+    78                              <1> %define BDA_segment 0x40
+    79                              <1> ; bda.console -- which consoles INT 10h drives.  Set before the first */
+    80                              <1> ; printf of POST; vga3_init adds the video bit when the board answers. */
+    81                              <1> ; Both at once mirrors the screen down the serial line.  One comment  */
+    82                              <1> ; per line here: bda.rul turns this file into bda.inc a line at a time. */
+    83                              <1> %define CON_SERIAL	0x01
+    84                              <1> %define CON_VIDEO	0x02
+    85                              <1> struc _BDA
+    86                              <1> ; first items at 0x40:0	*/
+    87 00000000 ????????????????    <1> serial_dev	resw	4	; serial port device codes */
+    88 00000008 ????????????????    <1> parallel_dev	resw	4	; printer port device codes */
+    89 00000010 ????                <1> equip_flag	resw	1		; int 12h equipment flags */
+    90 00000012 ??                  <1> mfg_test	resb	1		; initialization flags */
+    91                              <1> ; */
+    92                              <1> ; POST writes what it decided here, after the test of segment 0 has */
+    93                              <1> ; zeroed the area, so the answer survives to be reported.  Nothing else */
+    94                              <1> ; in this BIOS writes mfg_test.                                        */
+    95                              <1> %define WARM_POST 0x01	; warm start: the memory march was skipped */
+    96 00000013 ????                <1> memory_size	resw	1	; base memory size in Kilowords (1224) */
+    97 00000015 ??                  <1> mfg_err_flag	resb	1
+    98 00000016 ??                  <1> mfg_err_flag2	resb	1
+    99                              <1> ; */
+   100                              <1> ; first Keyboard data area */
+   101 00000017 ??                  <1> kbd_flag	resb	1	; shift status &c. */
+   102 00000018 ??                  <1> kbd_flag1	resb	1	;  mrre  */
+   103 00000019 ??                  <1> alt_input	resb	1	; save alternate kbd entry code */
+   104 0000001A ????                <1> buffer_head	resw	1
+   105 0000001C ????                <1> buffer_tail	resw	1
+   106                              <1> ; */
+   107 0000001E <res 20h>           <1> kbd_buffer	resw	16	; buffer empty when  head==tail**/
+   108                              <1> ; */
+   109                              <1> ; Diskette data area */
+   110 0000003E ??                  <1> seek_status	resb	1	; drive recalibration status */
+   111                              <1> ; bits 3..0 drive must recalibrate before next seek */
+   112 0000003F ??                  <1> motor_status	resb	1	; bits 3..0 motor running */
+   113                              <1> ; bit 7 current op is write */
+   114 00000040 ??                  <1> motor_count	resb	1	; timeout counter for motor turn-off */
+   115 00000041 ??                  <1> fd_status	resb	1	; return code status byte */
+   116 00000042 ??????????????      <1> fd_ctrl_stat	resb	7	; controller return bytes */
+   117                              <1> ; */
+   118                              <1> ; Video Display data area -- also used for video emulation */
+   119 00000049 ??                  <1> vid_mode	resb	1	; current display mode */
+   120 0000004A ????                <1> vid_columns	resw	1	; no. of columns on the screen */
+   121 0000004C ????                <1> vid_buf_len	resw	1	; length of video buffer in bytes*//
+   122 0000004E ????                <1> vid_start	resw	1	; start address of screen regeneration (in vid buf)*//
+   123 00000050 <res 10h>           <1> vid_cursor	resw	8	; cursor postition on up to 8 screens */
+   124 00000060 ????                <1> vid_cursor_mode	resw	1
+   125 00000062 ??                  <1> vid_active_page	resb	1
+   126 00000063 ????                <1> vid_addr_chip	resw	1	; I/O address for the video chip (6845,EGA,VGA)*//
+   127 00000065 ??                  <1> vid_crt_mode	resb	1	; current setting of the 3x8 register ???? */
+   128 00000066 ??                  <1> vid_palette	resb	1	; current color setting / palette **/
+   129                              <1> ; */
+   130                              <1> ; POST and ROM data */
+   131 00000067 ????????            <1> io_rom_addr	resd	1	; far word to ROM initialization routine */
+   132                              <1> %define io_rom_addr_low io_rom_addr
+   133                              <1> %define io_rom_addr_seg (io_rom_addr+2)
+   134 0000006B ??                  <1> interrupt_flag	resb	1	; indicates an interrupt occurred */
+   135                              <1> ; */
+   136                              <1> ; Timer data area  18.206602 hz  = ~54.925 ms  */
+   137 0000006C ????                <1> timer_count_low	resw	1	; low word of timer count */
+   138 0000006E ????                <1> timer_count_high	resw	1
+   139                              <1> %define timer_count timer_count_low
+   140                              <1> ; use timer_count as the double word timer counter */
+   141 00000070 ??                  <1> timer_overflow	resb	1	; timer has rolled over since last read */
+   142                              <1> ; */
+   143                              <1> ; System & Keboard data area */
+   144 00000071 ??                  <1> kbd_break_flag	resb	1	; bit 7 set if Break key is pressed */
+   145 00000072 ????                <1> reset_flag	resw	1	; word=0x1234 if Reset is underway (80286) */
+   146                              <1> ; */
+   147                              <1> ; reboot() writes WARM_BOOT here before restarting the board, and POST */
+   148                              <1> ; reads it to decide whether the memory march can be skipped.  Any       */
+   149                              <1> ; program can set it and jump to FFFF:0000 -- that is the PC convention  */
+   150                              <1> ; and this BIOS honours it.                                             */
+   151                              <1> %define WARM_BOOT 0x1234
+   152                              <1> ; */
+   153                              <1> ; Fixed (Hard) disk data area */
+   154 00000074 ??                  <1> hd_status	resb	1	; status info for hard disk */
+   155                              <1> %define disk_status1 hd_status
+   156 00000075 ??                  <1> hd_number	resb	1	; number of hard disks (for int 13h, fn 8h) */
+   157 00000076 ??                  <1> control_byte	resb	1	; head control ???? */
+   158 00000077 ??                  <1> port_offset	resb	1	; obsolete, maybe ???? */
+   159                              <1> ; */
+   160                              <1> ; Timeout counters */
+   161 00000078 ????????            <1> printer_timeout	resb	4	; four bytes for each interaace */
+   162 0000007C ????????            <1> serial_timeout	resb	4	; four bytes for each interacce */
+   163                              <1> ; */
+   164                              <1> ; Keyboard additional data area -- buffer location within segment 40h */
+   165 00000080 ????                <1> buffer_start	resw	1	; offset of keyboard buffer start**/
+   166 00000082 ????                <1> buffer_end	resw	1		; offset of end of kbd buffer */
+   167                              <1> ; */
+   168                              <1> ; EGA/PGA? data work area (graphic mode?  probably available) */
+   169 00000084 ??                  <1> ega_rows	resb	1		; rows on the active screen (less 1)**/
+   170 00000085 ????                <1> ega_points	resw	1		; bytes per charateer	*/
+   171 00000087 ??                  <1> ega_info	resb	1		; mode options ????*//
+   172 00000088 ??                  <1> ega_info_3	resb	1		; switch settings*//
+   173 00000089 ??                  <1> console	resb	1	; CON_SERIAL, CON_VIDEO, or both: where INT 10h writes**/
+   174 0000008A ??                  <1> ega_rsvd	resb	1	; reserved for adapter mfgrs */
+   175                              <1> ; */
+   176                              <1> ; Disk / Diskette media data */
+   177 0000008B ??                  <1> fd_last_data_rate	resb	1	; last data rate selected */
+   178 0000008C ??                  <1> hd_status_reg	resb	1		; hard disk status register */
+   179 0000008D ??                  <1> hd_error_reg	resb	1		; hard disk error register */
+   180 0000008E ??                  <1> hd_int_flag	resb	1	; HD interrupt flag */
+   181 0000008F ??                  <1> hd_cntrl	resb	1		; HD/FD combo controller bit flag */
+   182 00000090 ????                <1> hd_media	resb	2	; media state */
+   183 00000092 ????                <1> hd_op_start	resb	2	; operation start state */
+   184 00000094 ????                <1> hd_track	resw	1		; HD present cylinder number */
+   185                              <1> ; */
+   186                              <1> ; Additional Keyboard flags */
+   187 00000096 ??                  <1> kbd_flag3	resb	1	; mode state & type flags */
+   188 00000097 ??                  <1> kbd_flag2	resb	1	; kbd LED flags */
+   189                              <1> ; */
+   190                              <1> ; Real Time Clock data area */
+   191 00000098 ????????            <1> rtc_user_flag_addr	resd	1	; far address of user's wait flag */
+   192 0000009C ????????            <1> rtc_user_wait_flag	resd	1	; user wait flag */
+   193 000000A0 ??                  <1> rtc_wait_active	resb	1	; 01=busy, 80=posted, 00=post acknowledge */
+   194                              <1> ; */
+   195                              <1> ; Miscellaneous */
+   196 000000A1 ??????????????      <1> rsvd_network	resb	7	; reserved for network adapters */
+   197 000000A8 ????????            <1> ptr_ega_save	resd	1		; far pointer to EGA parameter control block */
+   198                              <1> ; */
+   199                              <1> ;	byte	rsvd_unused[84];	; reserved for 386EX usage */
+   200 000000AC ????                <1> errno	resw	1				; library error flag (errno.h) */
+   201 000000AE <res 29h>           <1> rsvd_unused	resb	41	; reserved for 386EX usage */
+   202 000000D7 ????????            <1> serial_flags	resb	4	; flags for each serial device**/
+   203 000000DB ????                <1> extended_memory	resw	1	; size of Extended Memory in Kilobytes */
+   204                              <1> ; this size is stored in CMOS on the PC/AT */
+   205 000000DD ????                <1> CPU_freq	resw	1	; CPU frequency in kilohertz */
+   206 000000DF ????                <1> ebda_seg_ptr	resw	1		; for EBDA allocations; c.f., memory_size */
+   207                              <1> ; */
+   208                              <1> ; start of 31 bytes of NVRAM informaiion */
+   209 000000E1 ????                <1> nvram_info	resb	2	; 31 bytes of NVRAM information (this may move)*//
+   210                              <1> ; starts with 2 bytes of SIO0 params */
+   211 000000E3 ????                <1> floppy_tab	resb	2		; floppy disk driver table */
+   212 000000E5 ????????????????    <1> disk_tab	resb	8  		; hard disk driver table */
+   213 000000ED ??                  <1> boot_order	resb	1		; which device INT 19h tries, and in what order */
+   214 000000EE <res 10h>           <1> nvram_unused	resb	16
+   215 000000FE ????                <1> nvram_checksum	resw	1	; 31st byte of the NVRAM info */
+   216                              <1> ; end of 31 bytes of NVRAM information */
+   217                              <1> ; */
+   218 00000100 ??                  <1> AT_status_byte	resb	1	; at 40:100h, 00500h, Print Screen Status byte*//
+   219                              <1> ; 00=ready/ok  01=busy  0FF=error	*/
+   220 00000101 ??                  <1> SRAM_size	resb	1	; size of SRAM in Kilobytes */
+   221                              <1> ; */
+   222                              <1> ; Extentsion to BDA during BIOS startup */
+   223                              <1> ; */
+   224                              <1> endstruc
+   224          ******************  <1>  warning: segment attributes specified on redeclaration of segment: ignoring [-w+other]
+    76                                  %undef XXX
+    77                                  
+    78                                  	global	vga3_init_		; C: int vga3_init(void), 1 if present
+    79                                  	global	vga3_putc		; AL at the cursor, character only
+    80                                  	global	vga3_cells		; AL,BL at the cursor CX times; DL=1 attr too
+    81                                  	global	vga3_getcell		; -> AX, the cell under the cursor
+    82                                  	global	vga3_cursor		; AH row, AL column -> the CRTC
+    83                                  	global	vga3_shape		; CX as INT 10h fn 01
+    84                                  	global	vga3_scroll_up		; as INT 10h fn 06
+    85                                  	global	vga3_scroll_dn		; as INT 10h fn 07
+    86                                  	global	vga3_clear		; the screen to spaces, cursor home
+    87                                  
+    88                                  segment	_TEXT
+    89                                  
+    90                                  V3_PORT		equ	0x4E0		; P3 jumpered to E0h
+    91                                  V3_CRTC_A	equ	V3_PORT+2	; HD6445 address register
+    92                                  V3_CRTC_D	equ	V3_PORT+3	; HD6445 data register
+    93                                  V3_CFG		equ	V3_PORT+4	; write only
+    94                                  V3_ADR_HI	equ	V3_PORT+5	; write only
+    95                                  V3_ADR_LO	equ	V3_PORT+6	; write only
+    96                                  V3_DATA		equ	V3_PORT+7
+    97                                  
+    98                                  V3_SEG		equ	0xB800		; the 32K, memory mapped
+    99                                  V3_FONT		equ	0x7000		; page 7, as CFG below says
+   100                                  V3_COLS		equ	80
+   101                                  V3_ROWS		equ	25
+   102                                  V3_CELLS	equ	V3_COLS*V3_ROWS
+   103                                  V3_BLANK	equ	0x0720		; attribute 07, a space
+   104                                  
+   105                                  ; CFG: bit 7 memory window at B8000 (clear: B0000); 6:4 font page 7;
+   106                                  ; bit 3 one font; bit 2 video on; bit 0 nine-dot characters.
+   107                                  V3_CFG_QUIET	equ	0xF0		; mapped, video off
+   108                                  V3_CFG_ON	equ	0xF4
+   109                                  
+   110                                  R31		equ	31		; HD6445: bit 1 = vertical blanking
+   111                                  ROW_BLANKING	equ	25		; "row" the beam is on during blanking
+   112                                  
+   113                                  
+   114                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   115                                  ; 80x25, nine-dot characters, 28.322mhz dots: VGA's 720x400 text timing.
+   116                                  ;   80 shown + 2 + 12 + 6 = 100 char clocks = 900 dots = 31.469khz
+   117                                  ;   400 lines + 12 + 2 + 35 = 449 lines = 70.08hz
+   118                                  ;
+   119                                  ; These are the parameters the SBC-188 BIOS (John Coffman, 2012) drove
+   120                                  ; this same board with.  Vsync belongs on line 412, which is not a row
+   121                                  ; boundary; the HD6445 can do it anyway -- R7 puts it at row 25, line
+   122                                  ; 400, and R27, enabled by bit 3 of R30, moves it 12 lines on.  So the
+   123                                  ; frame is VGA's 449 lines exactly, not the 453 a plain 6845 forced.
+   124                                  ; R2 is the arithmetic 82: the 68 that once "centred" the picture was
+   125                                  ; correcting for a monitor that had taken the signal for 640x350, which
+   126                                  ; is a sync-polarity matter for the jumpers, not for this table.
+   127                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   128                                  	align	2
+   129                                  v3_mode:
+   130 00000000 006301500252032C        	db	0,  99,   1,  80,   2,  82,   3,  0x2C
+   131 00000008 041B050106190719        	db	4,  27,   5,  1,    6,  25,   7,  25
+   132 00000010 0800090F0A6D0B0E        	db	8,  0,    9,  15,   10, 0x6D, 11, 14	; cursor lines 13-14, blink 1/32
+   133 00000018 0C000D000E000F00        	db	12, 0,    13, 0,    14, 0,    15, 0
+   134 00000020 1E001F002000            	db	30, 0,    31, 0,    32, 0		; control 1..3 known
+   135 00000026 1B0C1E08                	db	27, 12,   30, 0x08			; vsync 12 lines after row 25
+   136                                  v3_mode_len	equ	$ - v3_mode
+   137                                  
+   138                                  
+   139                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   140                                  ; The register path: the CRTC, and the RAM for the presence test
+   141                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   142                                  
+   143                                  ; g_crtc -- AH to CRTC register AL.  AL is destroyed.
+   144                                  g_crtc:
+   145 0000002A 52                      	push	dx
+   146 0000002B BAE204                  	mov	dx,V3_CRTC_A
+   147 0000002E EE                      	out	dx,al
+   148 0000002F 42                      	inc	dx
+   149 00000030 88E0                    	mov	al,ah
+   150 00000032 EE                      	out	dx,al
+   151 00000033 5A                      	pop	dx
+   152 00000034 C3                      	ret
+   153                                  
+   154                                  ; g_rd / g_wr -- AL from / to RAM byte BX through the address registers
+   155                                  g_seek:
+   156 00000035 5250                    	pushm	ax,dx
+   157 00000037 BAE504                  	mov	dx,V3_ADR_HI
+   158 0000003A 88F8                    	mov	al,bh
+   159 0000003C EE                      	out	dx,al
+   160 0000003D 42                      	inc	dx
+   161 0000003E 88D8                    	mov	al,bl
+   162 00000040 EE                      	out	dx,al
+   163 00000041 585A                    	popm	ax,dx
+   164 00000043 C3                      	ret
+   165                                  g_rd:
+   166 00000044 E8EEFF                  	call	g_seek
+   167 00000047 52                      	push	dx
+   168 00000048 BAE704                  	mov	dx,V3_DATA
+   169 0000004B EC                      	in	al,dx
+   170 0000004C 5A                      	pop	dx
+   171 0000004D C3                      	ret
+   172                                  g_wr:
+   173 0000004E E8E4FF                  	call	g_seek
+   174 00000051 52                      	push	dx
+   175 00000052 BAE704                  	mov	dx,V3_DATA
+   176 00000055 EE                      	out	dx,al
+   177 00000056 5A                      	pop	dx
+   178 00000057 C3                      	ret
+   179                                  
+   180                                  
+   181                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   182                                  ; Addressing
+   183                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   184                                  
+   185                                  ; g_cell -- BX = byte offset of the cell at row AH, column AL.  Needs
+   186                                  ; no segment; everything else preserved.
+   187                                  g_cell:
+   188 00000058 5250                    	pushm	ax,dx
+   189 0000005A 88C2                    	mov	dl,al
+   190 0000005C 88E0                    	mov	al,ah
+   191 0000005E B450                    	mov	ah,V3_COLS
+   192 00000060 F6E4                    	mul	ah
+   193 00000062 30F6                    	xor	dh,dh
+   194 00000064 01D0                    	add	ax,dx
+   195 00000066 01C0                    	add	ax,ax
+   196 00000068 89C3                    	mov	bx,ax
+   197 0000006A 585A                    	popm	ax,dx
+   198 0000006C C3                      	ret
+   199                                  
+   200                                  ; g_bda_cursor -- AH = row, AL = column of the active page's cursor.
+   201                                  ; DS is the BDA.
+   202                                  g_bda_cursor:
+   203 0000006D 53                      	push	bx
+   204 0000006E 8A1E6200                	mov	bl,[vid_active_page]
+   205 00000072 80E307                  	and	bl,7
+   206 00000075 30FF                    	xor	bh,bh
+   207 00000077 01DB                    	add	bx,bx
+   208 00000079 8B4750                  	mov	ax,[bx+vid_cursor]
+   209 0000007C 5B                      	pop	bx
+   210 0000007D C3                      	ret
+   211                                  
+   212                                  
+   213                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   214                                  ; The beam.  DS is the BDA.
+   215                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   216                                  
+   217                                  ; beam_avoid -- wait for vertical blanking, then return.  The arguments
+   218                                  ; the callers pass -- the rows they are about to touch -- are ignored:
+   219                                  ; during blanking every row is safe.  They are kept because the callers
+   220                                  ; read better for having said what they touch, and because a scheme that
+   221                                  ; uses them may yet be made to work.
+   222                                  ;
+   223                                  ; Bounded at 64K reads, about two frames.  If the bit never sets there is
+   224                                  ; no CRTC clock and nothing to synchronise with, so the write proceeds.
+   225                                  ; Everything preserved.
+   226                                  beam_avoid:
+   227 0000007E 525150                  	pushm	ax,cx,dx
+   228 00000081 BAE204                  	mov	dx,V3_CRTC_A
+   229 00000084 B01F                    	mov	al,R31
+   230 00000086 EE                      	out	dx,al
+   231 00000087 42                      	inc	dx			; DX = the data port, R31 selected
+   232 00000088 31C9                    	xor	cx,cx
+   233 0000008A EC                      .w:	in	al,dx
+   234 0000008B A802                    	test	al,2
+   235 0000008D E1FB                    	loopz	.w
+   236 0000008F 58595A                  	popm	ax,cx,dx
+   237 00000092 C3                      	ret
+   238                                  
+   239                                  
+   240                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   241                                  ; The primitives INT 10h uses.  DS is the BDA.  Registers preserved
+   242                                  ; except where a result is returned.
+   243                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   244                                  
+   245                                  ; vga3_putc -- the character AL into the cell under the cursor; the
+   246                                  ; attribute there is left alone, as teletype on a PC leaves it.
+   247                                  vga3_putc:
+   248 00000093 06525350                	pushm	ax,bx,dx,es
+   249 00000097 88C2                    	mov	dl,al
+   250 00000099 E8D1FF                  	call	g_bda_cursor		; AH row, AL column
+   251 0000009C 88E0                    	mov	al,ah
+   252 0000009E E8DDFF                  	call	beam_avoid		; AH..AL = the row
+   253 000000A1 E8C9FF                  	call	g_bda_cursor
+   254 000000A4 E8B1FF                  	call	g_cell
+   255 000000A7 B800B8                  	mov	ax,V3_SEG
+   256 000000AA 8EC0                    	mov	es,ax
+   257 000000AC 268817                  	mov	[es:bx],dl
+   258 000000AF 585B5A07                	popm	ax,bx,dx,es
+   259 000000B3 C3                      	ret
+   260                                  
+   261                                  ; vga3_cells -- AL, CX times, from the cursor on; with attribute BL when
+   262                                  ; DL is 1 (fn 09), character only when 0 (fn 0A).  Clipped to the
+   263                                  ; screen.  Written a row at a time, each row once the beam is off it.
+   264                                  vga3_cells:
+   265 000000B4 06575652515350          	pushm	ax,bx,cx,dx,si,di,es
+   266 000000BB 88DE                    	mov	dh,bl			; DH attribute, DL type
+   267 000000BD 88C3                    	mov	bl,al			; BL character
+   268 000000BF E8ABFF                  	call	g_bda_cursor
+   269 000000C2 89C6                    	mov	si,ax			; SI = row:column
+   270 000000C4 E891FF                  	call	g_cell
+   271 000000C7 89DF                    	mov	di,bx			; DI = byte offset
+   272 000000C9 B8A00F                  	mov	ax,V3_CELLS*2
+   273 000000CC 29F8                    	sub	ax,di
+   274 000000CE D1E8                    	shr	ax,1			; cells to the end of the screen
+   275 000000D0 39C1                    	cmp	cx,ax
+   276 000000D2 7602                    	jbe	.1
+   277 000000D4 89C1                    	mov	cx,ax
+   278 000000D6 E33C                    .1:	jcxz	.9
+   279 000000D8 B800B8                  	mov	ax,V3_SEG
+   280 000000DB 8EC0                    	mov	es,ax
+   281                                  .row:
+   282 000000DD 89F0                    	mov	ax,si			; AH row, AL column
+   283 000000DF 88C7                    	mov	bh,al			; BH = column
+   284 000000E1 88E0                    	mov	al,ah
+   285 000000E3 E898FF                  	call	beam_avoid		; this row
+   286 000000E6 B050                    	mov	al,V3_COLS
+   287 000000E8 28F8                    	sub	al,bh
+   288 000000EA 30E4                    	xor	ah,ah			; AX = cells left in this row
+   289 000000EC 39C8                    	cmp	ax,cx
+   290 000000EE 7602                    	jbe	.2
+   291 000000F0 89C8                    	mov	ax,cx
+   292 000000F2 29C1                    .2:	sub	cx,ax
+   293 000000F4 91                      	xchg	ax,cx			; CX = cells now, AX = cells after
+   294 000000F5 50                      	push	ax
+   295 000000F6 88D8                    	mov	al,bl			; character
+   296 000000F8 88F4                    	mov	ah,dh			; attribute
+   297 000000FA F6C201                  	test	dl,1
+   298 000000FD 7506                    	jnz	.both
+   299 000000FF AA                      .char:	stosb
+   300 00000100 47                      	inc	di
+   301 00000101 E2FC                    	loop	.char
+   302 00000103 EB02                    	jmp	short .3
+   303 00000105 F3AB                    .both:	rep	stosw
+   304 00000107 59                      .3:	pop	cx
+   305 00000108 E30A                    	jcxz	.9
+   306 0000010A 89F0                    	mov	ax,si			; column 0 of the next row
+   307 0000010C FEC4                    	inc	ah
+   308 0000010E 30C0                    	xor	al,al
+   309 00000110 89C6                    	mov	si,ax
+   310 00000112 EBC9                    	jmp	short .row
+   311                                  .9:
+   312 00000114 585B595A5E5F07          	popm	ax,bx,cx,dx,si,di,es
+   313 0000011B C3                      	ret
+   314                                  
+   315                                  ; vga3_getcell -- AX = attribute:character under the cursor.  A read
+   316                                  ; disturbs the fetch as a write does, so it too waits for the beam.
+   317                                  vga3_getcell:
+   318 0000011C 0653                    	pushm	bx,es
+   319 0000011E E84CFF                  	call	g_bda_cursor
+   320 00000121 88E0                    	mov	al,ah
+   321 00000123 E858FF                  	call	beam_avoid
+   322 00000126 E844FF                  	call	g_bda_cursor
+   323 00000129 E82CFF                  	call	g_cell
+   324 0000012C B800B8                  	mov	ax,V3_SEG
+   325 0000012F 8EC0                    	mov	es,ax
+   326 00000131 268B07                  	mov	ax,[es:bx]
+   327 00000134 5B07                    	popm	bx,es
+   328 00000136 C3                      	ret
+   329                                  
+   330                                  ; vga3_cursor -- the hardware cursor to row AH, column AL.  A CRTC
+   331                                  ; register, not RAM: no contention, so immediate.
+   332                                  vga3_cursor:
+   333 00000137 5350                    	pushm	ax,bx
+   334 00000139 E81CFF                  	call	g_cell
+   335 0000013C D1EB                    	shr	bx,1			; cell number
+   336 0000013E B00E                    	mov	al,14
+   337 00000140 88FC                    	mov	ah,bh
+   338 00000142 E8E5FE                  	call	g_crtc
+   339 00000145 B00F                    	mov	al,15
+   340 00000147 88DC                    	mov	ah,bl
+   341 00000149 E8DEFE                  	call	g_crtc
+   342 0000014C 585B                    	popm	ax,bx
+   343 0000014E C3                      	ret
+   344                                  
+   345                                  ; vga3_shape -- as INT 10h fn 01: CH start line, bit 5 no cursor; CL end.
+   346                                  ; R10 bits 6:5 are the 6845's blink control: 01 not displayed, 10 blink.
+   347                                  vga3_shape:
+   348 0000014F 50                      	pushm	ax
+   349 00000150 88EC                    	mov	ah,ch
+   350 00000152 80E41F                  	and	ah,0x1F
+   351 00000155 80CC40                  	or	ah,0x40
+   352 00000158 F6C520                  	test	ch,0x20
+   353 0000015B 7402                    	jz	.1
+   354 0000015D B420                    	mov	ah,0x20
+   355 0000015F B00A                    .1:	mov	al,10
+   356 00000161 E8C6FE                  	call	g_crtc
+   357 00000164 88CC                    	mov	ah,cl
+   358 00000166 80E41F                  	and	ah,0x1F
+   359 00000169 B00B                    	mov	al,11
+   360 0000016B E8BCFE                  	call	g_crtc
+   361 0000016E 58                      	popm	ax
+   362 0000016F C3                      	ret
+   363                                  
+   364                                  
+   365                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   366                                  ; Scrolling, as INT 10h fn 06 and 07 have it
+   367                                  ;
+   368                                  ;   CH,CL  top-left row, column      DH,DL  bottom-right row, column
+   369                                  ;   AL     lines to scroll, zero meaning blank the whole window
+   370                                  ;   BH     attribute for the lines that are blanked
+   371                                  ;
+   372                                  ; Rows are moved one at a time, each once the beam is clear of both its
+   373                                  ; source and its destination, then the vacated rows are blanked.  Up
+   374                                  ; works from the top down -- the order the beam draws in, so the copy
+   375                                  ; runs behind it -- and down from the bottom up, so that a row is always
+   376                                  ; read before it is overwritten.
+   377                                  ;
+   378                                  ; Registers through the loops: CX and DX the window, BH the attribute,
+   379                                  ; BL the row counter, DI the lines (low) and the window height (high).
+   380                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   381                                  vga3_scroll_up:
+   382 00000170 56                      	pushm	si
+   383 00000171 31F6                    	xor	si,si
+   384 00000173 EB04                    	jmp	short g_scroll
+   385                                  vga3_scroll_dn:
+   386 00000175 56                      	pushm	si
+   387 00000176 BE0100                  	mov	si,1
+   388                                  
+   389                                  g_scroll:				; SI 0 up, 1 down
+   390 00000179 065752515350            	pushm	ax,bx,cx,dx,di,es
+   391 0000017F FC                      	cld
+   392 00000180 80FE18                  	cmp	dh,V3_ROWS-1
+   393 00000183 7602                    	jbe	.1
+   394 00000185 B618                    	mov	dh,V3_ROWS-1
+   395 00000187 80FA4F                  .1:	cmp	dl,V3_COLS-1
+   396 0000018A 7602                    	jbe	.2
+   397 0000018C B24F                    	mov	dl,V3_COLS-1
+   398 0000018E 38F5                    .2:	cmp	ch,dh
+   399 00000190 7767                    	ja	.done			; an empty window
+   400 00000192 38D1                    	cmp	cl,dl
+   401 00000194 7763                    	ja	.done
+   402 00000196 88F4                    	mov	ah,dh
+   403 00000198 28EC                    	sub	ah,ch
+   404 0000019A FEC4                    	inc	ah			; AH = rows in the window
+   405 0000019C 08C0                    	or	al,al
+   406 0000019E 7404                    	jz	.all
+   407 000001A0 38E0                    	cmp	al,ah
+   408 000001A2 7202                    	jb	.some
+   409 000001A4 88E0                    .all:	mov	al,ah			; blank it all
+   410                                  .some:
+   411 000001A6 89C7                    	mov	di,ax			; DI: lines in the low byte, rows in the high
+   412 000001A8 B800B8                  	mov	ax,V3_SEG
+   413 000001AB 8EC0                    	mov	es,ax
+   414 000001AD 30DB                    	xor	bl,bl			; k = 0
+   415                                  
+   416                                  .move:
+   417 000001AF 89F8                    	mov	ax,di
+   418 000001B1 28C4                    	sub	ah,al			; AH = rows to move
+   419 000001B3 38E3                    	cmp	bl,ah
+   420 000001B5 731F                    	jae	.blank
+   421 000001B7 09F6                    	or	si,si
+   422 000001B9 750A                    	jnz	.mv_dn
+   423 000001BB 89F8                    	mov	ax,di			; up: destination = top + k,
+   424 000001BD 88EC                    	mov	ah,ch
+   425 000001BF 00DC                    	add	ah,bl
+   426 000001C1 00E0                    	add	al,ah			;     source = destination + lines
+   427 000001C3 EB0A                    	jmp	short .mv
+   428                                  .mv_dn:
+   429 000001C5 89F8                    	mov	ax,di			; down: destination = bottom - k,
+   430 000001C7 88F4                    	mov	ah,dh
+   431 000001C9 28DC                    	sub	ah,bl
+   432 000001CB F6D8                    	neg	al
+   433 000001CD 00E0                    	add	al,ah			;       source = destination - lines
+   434                                  .mv:
+   435 000001CF E82F00                  	call	row_copy		; AH destination row, AL source row
+   436 000001D2 FEC3                    	inc	bl
+   437 000001D4 EBD9                    	jmp	short .move
+   438                                  
+   439                                  .blank:
+   440 000001D6 30DB                    	xor	bl,bl			; j = 0
+   441                                  .bl:
+   442 000001D8 89F8                    	mov	ax,di
+   443 000001DA 38C3                    	cmp	bl,al			; j < lines?
+   444 000001DC 731B                    	jae	.done
+   445 000001DE 09F6                    	or	si,si
+   446 000001E0 750A                    	jnz	.bl_dn
+   447 000001E2 88F4                    	mov	ah,dh			; up: bottom - lines + 1 + j
+   448 000001E4 28C4                    	sub	ah,al
+   449 000001E6 FEC4                    	inc	ah
+   450 000001E8 00DC                    	add	ah,bl
+   451 000001EA EB04                    	jmp	short .bl_go
+   452                                  .bl_dn:
+   453 000001EC 88EC                    	mov	ah,ch			; down: top + j
+   454 000001EE 00DC                    	add	ah,bl
+   455                                  .bl_go:
+   456 000001F0 88F8                    	mov	al,bh			; the attribute
+   457 000001F2 E84500                  	call	row_blank		; AH row, AL attribute
+   458 000001F5 FEC3                    	inc	bl
+   459 000001F7 EBDF                    	jmp	short .bl
+   460                                  
+   461                                  .done:
+   462 000001F9 585B595A5F07            	popm	ax,bx,cx,dx,di,es
+   463 000001FF 5E                      	popm	si
+   464 00000200 C3                      	ret
+   465                                  
+   466                                  ; row_copy -- source row AL to destination row AH, columns CL..DL, on
+   467                                  ; the board (ES), once the beam is clear of both.  Everything preserved.
+   468                                  row_copy:
+   469 00000201 1E575652515350          	pushm	ax,bx,cx,dx,si,di,ds
+   470 00000208 89C3                    	mov	bx,ax
+   471 0000020A 38DF                    	cmp	bh,bl
+   472 0000020C 7602                    	jbe	.r1
+   473 0000020E 86FB                    	xchg	bh,bl			; BH the lower row, BL the higher
+   474 00000210 50                      .r1:	push	ax
+   475 00000211 89D8                    	mov	ax,bx
+   476 00000213 E868FE                  	call	beam_avoid		; AH..AL
+   477 00000216 58                      	pop	ax
+   478 00000217 88C6                    	mov	dh,al			; the source row
+   479 00000219 88C8                    	mov	al,cl
+   480 0000021B E83AFE                  	call	g_cell
+   481 0000021E 89DF                    	mov	di,bx			; destination
+   482 00000220 88F4                    	mov	ah,dh
+   483 00000222 E833FE                  	call	g_cell
+   484 00000225 89DE                    	mov	si,bx			; source
+   485 00000227 28CA                    	sub	dl,cl
+   486 00000229 FEC2                    	inc	dl
+   487 0000022B 0FB6CA                  	movzx	cx,dl			; cells
+   488 0000022E 06                      	push	es
+   489 0000022F 1F                      	pop	ds			; DS = ES = the board
+   490 00000230 F3A5                    	rep	movsw
+   491 00000232 585B595A5E5F1F          	popm	ax,bx,cx,dx,si,di,ds
+   492 00000239 C3                      	ret
+   493                                  
+   494                                  ; row_blank -- row AH, columns CL..DL, to spaces in attribute AL, on the
+   495                                  ; board (ES), once the beam is off it.  Everything preserved.
+   496                                  row_blank:
+   497 0000023A 5752515350              	pushm	ax,bx,cx,dx,di
+   498 0000023F 88C6                    	mov	dh,al			; the attribute
+   499 00000241 88E0                    	mov	al,ah
+   500 00000243 E838FE                  	call	beam_avoid		; this row
+   501 00000246 88C8                    	mov	al,cl
+   502 00000248 E80DFE                  	call	g_cell
+   503 0000024B 89DF                    	mov	di,bx
+   504 0000024D 28CA                    	sub	dl,cl
+   505 0000024F FEC2                    	inc	dl
+   506 00000251 0FB6CA                  	movzx	cx,dl
+   507 00000254 88F4                    	mov	ah,dh
+   508 00000256 B020                    	mov	al,' '
+   509 00000258 F3AB                    	rep	stosw
+   510 0000025A 585B595A5F              	popm	ax,bx,cx,dx,di
+   511 0000025F C3                      	ret
+   512                                  
+   513                                  ; vga3_clear -- the whole screen blanked, cursor home
+   514                                  vga3_clear:
+   515 00000260 52515350                	pushm	ax,bx,cx,dx
+   516 00000264 31C9                    	xor	cx,cx
+   517 00000266 BA4F18                  	mov	dx,((V3_ROWS-1)<<8)|(V3_COLS-1)
+   518 00000269 30C0                    	xor	al,al
+   519 0000026B B707                    	mov	bh,V3_BLANK>>8
+   520 0000026D E800FF                  	call	vga3_scroll_up
+   521 00000270 31C0                    	xor	ax,ax
+   522 00000272 E8C2FE                  	call	vga3_cursor
+   523 00000275 585B595A                	popm	ax,bx,cx,dx
+   524 00000279 C3                      	ret
+   525                                  
+   526                                  
+   527                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   528                                  ; vga3_init -- is the board there, and if so bring it up
+   529                                  ;
+   530                                  ;	int vga3_init(void);		returns 1 if it is
+   531                                  ;
+   532                                  ; Called from POST before the first INT 10h, and from the monitor after
+   533                                  ; VGA3 has been over the memory.  Two patterns at an off-screen address
+   534                                  ; decide presence: a floating bus reads FF and agrees with neither.
+   535                                  ; Then the CRTC; the memory window with video off; the font and a clear
+   536                                  ; screen written straight in, which is allowed to sparkle because
+   537                                  ; nothing is being shown yet; and video on.
+   538                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   539                                  vga3_init_:
+   540 0000027A 061E5756525153          	pushm	bx,cx,dx,si,di,ds,es
+   541 00000281 FC                      	cld
+   542 00000282 6A401F                  	get_bda	DS
+   543                                  
+   544 00000285 BB0010                  	mov	bx,0x1000
+   545 00000288 B055                    	mov	al,0x55
+   546 0000028A E8C1FD                  	call	g_wr
+   547 0000028D E8B4FD                  	call	g_rd
+   548 00000290 3C55                    	cmp	al,0x55
+   549 00000292 7561                    	jne	.absent
+   550 00000294 B0AA                    	mov	al,0xAA
+   551 00000296 E8B5FD                  	call	g_wr
+   552 00000299 E8A8FD                  	call	g_rd
+   553 0000029C 3CAA                    	cmp	al,0xAA
+   554 0000029E 7555                    	jne	.absent
+   555                                  
+   556 000002A0 B92800                  	mov	cx,40			; every register zero first, the extended
+   557 000002A3 31DB                    	xor	bx,bx			;  ones included, so the table starts from
+   558 000002A5 88D8                    .zap:	mov	al,bl			;  a known state.  g_crtc eats AL, hence BL
+   559 000002A7 30E4                    	xor	ah,ah
+   560 000002A9 E87EFD                  	call	g_crtc
+   561 000002AC FEC3                    	inc	bl
+   562 000002AE E2F5                    	loop	.zap
+   563                                  
+   564 000002B0 BE[0000]                	mov	si,v3_mode
+   565 000002B3 B91500                  	mov	cx,v3_mode_len/2
+   566                                  .crtc:
+   567 000002B6 2E8B04                     cs	mov	ax,[si]			; AL register, AH value
+   568 000002B9 E86EFD                  	call	g_crtc
+   569 000002BC 83C602                  	add	si,2
+   570 000002BF E2F5                    	loop	.crtc
+   571                                  
+   572 000002C1 BAE404                  	mov	dx,V3_CFG
+   573 000002C4 B0F0                    	mov	al,V3_CFG_QUIET
+   574 000002C6 EE                      	out	dx,al
+   575                                  
+   576 000002C7 B800B8                  	mov	ax,V3_SEG
+   577 000002CA 8EC0                    	mov	es,ax
+   578 000002CC BF0070                  	mov	di,V3_FONT
+   579 000002CF BE[FF02]                	mov	si,v3_font
+   580 000002D2 B90010                  	mov	cx,v3_font_len
+   581 000002D5 1E                      	push	ds
+   582 000002D6 0E                      	push	cs
+   583 000002D7 1F                      	pop	ds
+   584 000002D8 F3A4                    	rep	movsb			; the font
+   585 000002DA 1F                      	pop	ds
+   586 000002DB 31FF                    	xor	di,di
+   587 000002DD B82007                  	mov	ax,V3_BLANK
+   588 000002E0 B9D007                  	mov	cx,V3_CELLS
+   589 000002E3 F3AB                    	rep	stosw			; the screen
+   590                                  
+   591 000002E5 BAE404                  	mov	dx,V3_CFG
+   592 000002E8 B0F4                    	mov	al,V3_CFG_ON
+   593 000002EA EE                      	out	dx,al
+   594                                  
+   595 000002EB 800E890002              	or	byte [console],CON_VIDEO
+   596 000002F0 B80100                  	mov	ax,1
+   597 000002F3 EB02                    	jmp	short .9
+   598                                  .absent:
+   599 000002F5 31C0                    	xor	ax,ax
+   600                                  .9:
+   601 000002F7 5B595A5E5F1F07          	popm	bx,cx,dx,si,di,ds,es
+   602 000002FE C3                      	ret
+   603                                  
+   604                                  
+   605                                  %include "font3270.inc"
+   606                              <1> ; font3270.inc -- an 8x16 code page 437 font, generated.  Do not edit.
+   607                              <1> ;
+   608                              <1> ; Made by mkfont.py from ../../3270.SFD: the IBM 3270 face by the 3270font
+   609                              <1> ; project (rbanffy), rasterized to eight by sixteen; box drawing and
+   610                              <1> ; blocks B0..DF drawn to VGA geometry so they tile.  Sixteen bytes a
+   611                              <1> ; character, top row first, bit 7 leftmost.  4096 bytes.
+   612                              <1> 
+   613                              <1> v3_font:
+   614 000002FF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 00
+   614 00000308 00000000000000      <1>
+   615 0000030F 0000003C2255555522- <1> 	db 0x00,0x00,0x00,0x3C,0x22,0x55,0x55,0x55,0x22,0x1C,0x00,0x00,0x00,0x00,0x00,0x00	; 01
+   615 00000318 1C000000000000      <1>
+   616 0000031F 0000003E2A6B7F6B36- <1> 	db 0x00,0x00,0x00,0x3E,0x2A,0x6B,0x7F,0x6B,0x36,0x1C,0x00,0x00,0x00,0x00,0x00,0x00	; 02
+   616 00000328 1C000000000000      <1>
+   617 0000032F 00000000143E7F3E3E- <1> 	db 0x00,0x00,0x00,0x00,0x14,0x3E,0x7F,0x3E,0x3E,0x1C,0x08,0x00,0x00,0x00,0x00,0x00	; 03
+   617 00000338 1C080000000000      <1>
+   618 0000033F 000000000808183C7E- <1> 	db 0x00,0x00,0x00,0x00,0x08,0x08,0x18,0x3C,0x7E,0x18,0x18,0x08,0x00,0x00,0x00,0x00	; 04
+   618 00000348 18180800000000      <1>
+   619 0000034F 0000000000081C087E- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x08,0x1C,0x08,0x7E,0x7F,0x08,0x18,0x00,0x00,0x00,0x00	; 05
+   619 00000358 7F081800000000      <1>
+   620 0000035F 00000000081C3C3E7F- <1> 	db 0x00,0x00,0x00,0x00,0x08,0x1C,0x3C,0x3E,0x7F,0x3E,0x1C,0x18,0x00,0x00,0x00,0x00	; 06
+   620 00000368 3E1C1800000000      <1>
+   621 0000036F 0000000000081C1C08- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x08,0x1C,0x1C,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 07
+   621 00000378 00000000000000      <1>
+   622 0000037F FFFFFFFFE3C3C1E3E7- <1> 	db 0xFF,0xFF,0xFF,0xFF,0xE3,0xC3,0xC1,0xE3,0xE7,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF	; 08
+   622 00000388 FFFFFFFFFFFFFF      <1>
+   623 0000038F 0000001C2241414141- <1> 	db 0x00,0x00,0x00,0x1C,0x22,0x41,0x41,0x41,0x41,0x21,0x1E,0x00,0x00,0x00,0x00,0x00	; 09
+   623 00000398 211E0000000000      <1>
+   624 0000039F FFFFFFE3C99DBD9DC9- <1> 	db 0xFF,0xFF,0xFF,0xE3,0xC9,0x9D,0xBD,0x9D,0xC9,0xE3,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF	; 0A
+   624 000003A8 E3FFFFFFFFFFFF      <1>
+   625 000003AF 000003010B14241408- <1> 	db 0x00,0x00,0x03,0x01,0x0B,0x14,0x24,0x14,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0B
+   625 000003B8 00000000000000      <1>
+   626 000003BF 000000000814241408- <1> 	db 0x00,0x00,0x00,0x00,0x08,0x14,0x24,0x14,0x08,0x08,0x1C,0x08,0x00,0x00,0x00,0x00	; 0C
+   626 000003C8 081C0800000000      <1>
+   627 000003CF 10080E090808080808- <1> 	db 0x10,0x08,0x0E,0x09,0x08,0x08,0x08,0x08,0x08,0x08,0x30,0x30,0x00,0x00,0x00,0x00	; 0D
+   627 000003D8 08303000000000      <1>
+   628 000003DF 10080E090909090909- <1> 	db 0x10,0x08,0x0E,0x09,0x09,0x09,0x09,0x09,0x09,0x09,0x31,0x32,0x06,0x06,0x00,0x00	; 0E
+   628 000003E8 09313206060000      <1>
+   629 000003EF 0000084A2A14E5142A- <1> 	db 0x00,0x00,0x08,0x4A,0x2A,0x14,0xE5,0x14,0x2A,0x49,0x08,0x00,0x00,0x00,0x00,0x00	; 0F
+   629 000003F8 49080000000000      <1>
+   630 000003FF 000040303C3E302000- <1> 	db 0x00,0x00,0x40,0x30,0x3C,0x3E,0x30,0x20,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 10
+   630 00000408 00000000000000      <1>
+   631 0000040F 000001063E1E060100- <1> 	db 0x00,0x00,0x01,0x06,0x3E,0x1E,0x06,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 11
+   631 00000418 00000000000000      <1>
+   632 0000041F 000008183C4A087E18- <1> 	db 0x00,0x00,0x08,0x18,0x3C,0x4A,0x08,0x7E,0x18,0x18,0x08,0x00,0x00,0x00,0x00,0x00	; 12
+   632 00000428 18080000000000      <1>
+   633 0000042F 001414141414141414- <1> 	db 0x00,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x00,0x00,0x14,0x00,0x00,0x00,0x00	; 13
+   633 00000438 00001400000000      <1>
+   634 0000043F 007844444478404044- <1> 	db 0x00,0x78,0x44,0x44,0x44,0x78,0x40,0x40,0x44,0x4E,0x44,0x44,0x04,0x00,0x00,0x00	; 14
+   634 00000448 4E444404000000      <1>
+   635 0000044F 001C20206050484422- <1> 	db 0x00,0x1C,0x20,0x20,0x60,0x50,0x48,0x44,0x22,0x12,0x0A,0x04,0x04,0x38,0x00,0x00	; 15
+   635 00000458 120A0404380000      <1>
+   636 0000045F 0000000000007E7E7E- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x7E,0x7E,0x7E,0x7E,0x00,0x00,0x00,0x00,0x00,0x00	; 16
+   636 00000468 7E000000000000      <1>
+   637 0000046F 000008183C4A087E18- <1> 	db 0x00,0x00,0x08,0x18,0x3C,0x4A,0x08,0x7E,0x18,0x18,0x08,0x3E,0x00,0x00,0x00,0x00	; 17
+   637 00000478 18083E00000000      <1>
+   638 0000047F 000008183C4A080808- <1> 	db 0x00,0x00,0x08,0x18,0x3C,0x4A,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00,0x00	; 18
+   638 00000488 08080000000000      <1>
+   639 0000048F 000008080808087E18- <1> 	db 0x00,0x00,0x08,0x08,0x08,0x08,0x08,0x7E,0x18,0x18,0x08,0x00,0x00,0x00,0x00,0x00	; 19
+   639 00000498 18080000000000      <1>
+   640 0000049F 00000000040406FF04- <1> 	db 0x00,0x00,0x00,0x00,0x04,0x04,0x06,0xFF,0x04,0x04,0x00,0x00,0x00,0x00,0x00,0x00	; 1A
+   640 000004A8 04000000000000      <1>
+   641 000004AF 000000001010307F10- <1> 	db 0x00,0x00,0x00,0x00,0x10,0x10,0x30,0x7F,0x10,0x10,0x00,0x00,0x00,0x00,0x00,0x00	; 1B
+   641 000004B8 10000000000000      <1>
+   642 000004BF 000000004040404040- <1> 	db 0x00,0x00,0x00,0x00,0x40,0x40,0x40,0x40,0x40,0x40,0x7F,0x00,0x00,0x00,0x00,0x00	; 1C
+   642 000004C8 407F0000000000      <1>
+   643 000004CF 000000001414367F14- <1> 	db 0x00,0x00,0x00,0x00,0x14,0x14,0x36,0x7F,0x14,0x14,0x00,0x00,0x00,0x00,0x00,0x00	; 1D
+   643 000004D8 14000000000000      <1>
+   644 000004DF 000008081C1C3E7F00- <1> 	db 0x00,0x00,0x08,0x08,0x1C,0x1C,0x3E,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 1E
+   644 000004E8 00000000000000      <1>
+   645 000004EF 00007F3E1C1C080800- <1> 	db 0x00,0x00,0x7F,0x3E,0x1C,0x1C,0x08,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 1F
+   645 000004F8 00000000000000      <1>
+   646 000004FF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 20
+   646 00000508 00000000000000      <1>
+   647 0000050F 000808080808080808- <1> 	db 0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x08,0x00,0x00,0x00,0x00	; 21
+   647 00000518 00000800000000      <1>
+   648 0000051F 002424240000000000- <1> 	db 0x00,0x24,0x24,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 22
+   648 00000528 00000000000000      <1>
+   649 0000052F 0000247E2424247E24- <1> 	db 0x00,0x00,0x24,0x7E,0x24,0x24,0x24,0x7E,0x24,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 23
+   649 00000538 00000000000000      <1>
+   650 0000053F 0008083F48483C0B09- <1> 	db 0x00,0x08,0x08,0x3F,0x48,0x48,0x3C,0x0B,0x09,0x09,0x7E,0x08,0x08,0x00,0x00,0x00	; 24
+   650 00000548 097E0808000000      <1>
+   651 0000054F 002050710204040810- <1> 	db 0x00,0x20,0x50,0x71,0x02,0x04,0x04,0x08,0x10,0x20,0x43,0x05,0x03,0x00,0x00,0x00	; 25
+   651 00000558 20430503000000      <1>
+   652 0000055F 000030484848705051- <1> 	db 0x00,0x00,0x30,0x48,0x48,0x48,0x70,0x50,0x51,0x4A,0x44,0x3A,0x01,0x00,0x00,0x00	; 26
+   652 00000568 4A443A01000000      <1>
+   653 0000056F 000808080000000000- <1> 	db 0x00,0x08,0x08,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 27
+   653 00000578 00000000000000      <1>
+   654 0000057F 000004081010101010- <1> 	db 0x00,0x00,0x04,0x08,0x10,0x10,0x10,0x10,0x10,0x10,0x08,0x04,0x00,0x00,0x00,0x00	; 28
+   654 00000588 10080400000000      <1>
+   655 0000058F 000010080404040404- <1> 	db 0x00,0x00,0x10,0x08,0x04,0x04,0x04,0x04,0x04,0x04,0x08,0x10,0x00,0x00,0x00,0x00	; 29
+   655 00000598 04081000000000      <1>
+   656 0000059F 000008492A142A4A49- <1> 	db 0x00,0x00,0x08,0x49,0x2A,0x14,0x2A,0x4A,0x49,0x08,0x00,0x00,0x00,0x00,0x00,0x00	; 2A
+   656 000005A8 08000000000000      <1>
+   657 000005AF 0000000808087F0808- <1> 	db 0x00,0x00,0x00,0x08,0x08,0x08,0x7F,0x08,0x08,0x08,0x00,0x00,0x00,0x00,0x00,0x00	; 2B
+   657 000005B8 08000000000000      <1>
+   658 000005BF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x0C,0x0C,0x18,0x30,0x10,0x00	; 2C
+   658 000005C8 080C0C18301000      <1>
+   659 000005CF 0000000000003E0000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x3E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 2D
+   659 000005D8 00000000000000      <1>
+   660 000005DF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00,0x00	; 2E
+   660 000005E8 00181800000000      <1>
+   661 000005EF 000000010204040810- <1> 	db 0x00,0x00,0x00,0x01,0x02,0x04,0x04,0x08,0x10,0x20,0x40,0x00,0x00,0x00,0x00,0x00	; 2F
+   661 000005F8 20400000000000      <1>
+   662 000005FF 001C22414149494941- <1> 	db 0x00,0x1C,0x22,0x41,0x41,0x49,0x49,0x49,0x41,0x41,0x22,0x1C,0x00,0x00,0x00,0x00	; 30
+   662 00000608 41221C00000000      <1>
+   663 0000060F 000818282808080808- <1> 	db 0x00,0x08,0x18,0x28,0x28,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 31
+   663 00000618 08080800000000      <1>
+   664 0000061F 001E21410102040408- <1> 	db 0x00,0x1E,0x21,0x41,0x01,0x02,0x04,0x04,0x08,0x10,0x20,0x7F,0x00,0x00,0x00,0x00	; 32
+   664 00000628 10207F00000000      <1>
+   665 0000062F 003F0102040C040201- <1> 	db 0x00,0x3F,0x01,0x02,0x04,0x0C,0x04,0x02,0x01,0x01,0x42,0x3C,0x00,0x00,0x00,0x00	; 33
+   665 00000638 01423C00000000      <1>
+   666 0000063F 00060A122242427F02- <1> 	db 0x00,0x06,0x0A,0x12,0x22,0x42,0x42,0x7F,0x02,0x02,0x02,0x02,0x00,0x00,0x00,0x00	; 34
+   666 00000648 02020200000000      <1>
+   667 0000064F 007F40407C02010101- <1> 	db 0x00,0x7F,0x40,0x40,0x7C,0x02,0x01,0x01,0x01,0x01,0x02,0x7C,0x00,0x00,0x00,0x00	; 35
+   667 00000658 01027C00000000      <1>
+   668 0000065F 001020404048546241- <1> 	db 0x00,0x10,0x20,0x40,0x40,0x48,0x54,0x62,0x41,0x41,0x22,0x1C,0x00,0x00,0x00,0x00	; 36
+   668 00000668 41221C00000000      <1>
+   669 0000066F 007F01020408101010- <1> 	db 0x00,0x7F,0x01,0x02,0x04,0x08,0x10,0x10,0x10,0x10,0x10,0x10,0x00,0x00,0x00,0x00	; 37
+   669 00000678 10101000000000      <1>
+   670 0000067F 001C2222221C222241- <1> 	db 0x00,0x1C,0x22,0x22,0x22,0x1C,0x22,0x22,0x41,0x41,0x22,0x1C,0x00,0x00,0x00,0x00	; 38
+   670 00000688 41221C00000000      <1>
+   671 0000068F 001E21414345291101- <1> 	db 0x00,0x1E,0x21,0x41,0x43,0x45,0x29,0x11,0x01,0x01,0x01,0x02,0x00,0x00,0x00,0x00	; 39
+   671 00000698 01010200000000      <1>
+   672 0000069F 000000000010180000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x10,0x18,0x00,0x00,0x00,0x18,0x18,0x00,0x00,0x00,0x00	; 3A
+   672 000006A8 00181800000000      <1>
+   673 000006AF 0000000000080C0000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x08,0x0C,0x00,0x00,0x08,0x0C,0x0C,0x18,0x30,0x10,0x00	; 3B
+   673 000006B8 080C0C18301000      <1>
+   674 000006BF 000002040810202010- <1> 	db 0x00,0x00,0x02,0x04,0x08,0x10,0x20,0x20,0x10,0x08,0x04,0x02,0x00,0x00,0x00,0x00	; 3C
+   674 000006C8 08040200000000      <1>
+   675 000006CF 000000007F00007F00- <1> 	db 0x00,0x00,0x00,0x00,0x7F,0x00,0x00,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 3D
+   675 000006D8 00000000000000      <1>
+   676 000006DF 000020100804020204- <1> 	db 0x00,0x00,0x20,0x10,0x08,0x04,0x02,0x02,0x04,0x08,0x10,0x20,0x00,0x00,0x00,0x00	; 3E
+   676 000006E8 08102000000000      <1>
+   677 000006EF 001E21210204080808- <1> 	db 0x00,0x1E,0x21,0x21,0x02,0x04,0x08,0x08,0x08,0x00,0x00,0x08,0x00,0x00,0x00,0x00	; 3F
+   677 000006F8 00000800000000      <1>
+   678 000006FF 003E41414955564840- <1> 	db 0x00,0x3E,0x41,0x41,0x49,0x55,0x56,0x48,0x40,0x40,0x40,0x3F,0x00,0x00,0x00,0x00	; 40
+   678 00000708 40403F00000000      <1>
+   679 0000070F 000008142241417F41- <1> 	db 0x00,0x00,0x08,0x14,0x22,0x41,0x41,0x7F,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; 41
+   679 00000718 41414100000000      <1>
+   680 0000071F 00007C222122243C22- <1> 	db 0x00,0x00,0x7C,0x22,0x21,0x22,0x24,0x3C,0x22,0x21,0x22,0x7C,0x00,0x00,0x00,0x00	; 42
+   680 00000728 21227C00000000      <1>
+   681 0000072F 00000E112040404040- <1> 	db 0x00,0x00,0x0E,0x11,0x20,0x40,0x40,0x40,0x40,0x20,0x11,0x0E,0x00,0x00,0x00,0x00	; 43
+   681 00000738 20110E00000000      <1>
+   682 0000073F 00007C222121212121- <1> 	db 0x00,0x00,0x7C,0x22,0x21,0x21,0x21,0x21,0x21,0x21,0x22,0x7C,0x00,0x00,0x00,0x00	; 44
+   682 00000748 21227C00000000      <1>
+   683 0000074F 00007F4040407C4040- <1> 	db 0x00,0x00,0x7F,0x40,0x40,0x40,0x7C,0x40,0x40,0x40,0x40,0x7F,0x00,0x00,0x00,0x00	; 45
+   683 00000758 40407F00000000      <1>
+   684 0000075F 00007F4040407E4040- <1> 	db 0x00,0x00,0x7F,0x40,0x40,0x40,0x7E,0x40,0x40,0x40,0x40,0x40,0x00,0x00,0x00,0x00	; 46
+   684 00000768 40404000000000      <1>
+   685 0000076F 00001C224040404D42- <1> 	db 0x00,0x00,0x1C,0x22,0x40,0x40,0x40,0x4D,0x42,0x42,0x22,0x1E,0x00,0x00,0x00,0x00	; 47
+   685 00000778 42221E00000000      <1>
+   686 0000077F 0000414141417F4141- <1> 	db 0x00,0x00,0x41,0x41,0x41,0x41,0x7F,0x41,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; 48
+   686 00000788 41414100000000      <1>
+   687 0000078F 00001C080808080808- <1> 	db 0x00,0x00,0x1C,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x1C,0x00,0x00,0x00,0x00	; 49
+   687 00000798 08081C00000000      <1>
+   688 0000079F 00000E040404040404- <1> 	db 0x00,0x00,0x0E,0x04,0x04,0x04,0x04,0x04,0x04,0x44,0x44,0x38,0x00,0x00,0x00,0x00	; 4A
+   688 000007A8 44443800000000      <1>
+   689 000007AF 000041424448505068- <1> 	db 0x00,0x00,0x41,0x42,0x44,0x48,0x50,0x50,0x68,0x44,0x42,0x41,0x00,0x00,0x00,0x00	; 4B
+   689 000007B8 44424100000000      <1>
+   690 000007BF 000040404040404040- <1> 	db 0x00,0x00,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x7F,0x00,0x00,0x00,0x00	; 4C
+   690 000007C8 40407F00000000      <1>
+   691 000007CF 000041635549494941- <1> 	db 0x00,0x00,0x41,0x63,0x55,0x49,0x49,0x49,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; 4D
+   691 000007D8 41414100000000      <1>
+   692 000007DF 000041615149454143- <1> 	db 0x00,0x00,0x41,0x61,0x51,0x49,0x45,0x41,0x43,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; 4E
+   692 000007E8 41414100000000      <1>
+   693 000007EF 00003E414141414141- <1> 	db 0x00,0x00,0x3E,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,0x00	; 4F
+   693 000007F8 41413E00000000      <1>
+   694 000007FF 00007C424141424478- <1> 	db 0x00,0x00,0x7C,0x42,0x41,0x41,0x42,0x44,0x78,0x40,0x40,0x40,0x00,0x00,0x00,0x00	; 50
+   694 00000808 40404000000000      <1>
+   695 0000080F 00001C224141414141- <1> 	db 0x00,0x00,0x1C,0x22,0x41,0x41,0x41,0x41,0x41,0x49,0x2A,0x1C,0x02,0x01,0x00,0x00	; 51
+   695 00000818 492A1C02010000      <1>
+   696 0000081F 00007E414141427C48- <1> 	db 0x00,0x00,0x7E,0x41,0x41,0x41,0x42,0x7C,0x48,0x44,0x42,0x41,0x00,0x00,0x00,0x00	; 52
+   696 00000828 44424100000000      <1>
+   697 0000082F 00003E414020100C02- <1> 	db 0x00,0x00,0x3E,0x41,0x40,0x20,0x10,0x0C,0x02,0x01,0x41,0x3E,0x00,0x00,0x00,0x00	; 53
+   697 00000838 01413E00000000      <1>
+   698 0000083F 00007F080808080808- <1> 	db 0x00,0x00,0x7F,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 54
+   698 00000848 08080800000000      <1>
+   699 0000084F 000041414141414141- <1> 	db 0x00,0x00,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,0x00	; 55
+   699 00000858 41413E00000000      <1>
+   700 0000085F 000041414122222414- <1> 	db 0x00,0x00,0x41,0x41,0x41,0x22,0x22,0x24,0x14,0x14,0x08,0x08,0x00,0x00,0x00,0x00	; 56
+   700 00000868 14080800000000      <1>
+   701 0000086F 000041414141494949- <1> 	db 0x00,0x00,0x41,0x41,0x41,0x41,0x49,0x49,0x49,0x49,0x55,0x22,0x00,0x00,0x00,0x00	; 57
+   701 00000878 49552200000000      <1>
+   702 0000087F 000041412214180814- <1> 	db 0x00,0x00,0x41,0x41,0x22,0x14,0x18,0x08,0x14,0x22,0x41,0x41,0x00,0x00,0x00,0x00	; 58
+   702 00000888 22414100000000      <1>
+   703 0000088F 000041221408080808- <1> 	db 0x00,0x00,0x41,0x22,0x14,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 59
+   703 00000898 08080800000000      <1>
+   704 0000089F 00007F010204080810- <1> 	db 0x00,0x00,0x7F,0x01,0x02,0x04,0x08,0x08,0x10,0x20,0x40,0x7F,0x00,0x00,0x00,0x00	; 5A
+   704 000008A8 20407F00000000      <1>
+   705 000008AF 001C10101010101010- <1> 	db 0x00,0x1C,0x10,0x10,0x10,0x10,0x10,0x10,0x10,0x10,0x10,0x10,0x1C,0x00,0x00,0x00	; 5B
+   705 000008B8 1010101C000000      <1>
+   706 000008BF 000000402010080804- <1> 	db 0x00,0x00,0x00,0x40,0x20,0x10,0x08,0x08,0x04,0x02,0x01,0x00,0x00,0x00,0x00,0x00	; 5C
+   706 000008C8 02010000000000      <1>
+   707 000008CF 001C04040404040404- <1> 	db 0x00,0x1C,0x04,0x04,0x04,0x04,0x04,0x04,0x04,0x04,0x04,0x04,0x1C,0x00,0x00,0x00	; 5D
+   707 000008D8 0404041C000000      <1>
+   708 000008DF 000814220000000000- <1> 	db 0x00,0x08,0x14,0x22,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 5E
+   708 000008E8 00000000000000      <1>
+   709 000008EF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0x00,0x00,0x00	; 5F
+   709 000008F8 0000007F000000      <1>
+   710 000008FF 001008040000000000- <1> 	db 0x00,0x10,0x08,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 60
+   710 00000908 00000000000000      <1>
+   711 0000090F 000000003C0202023E- <1> 	db 0x00,0x00,0x00,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 61
+   711 00000918 42423F00000000      <1>
+   712 0000091F 004040407844424242- <1> 	db 0x00,0x40,0x40,0x40,0x78,0x44,0x42,0x42,0x42,0x42,0x44,0x78,0x00,0x00,0x00,0x00	; 62
+   712 00000928 42447800000000      <1>
+   713 0000092F 000000001E20404040- <1> 	db 0x00,0x00,0x00,0x00,0x1E,0x20,0x40,0x40,0x40,0x40,0x20,0x1E,0x00,0x00,0x00,0x00	; 63
+   713 00000938 40201E00000000      <1>
+   714 0000093F 000202021E22424242- <1> 	db 0x00,0x02,0x02,0x02,0x1E,0x22,0x42,0x42,0x42,0x42,0x22,0x1E,0x00,0x00,0x00,0x00	; 64
+   714 00000948 42221E00000000      <1>
+   715 0000094F 000000003C4242427E- <1> 	db 0x00,0x00,0x00,0x00,0x3C,0x42,0x42,0x42,0x7E,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; 65
+   715 00000958 40403E00000000      <1>
+   716 0000095F 000E10107C10101010- <1> 	db 0x00,0x0E,0x10,0x10,0x7C,0x10,0x10,0x10,0x10,0x10,0x10,0x10,0x00,0x00,0x00,0x00	; 66
+   716 00000968 10101000000000      <1>
+   717 0000096F 000000001C22414142- <1> 	db 0x00,0x00,0x00,0x00,0x1C,0x22,0x41,0x41,0x42,0x25,0x19,0x01,0x22,0x1E,0x00,0x00	; 67
+   717 00000978 251901221E0000      <1>
+   718 0000097F 004040405C62424242- <1> 	db 0x00,0x40,0x40,0x40,0x5C,0x62,0x42,0x42,0x42,0x42,0x42,0x42,0x00,0x00,0x00,0x00	; 68
+   718 00000988 42424200000000      <1>
+   719 0000098F 000800000808080808- <1> 	db 0x00,0x08,0x00,0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 69
+   719 00000998 08080800000000      <1>
+   720 0000099F 000200000202020202- <1> 	db 0x00,0x02,0x00,0x00,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x22,0x1C,0x00,0x00	; 6A
+   720 000009A8 020202221C0000      <1>
+   721 000009AF 004040404244484870- <1> 	db 0x00,0x40,0x40,0x40,0x42,0x44,0x48,0x48,0x70,0x48,0x44,0x42,0x00,0x00,0x00,0x00	; 6B
+   721 000009B8 48444200000000      <1>
+   722 000009BF 000808080808080808- <1> 	db 0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x04,0x00,0x00,0x00,0x00	; 6C
+   722 000009C8 08080400000000      <1>
+   723 000009CF 000000007649494949- <1> 	db 0x00,0x00,0x00,0x00,0x76,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x00,0x00,0x00,0x00	; 6D
+   723 000009D8 49494900000000      <1>
+   724 000009DF 000000005C22222222- <1> 	db 0x00,0x00,0x00,0x00,0x5C,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x00,0x00,0x00,0x00	; 6E
+   724 000009E8 22222200000000      <1>
+   725 000009EF 000000003C42424242- <1> 	db 0x00,0x00,0x00,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; 6F
+   725 000009F8 42423C00000000      <1>
+   726 000009FF 000000007844424242- <1> 	db 0x00,0x00,0x00,0x00,0x78,0x44,0x42,0x42,0x42,0x42,0x44,0x78,0x40,0x40,0x40,0x00	; 70
+   726 00000A08 42447840404000      <1>
+   727 00000A0F 000000001E22424242- <1> 	db 0x00,0x00,0x00,0x00,0x1E,0x22,0x42,0x42,0x42,0x42,0x22,0x1E,0x02,0x02,0x03,0x00	; 71
+   727 00000A18 42221E02020300      <1>
+   728 00000A1F 000000004C12202020- <1> 	db 0x00,0x00,0x00,0x00,0x4C,0x12,0x20,0x20,0x20,0x20,0x20,0x20,0x00,0x00,0x00,0x00	; 72
+   728 00000A28 20202000000000      <1>
+   729 00000A2F 000000003C42201008- <1> 	db 0x00,0x00,0x00,0x00,0x3C,0x42,0x20,0x10,0x08,0x04,0x42,0x3C,0x00,0x00,0x00,0x00	; 73
+   729 00000A38 04423C00000000      <1>
+   730 00000A3F 000808083E08080808- <1> 	db 0x00,0x08,0x08,0x08,0x3E,0x08,0x08,0x08,0x08,0x08,0x08,0x04,0x00,0x00,0x00,0x00	; 74
+   730 00000A48 08080400000000      <1>
+   731 00000A4F 000000004242424242- <1> 	db 0x00,0x00,0x00,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 75
+   731 00000A58 42423F00000000      <1>
+   732 00000A5F 000000004141412222- <1> 	db 0x00,0x00,0x00,0x00,0x41,0x41,0x41,0x22,0x22,0x14,0x08,0x08,0x00,0x00,0x00,0x00	; 76
+   732 00000A68 14080800000000      <1>
+   733 00000A6F 000000004141414149- <1> 	db 0x00,0x00,0x00,0x00,0x41,0x41,0x41,0x41,0x49,0x49,0x55,0x22,0x00,0x00,0x00,0x00	; 77
+   733 00000A78 49552200000000      <1>
+   734 00000A7F 000000004122241808- <1> 	db 0x00,0x00,0x00,0x00,0x41,0x22,0x24,0x18,0x08,0x14,0x22,0x41,0x00,0x00,0x00,0x00	; 78
+   734 00000A88 14224100000000      <1>
+   735 00000A8F 000000004242424242- <1> 	db 0x00,0x00,0x00,0x00,0x42,0x42,0x42,0x42,0x42,0x22,0x14,0x08,0x10,0x20,0x40,0x00	; 79
+   735 00000A98 22140810204000      <1>
+   736 00000A9F 000000007F02040808- <1> 	db 0x00,0x00,0x00,0x00,0x7F,0x02,0x04,0x08,0x08,0x10,0x20,0x7F,0x00,0x00,0x00,0x00	; 7A
+   736 00000AA8 10207F00000000      <1>
+   737 00000AAF 000C10101010201010- <1> 	db 0x00,0x0C,0x10,0x10,0x10,0x10,0x20,0x10,0x10,0x10,0x10,0x10,0x0C,0x00,0x00,0x00	; 7B
+   737 00000AB8 1010100C000000      <1>
+   738 00000ABF 080808080808080808- <1> 	db 0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00	; 7C
+   738 00000AC8 08080808080800      <1>
+   739 00000ACF 003008080808040808- <1> 	db 0x00,0x30,0x08,0x08,0x08,0x08,0x04,0x08,0x08,0x08,0x08,0x08,0x30,0x00,0x00,0x00	; 7D
+   739 00000AD8 08080830000000      <1>
+   740 00000ADF 003049060000000000- <1> 	db 0x00,0x30,0x49,0x06,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 7E
+   740 00000AE8 00000000000000      <1>
+   741 00000AEF 000000182422424242- <1> 	db 0x00,0x00,0x00,0x18,0x24,0x22,0x42,0x42,0x42,0x42,0x7E,0x00,0x00,0x00,0x00,0x00	; 7F
+   741 00000AF8 427E0000000000      <1>
+   742 00000AFF 00000E112040404040- <1> 	db 0x00,0x00,0x0E,0x11,0x20,0x40,0x40,0x40,0x40,0x20,0x11,0x0E,0x04,0x04,0x04,0x18	; 80
+   742 00000B08 20110E04040418      <1>
+   743 00000B0F 000024004242424242- <1> 	db 0x00,0x00,0x24,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 81
+   743 00000B18 42423F00000000      <1>
+   744 00000B1F 020408003C4242427E- <1> 	db 0x02,0x04,0x08,0x00,0x3C,0x42,0x42,0x42,0x7E,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; 82
+   744 00000B28 40403E00000000      <1>
+   745 00000B2F 081422003C0202023E- <1> 	db 0x08,0x14,0x22,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 83
+   745 00000B38 42423F00000000      <1>
+   746 00000B3F 002400003C0202023E- <1> 	db 0x00,0x24,0x00,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 84
+   746 00000B48 42423F00000000      <1>
+   747 00000B4F 201008003C0202023E- <1> 	db 0x20,0x10,0x08,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 85
+   747 00000B58 42423F00000000      <1>
+   748 00000B5F 242418003C0202023E- <1> 	db 0x24,0x24,0x18,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 86
+   748 00000B68 42423F00000000      <1>
+   749 00000B6F 000000001E20404040- <1> 	db 0x00,0x00,0x00,0x00,0x1E,0x20,0x40,0x40,0x40,0x40,0x20,0x1E,0x04,0x04,0x04,0x18	; 87
+   749 00000B78 40201E04040418      <1>
+   750 00000B7F 081424003C4242427E- <1> 	db 0x08,0x14,0x24,0x00,0x3C,0x42,0x42,0x42,0x7E,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; 88
+   750 00000B88 40403E00000000      <1>
+   751 00000B8F 002400003C4242427E- <1> 	db 0x00,0x24,0x00,0x00,0x3C,0x42,0x42,0x42,0x7E,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; 89
+   751 00000B98 40403E00000000      <1>
+   752 00000B9F 201008003C4242427E- <1> 	db 0x20,0x10,0x08,0x00,0x3C,0x42,0x42,0x42,0x7E,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; 8A
+   752 00000BA8 40403E00000000      <1>
+   753 00000BAF 002400000808080808- <1> 	db 0x00,0x24,0x00,0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 8B
+   753 00000BB8 08080800000000      <1>
+   754 00000BBF 000814220808080808- <1> 	db 0x00,0x08,0x14,0x22,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 8C
+   754 00000BC8 08080800000000      <1>
+   755 00000BCF 201008000808080808- <1> 	db 0x20,0x10,0x08,0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; 8D
+   755 00000BD8 08080800000000      <1>
+   756 00000BDF 240008142241417F41- <1> 	db 0x24,0x00,0x08,0x14,0x22,0x41,0x41,0x7F,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; 8E
+   756 00000BE8 41414100000000      <1>
+   757 00000BEF 241408000814224141- <1> 	db 0x24,0x14,0x08,0x00,0x08,0x14,0x22,0x41,0x41,0x7F,0x41,0x41,0x00,0x00,0x00,0x00	; 8F
+   757 00000BF8 7F414100000000      <1>
+   758 00000BFF 08087F4040407C4040- <1> 	db 0x08,0x08,0x7F,0x40,0x40,0x40,0x7C,0x40,0x40,0x40,0x40,0x7F,0x00,0x00,0x00,0x00	; 90
+   758 00000C08 40407F00000000      <1>
+   759 00000C0F 00000000760909192F- <1> 	db 0x00,0x00,0x00,0x00,0x76,0x09,0x09,0x19,0x2F,0x48,0x48,0x37,0x00,0x00,0x00,0x00	; 91
+   759 00000C18 48483700000000      <1>
+   760 00000C1F 00000F14244444477C- <1> 	db 0x00,0x00,0x0F,0x14,0x24,0x44,0x44,0x47,0x7C,0x44,0x44,0x47,0x00,0x00,0x00,0x00	; 92
+   760 00000C28 44444700000000      <1>
+   761 00000C2F 102824003C42424242- <1> 	db 0x10,0x28,0x24,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; 93
+   761 00000C38 42423C00000000      <1>
+   762 00000C3F 002400003C42424242- <1> 	db 0x00,0x24,0x00,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; 94
+   762 00000C48 42423C00000000      <1>
+   763 00000C4F 202010003C42424242- <1> 	db 0x20,0x20,0x10,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; 95
+   763 00000C58 42423C00000000      <1>
+   764 00000C5F 081422004242424242- <1> 	db 0x08,0x14,0x22,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 96
+   764 00000C68 42423F00000000      <1>
+   765 00000C6F 201008004242424242- <1> 	db 0x20,0x10,0x08,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; 97
+   765 00000C78 42423F00000000      <1>
+   766 00000C7F 000024004242424242- <1> 	db 0x00,0x00,0x24,0x00,0x42,0x42,0x42,0x42,0x42,0x22,0x14,0x08,0x10,0x20,0x40,0x00	; 98
+   766 00000C88 22140810204000      <1>
+   767 00000C8F 12003E414141414141- <1> 	db 0x12,0x00,0x3E,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,0x00	; 99
+   767 00000C98 41413E00000000      <1>
+   768 00000C9F 240041414141414141- <1> 	db 0x24,0x00,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,0x00	; 9A
+   768 00000CA8 41413E00000000      <1>
+   769 00000CAF 0008083E484848483E- <1> 	db 0x00,0x08,0x08,0x3E,0x48,0x48,0x48,0x48,0x3E,0x08,0x08,0x00,0x00,0x00,0x00,0x00	; 9B
+   769 00000CB8 08080000000000      <1>
+   770 00000CBF 000C1210107C101010- <1> 	db 0x00,0x0C,0x12,0x10,0x10,0x7C,0x10,0x10,0x10,0x10,0x51,0x6E,0x00,0x00,0x00,0x00	; 9C
+   770 00000CC8 10516E00000000      <1>
+   771 00000CCF 00412214087F080808- <1> 	db 0x00,0x41,0x22,0x14,0x08,0x7F,0x08,0x08,0x08,0x7F,0x08,0x08,0x00,0x00,0x00,0x00	; 9D
+   771 00000CD8 7F080800000000      <1>
+   772 00000CDF 000868685D5A5A6A49- <1> 	db 0x00,0x08,0x68,0x68,0x5D,0x5A,0x5A,0x6A,0x49,0x49,0x49,0x4B,0x00,0x00,0x00,0x00	; 9E
+   772 00000CE8 49494B00000000      <1>
+   773 00000CEF 000708083E08080808- <1> 	db 0x00,0x07,0x08,0x08,0x3E,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x70,0x00,0x00	; 9F
+   773 00000CF8 08080808700000      <1>
+   774 00000CFF 020408003C0202023E- <1> 	db 0x02,0x04,0x08,0x00,0x3C,0x02,0x02,0x02,0x3E,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; A0
+   774 00000D08 42423F00000000      <1>
+   775 00000D0F 020408000808080808- <1> 	db 0x02,0x04,0x08,0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; A1
+   775 00000D18 08080800000000      <1>
+   776 00000D1F 040808003C42424242- <1> 	db 0x04,0x08,0x08,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; A2
+   776 00000D28 42423C00000000      <1>
+   777 00000D2F 020408004242424242- <1> 	db 0x02,0x04,0x08,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x3F,0x00,0x00,0x00,0x00	; A3
+   777 00000D38 42423F00000000      <1>
+   778 00000D3F 304906005C22222222- <1> 	db 0x30,0x49,0x06,0x00,0x5C,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x00,0x00,0x00,0x00	; A4
+   778 00000D48 22222200000000      <1>
+   779 00000D4F 490641615149454143- <1> 	db 0x49,0x06,0x41,0x61,0x51,0x49,0x45,0x41,0x43,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; A5
+   779 00000D58 41414100000000      <1>
+   780 00000D5F 00003C02023E424242- <1> 	db 0x00,0x00,0x3C,0x02,0x02,0x3E,0x42,0x42,0x42,0x3F,0x00,0x7F,0x00,0x00,0x00,0x00	; A6
+   780 00000D68 3F007F00000000      <1>
+   781 00000D6F 00003C424242424242- <1> 	db 0x00,0x00,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x7E,0x00,0x00,0x00,0x00	; A7
+   781 00000D78 3C007E00000000      <1>
+   782 00000D7F 000400000404040810- <1> 	db 0x00,0x04,0x00,0x00,0x04,0x04,0x04,0x08,0x10,0x21,0x21,0x1E,0x00,0x00,0x00,0x00	; A8
+   782 00000D88 21211E00000000      <1>
+   783 00000D8F 00000000003F404000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x3F,0x40,0x40,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; A9
+   783 00000D98 00000000000000      <1>
+   784 00000D9F 00000000007E010101- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x7E,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; AA
+   784 00000DA8 00000000000000      <1>
+   785 00000DAF 202020212204081321- <1> 	db 0x20,0x20,0x20,0x21,0x22,0x04,0x08,0x13,0x21,0x41,0x02,0x07,0x00,0x00,0x00,0x00	; AB
+   785 00000DB8 41020700000000      <1>
+   786 00000DBF 202020212204081123- <1> 	db 0x20,0x20,0x20,0x21,0x22,0x04,0x08,0x11,0x23,0x45,0x07,0x01,0x00,0x00,0x00,0x00	; AC
+   786 00000DC8 45070100000000      <1>
+   787 00000DCF 000800000808080808- <1> 	db 0x00,0x08,0x00,0x00,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x00,0x00,0x00,0x00	; AD
+   787 00000DD8 08080800000000      <1>
+   788 00000DDF 000000091224484824- <1> 	db 0x00,0x00,0x00,0x09,0x12,0x24,0x48,0x48,0x24,0x12,0x09,0x00,0x00,0x00,0x00,0x00	; AE
+   788 00000DE8 12090000000000      <1>
+   789 00000DEF 000000482412090912- <1> 	db 0x00,0x00,0x00,0x48,0x24,0x12,0x09,0x09,0x12,0x24,0x48,0x00,0x00,0x00,0x00,0x00	; AF
+   789 00000DF8 24480000000000      <1>
+   790 00000DFF 228822882288228822- <1> 	db 0x22,0x88,0x22,0x88,0x22,0x88,0x22,0x88,0x22,0x88,0x22,0x88,0x22,0x88,0x22,0x88	; B0
+   790 00000E08 88228822882288      <1>
+   791 00000E0F 55AA55AA55AA55AA55- <1> 	db 0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA	; B1
+   791 00000E18 AA55AA55AA55AA      <1>
+   792 00000E1F DD77DD77DD77DD77DD- <1> 	db 0xDD,0x77,0xDD,0x77,0xDD,0x77,0xDD,0x77,0xDD,0x77,0xDD,0x77,0xDD,0x77,0xDD,0x77	; B2
+   792 00000E28 77DD77DD77DD77      <1>
+   793 00000E2F 181818181818181818- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; B3
+   793 00000E38 18181818181818      <1>
+   794 00000E3F 18181818181818F818- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0xF8,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; B4
+   794 00000E48 18181818181818      <1>
+   795 00000E4F 181818181818F818F8- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0xF8,0x18,0xF8,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; B5
+   795 00000E58 18181818181818      <1>
+   796 00000E5F 66666666666666E666- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0xE6,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; B6
+   796 00000E68 66666666666666      <1>
+   797 00000E6F 00000000000000FE66- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFE,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; B7
+   797 00000E78 66666666666666      <1>
+   798 00000E7F 000000000000F818F8- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0xF8,0x18,0xF8,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; B8
+   798 00000E88 18181818181818      <1>
+   799 00000E8F 666666666666E606E6- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0xE6,0x06,0xE6,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; B9
+   799 00000E98 66666666666666      <1>
+   800 00000E9F 666666666666666666- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; BA
+   800 00000EA8 66666666666666      <1>
+   801 00000EAF 000000000000FE06E6- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0xFE,0x06,0xE6,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; BB
+   801 00000EB8 66666666666666      <1>
+   802 00000EBF 666666666666E606FE- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0xE6,0x06,0xFE,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; BC
+   802 00000EC8 00000000000000      <1>
+   803 00000ECF 66666666666666FE00- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0xFE,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; BD
+   803 00000ED8 00000000000000      <1>
+   804 00000EDF 181818181818F818F8- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0xF8,0x18,0xF8,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; BE
+   804 00000EE8 00000000000000      <1>
+   805 00000EEF 00000000000000F818- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xF8,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; BF
+   805 00000EF8 18181818181818      <1>
+   806 00000EFF 181818181818181F00- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; C0
+   806 00000F08 00000000000000      <1>
+   807 00000F0F 18181818181818FF00- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; C1
+   807 00000F18 00000000000000      <1>
+   808 00000F1F 00000000000000FF18- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; C2
+   808 00000F28 18181818181818      <1>
+   809 00000F2F 181818181818181F18- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x1F,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; C3
+   809 00000F38 18181818181818      <1>
+   810 00000F3F 00000000000000FF00- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; C4
+   810 00000F48 00000000000000      <1>
+   811 00000F4F 18181818181818FF18- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0xFF,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; C5
+   811 00000F58 18181818181818      <1>
+   812 00000F5F 1818181818181F181F- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x1F,0x18,0x1F,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; C6
+   812 00000F68 18181818181818      <1>
+   813 00000F6F 666666666666666766- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x67,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; C7
+   813 00000F78 66666666666666      <1>
+   814 00000F7F 66666666666667607F- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x67,0x60,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; C8
+   814 00000F88 00000000000000      <1>
+   815 00000F8F 0000000000007F6067- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0x60,0x67,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; C9
+   815 00000F98 66666666666666      <1>
+   816 00000F9F 666666666666E700FF- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0xE7,0x00,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; CA
+   816 00000FA8 00000000000000      <1>
+   817 00000FAF 000000000000FF00E7- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x00,0xE7,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; CB
+   817 00000FB8 66666666666666      <1>
+   818 00000FBF 666666666666676067- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x67,0x60,0x67,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; CC
+   818 00000FC8 66666666666666      <1>
+   819 00000FCF 000000000000FF00FF- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x00,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; CD
+   819 00000FD8 00000000000000      <1>
+   820 00000FDF 666666666666E700E7- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0xE7,0x00,0xE7,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; CE
+   820 00000FE8 66666666666666      <1>
+   821 00000FEF 181818181818FF00FF- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0xFF,0x00,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; CF
+   821 00000FF8 00000000000000      <1>
+   822 00000FFF 66666666666666FF00- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; D0
+   822 00001008 00000000000000      <1>
+   823 0000100F 000000000000FF00FF- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x00,0xFF,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; D1
+   823 00001018 18181818181818      <1>
+   824 0000101F 00000000000000FF66- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; D2
+   824 00001028 66666666666666      <1>
+   825 0000102F 666666666666667F00- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; D3
+   825 00001038 00000000000000      <1>
+   826 0000103F 1818181818181F181F- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x1F,0x18,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; D4
+   826 00001048 00000000000000      <1>
+   827 0000104F 0000000000001F181F- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x1F,0x18,0x1F,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; D5
+   827 00001058 18181818181818      <1>
+   828 0000105F 000000000000007F66- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x7F,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; D6
+   828 00001068 66666666666666      <1>
+   829 0000106F 66666666666666FF66- <1> 	db 0x66,0x66,0x66,0x66,0x66,0x66,0x66,0xFF,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66	; D7
+   829 00001078 66666666666666      <1>
+   830 0000107F 181818181818FF18FF- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0xFF,0x18,0xFF,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; D8
+   830 00001088 18181818181818      <1>
+   831 0000108F 18181818181818F800- <1> 	db 0x18,0x18,0x18,0x18,0x18,0x18,0x18,0xF8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; D9
+   831 00001098 00000000000000      <1>
+   832 0000109F 000000000000001F18- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1F,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18	; DA
+   832 000010A8 18181818181818      <1>
+   833 000010AF FFFFFFFFFFFFFFFFFF- <1> 	db 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF	; DB
+   833 000010B8 FFFFFFFFFFFFFF      <1>
+   834 000010BF 0000000000000000FF- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF	; DC
+   834 000010C8 FFFFFFFFFFFFFF      <1>
+   835 000010CF F0F0F0F0F0F0F0F0F0- <1> 	db 0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0	; DD
+   835 000010D8 F0F0F0F0F0F0F0      <1>
+   836 000010DF 0F0F0F0F0F0F0F0F0F- <1> 	db 0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F	; DE
+   836 000010E8 0F0F0F0F0F0F0F      <1>
+   837 000010EF FFFFFFFFFFFFFFFF00- <1> 	db 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; DF
+   837 000010F8 00000000000000      <1>
+   838 000010FF 00000000102E444444- <1> 	db 0x00,0x00,0x00,0x00,0x10,0x2E,0x44,0x44,0x44,0x44,0x44,0x3A,0x00,0x00,0x00,0x00	; E0
+   838 00001108 44443A00000000      <1>
+   839 0000110F 001824444844424241- <1> 	db 0x00,0x18,0x24,0x44,0x48,0x44,0x42,0x42,0x41,0x41,0x51,0x4E,0x00,0x00,0x00,0x00	; E1
+   839 00001118 41514E00000000      <1>
+   840 0000111F 00007F404040404040- <1> 	db 0x00,0x00,0x7F,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x40,0x00,0x00,0x00,0x00	; E2
+   840 00001128 40404000000000      <1>
+   841 0000112F 000000005A24242424- <1> 	db 0x00,0x00,0x00,0x00,0x5A,0x24,0x24,0x24,0x24,0x24,0x24,0x22,0x00,0x00,0x00,0x00	; E3
+   841 00001138 24242200000000      <1>
+   842 0000113F 00007F201010080808- <1> 	db 0x00,0x00,0x7F,0x20,0x10,0x10,0x08,0x08,0x08,0x10,0x20,0x7F,0x00,0x00,0x00,0x00	; E4
+   842 00001148 10207F00000000      <1>
+   843 0000114F 000000001A44444444- <1> 	db 0x00,0x00,0x00,0x00,0x1A,0x44,0x44,0x44,0x44,0x44,0x44,0x38,0x00,0x00,0x00,0x00	; E5
+   843 00001158 44443800000000      <1>
+   844 0000115F 000000004242424242- <1> 	db 0x00,0x00,0x00,0x00,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x7F,0x40,0x40,0x40,0x00	; E6
+   844 00001168 42427F40404000      <1>
+   845 0000116F 000000007E08080808- <1> 	db 0x00,0x00,0x00,0x00,0x7E,0x08,0x08,0x08,0x08,0x08,0x08,0x0C,0x00,0x00,0x00,0x00	; E7
+   845 00001178 08080C00000000      <1>
+   846 0000117F 000008083E49494949- <1> 	db 0x00,0x00,0x08,0x08,0x3E,0x49,0x49,0x49,0x49,0x3E,0x08,0x08,0x00,0x00,0x00,0x00	; E8
+   846 00001188 3E080800000000      <1>
+   847 0000118F 00003E414141414741- <1> 	db 0x00,0x00,0x3E,0x41,0x41,0x41,0x41,0x47,0x41,0x41,0x41,0x3E,0x00,0x00,0x00,0x00	; E9
+   847 00001198 41413E00000000      <1>
+   848 0000119F 00001C224141414141- <1> 	db 0x00,0x00,0x1C,0x22,0x41,0x41,0x41,0x41,0x41,0x42,0x22,0x77,0x00,0x00,0x00,0x00	; EA
+   848 000011A8 42227700000000      <1>
+   849 000011AF 00007C403C42424242- <1> 	db 0x00,0x00,0x7C,0x40,0x3C,0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00,0x00,0x00,0x00	; EB
+   849 000011B8 42423C00000000      <1>
+   850 000011BF 00000000007749497F- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x77,0x49,0x49,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; EC
+   850 000011C8 00000000000000      <1>
+   851 000011CF 00000000244A4A4A4A- <1> 	db 0x00,0x00,0x00,0x00,0x24,0x4A,0x4A,0x4A,0x4A,0x4A,0x4A,0x3C,0x08,0x08,0x08,0x00	; ED
+   851 000011D8 4A4A3C08080800      <1>
+   852 000011DF 000000003E40402038- <1> 	db 0x00,0x00,0x00,0x00,0x3E,0x40,0x40,0x20,0x38,0x40,0x40,0x3E,0x00,0x00,0x00,0x00	; EE
+   852 000011E8 40403E00000000      <1>
+   853 000011EF 0000001C2241414141- <1> 	db 0x00,0x00,0x00,0x1C,0x22,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00	; EF
+   853 000011F8 41414100000000      <1>
+   854 000011FF 0000007F0000007F00- <1> 	db 0x00,0x00,0x00,0x7F,0x00,0x00,0x00,0x7F,0x00,0x00,0x7F,0x00,0x00,0x00,0x00,0x00	; F0
+   854 00001208 007F0000000000      <1>
+   855 0000120F 000808087F08080808- <1> 	db 0x00,0x08,0x08,0x08,0x7F,0x08,0x08,0x08,0x08,0x00,0x7F,0x00,0x00,0x00,0x00,0x00	; F1
+   855 00001218 007F0000000000      <1>
+   856 0000121F 000020100804020204- <1> 	db 0x00,0x00,0x20,0x10,0x08,0x04,0x02,0x02,0x04,0x08,0x10,0x20,0x00,0x3F,0x00,0x00	; F2
+   856 00001228 081020003F0000      <1>
+   857 0000122F 000002040810202010- <1> 	db 0x00,0x00,0x02,0x04,0x08,0x10,0x20,0x20,0x10,0x08,0x04,0x02,0x00,0x3F,0x00,0x00	; F3
+   857 00001238 080402003F0000      <1>
+   858 0000123F 080808080808080808- <1> 	db 0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08	; F4
+   858 00001248 08080808080808      <1>
+   859 0000124F 080808080808080808- <1> 	db 0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x08,0x38	; F5
+   859 00001258 08080808080838      <1>
+   860 0000125F 000000180800007F00- <1> 	db 0x00,0x00,0x00,0x18,0x08,0x00,0x00,0x7F,0x00,0x08,0x18,0x00,0x00,0x00,0x00,0x00	; F6
+   860 00001268 08180000000000      <1>
+   861 0000126F 000000007049063049- <1> 	db 0x00,0x00,0x00,0x00,0x70,0x49,0x06,0x30,0x49,0x07,0x00,0x00,0x00,0x00,0x00,0x00	; F7
+   861 00001278 07000000000000      <1>
+   862 0000127F 001824241800000000- <1> 	db 0x00,0x18,0x24,0x24,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; F8
+   862 00001288 00000000000000      <1>
+   863 0000128F 0000000000081C1C08- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x08,0x1C,0x1C,0x08,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; F9
+   863 00001298 00000000000000      <1>
+   864 0000129F 000000000000101818- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x10,0x18,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; FA
+   864 000012A8 00000000000000      <1>
+   865 000012AF 000006040408080808- <1> 	db 0x00,0x00,0x06,0x04,0x04,0x08,0x08,0x08,0x08,0x48,0x30,0x10,0x00,0x00,0x00,0x00	; FB
+   865 000012B8 48301000000000      <1>
+   866 000012BF 003C12121212121200- <1> 	db 0x00,0x3C,0x12,0x12,0x12,0x12,0x12,0x12,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; FC
+   866 000012C8 00000000000000      <1>
+   867 000012CF 000C14020408101E00- <1> 	db 0x00,0x0C,0x14,0x02,0x04,0x08,0x10,0x1E,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; FD
+   867 000012D8 00000000000000      <1>
+   868 000012DF 00000000007E7E7E7E- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x7E,0x7E,0x7E,0x7E,0x7E,0x7E,0x00,0x00,0x00,0x00,0x00	; FE
+   868 000012E8 7E7E0000000000      <1>
+   869 000012EF 000000000000000000- <1> 	db 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; FF
+   869 000012F8 00000000000000      <1>
+   870                              <1> v3_font_len	equ	$ - v3_font

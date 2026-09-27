@@ -10,19 +10,19 @@ was found on the way, and what is left.**
 | Toolchain | NASM + Open Watcom C 1.9 |
 | Target | 64K ROM at `F000:0000` |
 | Assessed | 2026-09-06, by code inspection |
-| Last updated | 2026-09-13 — ROM shadowing working on hardware; Phase 4 still unrun |
+| Last updated | 2026-09-26 — Phase 7, the VGA3 video console and PS/2 keyboard, working |
 
 ---
 
 ## The short version
 
-**The board boots MS-DOS 6 to a prompt over the serial console, from the fixed disk or
-from a floppy, and formats its own disks.** Phases 0 through 4 and 6 are complete and
-verified on hardware, and so is Phase 5 — reset, shadowing, the watchdog and the second
-IDE device, recorded in 06b, 06c and 06d. Phase 3 is complete except for VT100 escape
-translation, which is deliberately parked until the video card and keyboard land, since
-both will change what the console has to translate. What is left after that is small and
-listed in section 09.
+**The board boots MS-DOS 6 to a prompt, from the fixed disk or from a floppy, formats its
+own disks, and drives its own display and keyboard.** Phases 0 through 6 are complete and
+verified on hardware — Phase 5's reset, shadowing, watchdog and second IDE device are
+recorded in 06b, 06c and 06d. **Phase 7, the ECB VGA3 video console and its PS/2 keyboard,
+is complete and recorded in section 10**; the serial console remains first-class and both
+run at once. VT100 escape translation is still parked, and is now the only part of Phase 3
+outstanding. What is left is listed in `0TODO.md`, which supersedes section 09.
 
 The original assessment held up: nothing was architecturally wrong, and the work went in
 the predicted order. What it could not predict was the hardware, and most of the time
@@ -129,14 +129,15 @@ The remaining stubs are deliberate.
 | `00–07` | CPU exceptions | stub | All alias to a single `IRET`. Unchanged. |
 | `08` | IRQ0 — timer tick | **working** | 18.2066 Hz, chains INT 1Ch, maintains BDA counters. |
 | `0C` | IRQ4 — SIO0 receive | **working** | New. Drains the UART into the BDA ring buffer. |
-| `09–0F` | other IRQs | EOI only | Non-specific EOI then `IRET`. |
-| `10` | Video | **working** | `10h_video.asm`. Serial-only, ANSI/VT100. See section 04a. |
+| `09` | IRQ1 — 8242 keyboard | **working** | New. Set-1 scan codes into the same ring buffer as the serial console. |
+| `0A–0F` | other IRQs | EOI only | Non-specific EOI then `IRET`. |
+| `10` | Video | **working** | `10h_video.asm` + `vga3.asm`. Serial ANSI/VT100, the VGA3 board, or both at once. Adds 12h and 1Ah. See section 07. |
 | `11` | Equipment list | **working** | Video bits now set; floppy bits still not. |
 | `12` | Conventional memory | **working** | Reports 640K. |
 | `13` | Disk | **working** | CHS 00/02/03/04/08/15 and packet 41–44/47/48. `4Eh` still stubbed. |
 | `14` | Serial | **complete** | Console port now protected from re-initialisation. |
 | `15` | Misc / system | **written** | 86h, 87h, 88h, C0h and 4Fh. Phase 4 — not yet built or run. |
-| `16` | Keyboard | **working** | `16h_kbd.asm`. Interrupt-driven, 00/01/02 + 10h/11h/12h. |
+| `16` | Keyboard | **working** | `16h_kbd.asm`. Interrupt-driven from both consoles, 00/01/02 + 10h/11h/12h. |
 | `17` | Printer | **working** | `17h_prn.asm`. Returns a clean not-present status. |
 | `18` | Boot failure | **working** | Prints, drops into the monitor, retries on exit. |
 | `19` | Bootstrap loader | **working** | `19h_boot.asm`. Loads and enters the boot sector. |
@@ -1234,6 +1235,11 @@ never span.
 
 ---
 
+### Phase 7 · The video console — **DONE**, see section 10
+
+The ECB VGA3 card: 80x25 colour text on an HD6445, and a PS/2 keyboard on its 8242.
+Both consoles are first-class and run at once. Item 12 of `0TODO.md`.
+
 ## 06 · Bring-up ladder
 
 Each rung is independently observable on the serial console, and each one only depends on
@@ -1795,7 +1801,9 @@ it wrong is a build that does too little rather than one that fails.
 ## 09 · Open items
 
 Small things that are known, deliberate, or simply not done yet. None of them block the
-DOS prompt.
+DOS prompt. `0TODO.md` is the live list and supersedes this section where they disagree;
+in particular the video and keyboard items here were closed by Phase 7, and the ROM is now
+2.4% free rather than 24%.
 
 ### Running DOS on this board
 
@@ -1906,19 +1914,217 @@ DOS prompt.
 | `strtoint.c` / `.h` | Hex string parsing for the monitor. `strtoint.h` did not exist; the function was being called with no declaration, so its `unsigned long` return was truncated. |
 | `19h_boot.asm` | INT 19h bootstrap and INT 18h boot-failure handler. |
 | `10h_video.asm` | INT 10h over ANSI/VT100. |
-| `16h_kbd.asm` | INT 16h, the IRQ4 receive ISR, and the ASCII→scan-code table. |
+| `16h_kbd.asm` | INT 16h, the IRQ4 serial receive ISR, the IRQ1 PS/2 ISR and its set-1 tables, and the ASCII→scan-code table. Both consoles fill one ring buffer. |
+| `vga3.asm` | The ECB VGA3 driver: CRTC timing, font, and the primitives INT 10h draws with. Writes only during vertical blanking. Includes `font3270.inc`. |
+| `font3270.inc` | 8x16 code page 437, generated by `mkfont.py` from `3270.SFD`. 4K. |
+| `mkfont.py` | The rasteriser. Bare Python: no FontForge, no freetype. |
 | `17h_prn.asm` | INT 17h. |
 
 Phase 4 added no files. `15h_misc.asm`, `stub.asm`, `start.asm`, `monitor.asm`,
-`debugmon.c` and `debugmon.h` were extended.
+`debugmon.c` and `debugmon.h` were extended. Phase 7 added `vga3.asm`, `font3270.inc`,
+`mkfont.py`, `tools/kbdiag.asm` and the `8088BIOSVGA3/` reference drivers.
 
 ### Monitor commands
 
-`DUMP` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST` `MKBOOT`
-`BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IOTIME` `IRQFIND` `GO` `INT13` `INT15`
-`SECCMP` `WDT` `EXIT`
+`DUMP` `FILL` `BDA` `IDENT` `LBA` `HDINIT` `GEO` `SECRAW` `SECRAW16` `SEC2` `SECTEST`
+`MKBOOT` `BOOTCHK` `BOOT` `IOR` `IORW` `IOW` `IOWW` `IOTIME` `IRQFIND` `GO` `INT13` `INT15`
+`SECCMP` `WDT` `EXIT` `FDC` `FDID` `FDREAD` `FDWRITE` `FDFMT` `FD13`
+`VGA3` `V3CRTC` `V3DUMP` `V3BEAM` `V3RDCHK` `VIDEO` `V3KBD`
 
 Several were written to answer one question and kept because they answered it — `IRQFIND`
 found the SIO0 interrupt line, `SECRAW` proved a card was short a byte per sector,
 `MKBOOT` separated the boot path from the console, and `GEO` let a geometry be tried
 without a rebuild.
+
+
+---
+
+## 10 · Phase 7 · The video console — **DONE**
+
+Item 12 of `0TODO.md`. New hardware, brought up in September 2026: an **ECB VGA3** card —
+Hitachi HD6445 CRTC, 32K of display memory, Intel 8242 keyboard controller, one ECB slot.
+
+### What the hardware turned out to be
+
+| | |
+|---|---|
+| I/O block | `04E0`–`04E7`. P3 jumpered `E0h`; the ECB rule puts Z80 port N at 386EX `400h+N`, and CS0 already decodes `0400`–`04FF` at seven wait states |
+| `+0` `+1` | 8242 — an 8042 with the PC/AT firmware, so the `60h`/`64h` protocol at another address |
+| `+2` `+3` | HD6445 address register, data register. The manual does not say which is which; `V3CRTC` tried both and `04E2` is the address |
+| `+4` | CFG, write only, cleared to zero by RESET — which is why the board comes up blanked and every early probe was safe |
+| `+5`–`+7` | address-high, address-low, data: the 32K a byte at a time, three I/O cycles each |
+| Memory window | CFG bit 7 set puts the 32K at `B8000`; clear, `B0000`. CS3 maps `B0000`–`BFFFF` to the bus with DRAM suppressed, 8-bit, five wait states |
+| K4 | 8242 interrupt. Both positions reach the 386EX INT0 pin — master IR1, `INT 09h` with the ICW2 already in use |
+| K1 | video retrace interrupt, INT0 or INT5. **Not used**; either position |
+| Sync jumpers | H negative, V positive for 80x25 |
+
+The 32K holds the screen at `0000` — 4000 bytes, character then attribute — and the font in
+the last 4K page, which CFG selects. The CRTC start address stays at zero so `B800:0000` is
+the top-left cell, which is what every DOS program expects.
+
+### The ladder
+
+Each rung a monitor command, each proving one thing, none written until the one below it had
+passed on hardware. This is the method section 06 describes, and it earned its keep four
+times over.
+
+| Rung | Command | What it established |
+|---|---|---|
+| 1 | `VGA3` | Two patterns at one address, then all 32K written with an address-dependent pattern. Presence, data path, and — because the pattern depends on all fifteen address bits — that no address line is dead or aliased |
+| 2 | `V3CRTC` | Self-test of the CRTC by writing and reading R14/R15, the only readable pair. Tried both port orders and reported which answered, settling the manual's ambiguity |
+| 3 | `V3MODE` | Timing and video on, with the screen cleared and the font blank — so the result was **sync**, a yes-or-no the monitor answers by itself, with nothing else able to confuse it |
+| 4 | `V3FONT` | Font loaded and a test screen painted: a numbered column ruler, a double-line frame, all 256 glyphs, attribute bars, a cursor. Each element answering a question the previous rung could not |
+| 5 | `V3KBD` | Controller status, self-test, interface test, command byte, keyboard reset — the first four needing no keyboard plugged in |
+| 6 | `V3KBD IRQ` | Which ICU input the keyboard raises, by holding a key unread so the request stays asserted |
+
+`V3MODE` and `V3FONT` have since been removed: POST does that work now, and `VIDEO` paints
+the same test screen through `INT 10h` so that it tests the driver rather than the board.
+
+### What the ladder caught
+
+**A column ruler instead of a white raster.** The test screen numbers its columns `00`–`79`
+along the top. A solid raster cannot show a missing edge; a numbered one can. This is the
+form every rung took — design the output so it answers the open question by itself.
+
+**R2, the horizontal sync position.** The arithmetic says 82. On the monitor, 68 centred the
+picture, and that value was adopted with a note saying it was measured rather than derived.
+It was wrong. The monitor was identifying the signal as 640x350 — the same frequencies as
+720x400, distinguished only by sync polarity — and applying 640-wide geometry to a 720-wide
+picture. The jumpers were the fix; R2 is 82.
+
+**An interrupt on a bus line nobody listens to.** The VGA3's own numbering calls its
+interrupt IRQ0, and the SBC's ECB connector has a `B_~IR0` pin — but the driver sheet carries
+only `~INT`, `~IR1`, `~IR2`, `~IR3`, `~IR5`, `~IR6`, `~IR7` to the CPU. `~IR0` stops at the
+connector. The `01` the probe saw in the request register was the timer, caught by chance.
+
+**A 70 Hz pulse train read as a keyboard interrupt.** With K1 in its other position the video
+retrace shared INT0, and a probe that only OR-accumulated the request register saw IR1
+latched before any key was pressed. It was diagnosed as reversed interrupt polarity. Moving
+K1 made it vanish.
+
+**A POST that only worked if you had run the probe first.** The PS/2 keyboard worked at the
+monitor prompt and then stopped, and the difference turned out to be that `V3KBD` had been
+run by hand in the same session. `kbc_init` drained the controller, wrote the command byte
+and enabled the interface; it did not send the `AA` controller self-test or the `FF` keyboard
+reset, and on this 8242 both are needed. **Power-cycle between a hand-run probe and any claim
+that POST code works.**
+
+The keyboard investigation before that went through the interrupt mask, the IVT, DOS's
+`STACKS` stub and the 8242's output buffer — all wrong. What cut through it was a `.COM`
+diagnostic (`tools/kbdiag.asm`) whose fourth test **polls the controller directly, bypassing
+every layer**: no bytes at all, so the interrupt path was never the question. That test is
+worth reaching for early the next time a device goes quiet.
+
+### Snow, and two designs that failed
+
+The 32K is shared between the CPU and the CRTC with **no arbitration**. A CPU access while
+the CRTC is fetching corrupts the fetch and the screen sparkles — measured on both the
+register path and the memory-mapped one. The CPU's own access is unharmed: `V3RDCHK` read
+the live screen 32,000 times without an error, so it is the CGA arrangement, the CPU winning
+the bus and the picture paying for it.
+
+**First design: queue the work, drain it during vertical blanking.** `INT 10h` appended
+operations to a 4K queue and returned; the retrace interrupt drained it. Blanking is 1,553 µs
+of a 14,271 µs frame, about thirteen row copies, so a whole-screen scroll took four frames —
+57 ms, slower than the same text at 9600 baud. Rejected as unusably slow.
+
+**Second design: know where the beam is.** The line rate is fixed by the 28.322 MHz crystal
+at 31.78 µs and counter 1 is a free-running 1 MHz clock, so from one timestamped blanking
+edge the row being drawn is arithmetic. Write to any row the beam is not on, and a scroll can
+run *behind* the beam — a row copies in 112 µs where the beam takes 508 µs to draw one. It
+was fast and it flickered. One real bug was found and fixed — the sync was trusted for two
+timer ticks, 110 ms, where the 16-bit microsecond counter can only express 65.5 ms, so any
+write in between computed a nonsense row. **It went on flickering after that was fixed, and
+the reason was never established.** The arithmetic checked out and the measurements agreed
+with it; something about writing while the beam is live disturbs this board more than the
+model predicts.
+
+**What is in the ROM: wait for blanking, then write.** Bit 1 of HD6445 register 31, read
+through the data port, is vertical blanking — learned from the SBC-188 BIOS, which scrolled
+on it. Every write waits for it. A whole-screen scroll is two frames, near 28 ms; a character
+waits at most one frame. It is the dullest of the three designs and the only one that works,
+because it needs no model of the hardware to be right — the chip says when it is not looking.
+
+The `V3BEAM` command remains, and measures what the argument rests on: frame 14,271 µs = 449
+lines, blanking 1,553 µs = 49 lines, the 1 MHz counter good to 0.02% against the crystal.
+
+### The SBC-188 BIOS as a reference
+
+Partway through, a set of drivers from John Coffman's 80C188 BIOS for this same card was
+brought into `bios/8088BIOSVGA3/`. Three things came from it and each was worth having.
+
+- **The CRTC parameters.** 449 lines at 70.08 Hz — the true VGA figure — with vsync on line
+  412 placed by the HD6445's extended registers R27 and R30, which a plain 6845 cannot do.
+  Our own table had a 453-line frame as a workaround for that limitation.
+- **The register-zeroing init.** All 40 registers written to zero before the table, so the
+  extended ones start known.
+- **`rd_crtc(31) & 2`.** The vertical blanking status, which the manual does not mention and
+  which the whole final design rests on. It had been looked for and not found: the address
+  port was probed for status and reads `FF`, and the conclusion drawn was that the board
+  offers none.
+
+Their font (`font_vga.asm`, the standard IBM VGA 8x16) is a drop-in alternative to the 3270
+face if the classic look is ever wanted; `font8x8.asm` serves their 43-line mode.
+
+### The font
+
+`mkfont.py` rasterises a FontForge `.sfd` into an 8x16 code page 437 table — bare Python, no
+FontForge, no freetype, because neither was available. It flattens the cubic outlines, fills
+by the non-zero winding rule on an 8x8 supersampled grid, and thresholds.
+
+Three things it does that a naive rasteriser does not:
+
+- **Dropout control**, in both axes. The threshold has to sit high — 69% coverage — for a
+  one-pixel stem to come out one pixel wide, and at that threshold a stem straddling a pixel
+  boundary vanishes entirely. Where the outline crosses a pixel row or column and nothing
+  lit, the pixel under the middle of the crossing is lit. This is what TrueType rasterisers
+  do and it is what makes the high threshold usable.
+- **Stroke normalisation.** Where a crossing is narrower than 1.6 pixels it is a single
+  stroke, and only the middle pixel is kept. Twenty-nine glyphs changed, all thinner. What
+  remains doubled is either two strokes meeting or a shallow diagonal, both of which the grid
+  requires.
+- **Box drawing is drawn, not rasterised.** `B0`–`DF` are generated pixel by pixel to VGA's
+  junction geometry so that corners and tees butt exactly. No outline scaled to eight pixels
+  would tile.
+
+The generated `font3270.inc` is committed, so the build needs no Python. **Hand edits to it
+would be lost on the next run** — see item 17.
+
+### Two consoles
+
+`bda.console` carries `CON_SERIAL` and `CON_VIDEO`. POST sets serial before the first
+`printf`; `vga3_init` adds video if the board answers. With both set the screen is mirrored
+down the serial line — which is the point, because a board whose only console is a video card
+it shares with the fault under investigation is a worse board to work on.
+
+`INT 10h` gates the whole ANSI path on one test in `vputc` and hooks the video path where
+something is drawn or the cursor moves. The BDA cursor is the single cursor: the serial side
+keeps it in step with what the terminal has done, the video side draws where it says.
+
+`INT 09h` and the serial receive ISR fill the same ring buffer at `40:1E`, so `INT 16h` did
+not change at all and DOS cannot tell which console a key came from.
+
+Two new `INT 10h` functions, 12h (`BL=10h`, EGA information) and 1Ah (display combination),
+both answering **VGA colour**. This is not what the hardware is. It is what stops a program
+from deciding it is on a CGA and polling `3DAh` for retrace — a port no chip select claims,
+where every read stalls 209 ms on the bus monitor. See item 16.
+
+### Files
+
+| File | Contents |
+|---|---|
+| `vga3.asm` | The driver: presence, CRTC timing, font load, CFG, and the primitives `INT 10h` draws with. Includes `font3270.inc` |
+| `font3270.inc` | The 8x16 CP437 font, generated. 4K |
+| `mkfont.py` | The rasteriser. `py mkfont.py 3270.SFD font3270.inc` |
+| `8088BIOSVGA3/` | The SBC-188 BIOS drivers, for reference. Not built |
+| `tools/kbdiag.asm` | A DOS `.COM` that reports why the keyboard is quiet. Six tests, of which the fourth — poll the device directly — is the one that matters |
+
+`10h_video.asm`, `16h_kbd.asm`, `main.c`, `bda.h`, `stub.asm` and `makefile` were extended.
+`debugmon.c` gained `VGA3`, `V3CRTC`, `V3KBD`, `V3DUMP`, `V3BEAM`, `V3RDCHK`, `VIDEO` and
+`FILL`, and lost `WDTSET`, `IOTIME1` and `IOWALL` to make room.
+
+### What Phase 7 cost
+
+The ROM went from 24% free to **2.4%** — 63,968 bytes of 65,536. About 14K, of which 4K is
+the font, which is permanent BIOS content rather than overhead. `MONITOR=0` still reclaims
+about 25K and is the escape hatch; see item 15.

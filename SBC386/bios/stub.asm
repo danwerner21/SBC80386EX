@@ -43,7 +43,7 @@ global	int_invalid_opcode	; 6
 global	int_FPU_escape		; 7
 
 ;;global	int_irq0	; (timer 0)	int_double_fault
-global	int_irq1	; (keyboard)	int_FPU_seg_overrun
+;;global	int_irq1	; (keyboard) -- real, in 16h_kbd.asm
 global	int_irq2	; (IRQ cascade)	int_invalid_TSS
 global	int_irq3	;		int_seg_not_present
 global	int_irq4	; (COM1)	int_stack_fault
@@ -137,7 +137,6 @@ int_nop:	iret
 NS_EOI	equ	0x20
 
 int_irq0:
-int_irq1:
 int_irq2:
 int_irq3:
 int_irq5:

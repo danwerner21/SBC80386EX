@@ -37,6 +37,8 @@
 #include "debugmon.h"
 #include "hdinit.h"
 
+int  vga3_init( void );		/* vga3.asm */
+
 #define LINE 40
 #define BYTES_PER_LINE 16
 #define DEFAULT_LEN 0x80	/* bytes shown when no end address is given */
@@ -247,6 +249,216 @@ static void io_write( word port, word val, int wide )
 			out	dx,al
 		}
 	}
+}
+
+
+/*
+ * The ECB VGA3 board, reached through its I/O block only.
+ *
+ * P3 selects A7..A3 of an eight-port block, and the ECB rule this board
+ * has used throughout puts Z80 port N at 386EX port 400h + N.  Jumpered
+ * to E0h, as it is, the block is 4E0h..4E7h -- inside the 0400..04FF
+ * window CS0 already decodes at seven wait states, so nothing has to be
+ * reconfigured to talk to it.  The manual's own SBC-188 example puts CFG
+ * at $4E4, which is the same arithmetic.
+ *
+ * The board offers two ways to its 32K: memory mapping, and these address
+ * registers.  The registers are used here because they cannot conflict
+ * with anything.  Memory mapping would land on CS3 at 000B_0000, which
+ * CS2 also claims -- CS2 covers the whole first megabyte and HALF_MEM
+ * cannot exclude it while SHADOW_MODE needs the DRAM under F0000.  That
+ * is a chip-select problem to solve later and on purpose, not one to
+ * stumble into while finding out whether the board works at all.
+ */
+#define V3_PORT		0x4E0		/* P3 jumpered to E0h */
+
+#define V3_KBD_DATA	(V3_PORT+0)	/* 8242, A0 low  */
+#define V3_KBD_CMD	(V3_PORT+1)	/* 8242, A0 high */
+#define V3_CRTC_ADR	(V3_PORT+2)	/* HD6445 address register */
+#define V3_CRTC_DAT	(V3_PORT+3)	/* HD6445 data register    */
+#define V3_CFG		(V3_PORT+4)	/* write only */
+#define V3_ADR_HI	(V3_PORT+5)	/* write only */
+#define V3_ADR_LO	(V3_PORT+6)	/* write only */
+#define V3_DATA		(V3_PORT+7)	/* read/write */
+
+#define V3_SIZE		0x8000		/* one 32K x 8 SRAM */
+
+/*
+ * Both address bytes are written before every access.
+ *
+ * Whether the address register post-increments is not documented and has
+ * not been established.  Re-seeking is correct either way and costs two
+ * I/O cycles; assuming it increments would be correct only if it does.
+ * When something later wants the speed, prove the behaviour first and
+ * write a second accessor -- do not quietly stop seeking here.
+ */
+static void v3_seek( word addr )
+{
+	io_write(V3_ADR_HI,(word)((addr >> 8) & 0xFF),0);
+	io_write(V3_ADR_LO,(word)(addr & 0xFF),0);
+}
+
+static byte v3_get( word addr )
+{
+	v3_seek(addr);
+	return( (byte)io_read(V3_DATA,0) );
+}
+
+static void v3_put( word addr, byte v )
+{
+	v3_seek(addr);
+	io_write(V3_DATA,v,0);
+}
+
+/*
+ * The CRTC, through whichever of the pair is the address register.
+ *
+ * The manual lists "I/O+2" and "I/O+3: addresses the 6445 CRTC" on
+ * separate lines and does not say which is which.  A 6845-family part
+ * takes a register number on one port and the value on the other, so
+ * getting it backwards writes register numbers into whatever register
+ * was last selected -- which on a CRTC means a garbage display rather
+ * than an error.  Cheaper to try both and find out.
+ */
+static byte v3_crtc_get( word ap, word dp, byte reg )
+{
+	io_write(ap,reg,0);
+	return( (byte)io_read(dp,0) );
+}
+
+static void v3_crtc_put( word ap, word dp, byte reg, byte val )
+{
+	io_write(ap,reg,0);
+	io_write(dp,val,0);
+}
+
+/* R14 and R15 hold the cursor address and are the readable pair on a
+   6845; R0-R13 are write only.  R14 carries the high half of a 14-bit
+   address, so only its low six bits are kept -- a test pattern has to
+   fit in them or it will "fail" correctly. */
+static int v3_crtc_try( word ap, word dp )
+{
+	v3_crtc_put(ap,dp,14,0x12);
+	v3_crtc_put(ap,dp,15,0x5A);
+	if( v3_crtc_get(ap,dp,14) != 0x12 )	return( 0 );
+	if( v3_crtc_get(ap,dp,15) != 0x5A )	return( 0 );
+
+	/* A second pattern, inverted where it can be.  One pattern agrees
+	   with a stuck bus as readily as with a working register. */
+	v3_crtc_put(ap,dp,14,0x2D);
+	v3_crtc_put(ap,dp,15,0xA5);
+	if( v3_crtc_get(ap,dp,14) != 0x2D )	return( 0 );
+	if( v3_crtc_get(ap,dp,15) != 0xA5 )	return( 0 );
+
+	return( 1 );
+}
+
+
+/* Depends on all fifteen address bits, so a dead or undecoded address
+   line shows up as a mismatch rather than as a pattern that happens to
+   agree with its own alias. */
+static byte v3_pat( word addr )
+{
+	return( (byte)(((addr >> 8) ^ addr ^ 0x5A) & 0xFF) );
+}
+
+/* INT 10h from C, for the VIDEO test screen: place the cursor, write a
+   cell without moving it, set the mode.  The mode set is 3 with bit 7
+   clear, so the screen is cleared and the cursor homed. */
+static void v10_goto( word row, word col )
+{
+	ASM {
+		mov	ah,2
+		xor	bh,bh
+		mov	dh,byte ptr [row]
+		mov	dl,byte ptr [col]
+		int	0x10
+	}
+}
+
+static void v10_cell( word row, word col, byte chr, byte attr )
+{
+	v10_goto(row,col);
+	ASM {
+		mov	ah,9
+		mov	al,[chr]
+		xor	bh,bh
+		mov	bl,[attr]
+		mov	cx,1
+		int	0x10
+	}
+}
+
+static void v10_text( word row, word col, const char *t, byte attr )
+{
+	while( *t )
+		v10_cell(row,col++,(byte)*t++,attr);
+}
+
+static void v10_mode( void )
+{
+	ASM {
+		mov	ax,0x0003
+		int	0x10
+	}
+}
+
+
+/*
+ * The 8242 keyboard controller: an 8042 with the PC/AT firmware in it,
+ * so this is the port 60h/64h protocol at 4E0h/4E1h.
+ *
+ * Status is read at +1.  Bit 0 (OBF) says a byte is waiting at +0; bit 1
+ * (IBF) says the last byte written has not been taken yet, and nothing
+ * may be written until it clears.  Every wait here is bounded by the
+ * 18.2hz tick, because a controller that is not there reads FF -- both
+ * bits set -- and a loop that trusted it would never end.
+ */
+#define K8_OBF		0x01
+#define K8_IBF		0x02
+
+#define K8_SELFTEST	0xAA		/* replies 55 */
+#define K8_IFTEST	0xAB		/* replies 00, or 1-4 naming a stuck line */
+#define K8_RDCMD	0x20		/* read the command byte */
+#define K8_WRCMD	0x60
+#define K8_ENABLE	0xAE		/* keyboard interface on */
+
+#define KB_RESET	0xFF		/* to the keyboard: replies FA, then AA */
+#define KB_ACK		0xFA
+#define KB_BAT_OK	0xAA
+
+static int v3_kbd_get( byte *v, word ticks )
+{
+	word	start = bda.timer_count_low;
+
+	do {
+		if( io_read(V3_KBD_CMD,0) & K8_OBF ) {
+			*v = (byte)io_read(V3_KBD_DATA,0);
+			return( 1 );
+		}
+	} while( (word)(bda.timer_count_low - start) < ticks );
+	return( 0 );
+}
+
+/* To the controller through +1, or to the keyboard through +0. */
+static int v3_kbd_put( word port, byte v )
+{
+	word	start = bda.timer_count_low;
+
+	do {
+		if( !(io_read(V3_KBD_CMD,0) & K8_IBF) ) {
+			io_write(port,v,0);
+			return( 1 );
+		}
+	} while( (word)(bda.timer_count_low - start) < 9 );
+	return( 0 );
+}
+
+/* Controller command that answers with one byte. */
+static int v3_kbd_ask( byte cmd, byte *reply )
+{
+	if( !v3_kbd_put(V3_KBD_CMD,cmd) )	return( 0 );
+	return( v3_kbd_get(reply,18) );
 }
 
 
@@ -815,6 +1027,37 @@ void debugmon(void)
 				end = start + (DEFAULT_LEN - 1);
 
 			DumpMemory(start,end);
+			continue;
+		}
+
+/*
+ * FILL -- write one byte value over a run of memory.
+ *
+ * Real mode, one byte at a time, so it lands on whatever the address
+ * decodes to -- including the ECB memory window at B0000..BFFFF, which
+ * is how the VGA3 in its memory-mapped mode gets its first writes.
+ */
+		if( is_cmd(&cp,"FILL") )
+		{
+			dword	a, n, v, inc;
+			word	i;
+			union {
+				byte	far *p;
+				struct { word off; word seg; } fp;
+			} m;
+
+			if( !parse_addr(&cp,&a) || !parse_val(&cp,&n) || !parse_val(&cp,&v)
+			    || n == 0 || n > 0xFFF0UL ) {
+				printf("usage: FILL <addr> <count> <byte> [<step>]   count to FFF0\n"
+				       "       with a step, each byte is the last plus step\n");
+				continue;
+			}
+			m.fp.seg = (word)(a >> 4);
+			m.fp.off = (word)(a & 0x0F);
+			if( !parse_val(&cp,&inc) )	inc = 0;
+			for( i = 0; i < (word)n; i++, v += inc )
+				m.p[i] = (byte)v;
+			printf("FILL: %04X:%04X, %u bytes\n", m.fp.seg, m.fp.off, (word)n);
 			continue;
 		}
 
@@ -2015,234 +2258,515 @@ void debugmon(void)
  * experiment.
  */
 /*
- * WDTSET -- change the bus-monitor watchdog reload, at runtime.
+ * VGA3 -- prove the video board is there, before anything depends on it.
  *
- * Section 06d worked out that the watchdog cannot trip during real I/O
- * and was right about that, but it put the timeout at 209ms by assuming
- * the counter runs at the CPU clock.  IOTIME then measured an undecoded
- * read at about 55ms, which is the same reload at roughly four times
- * that rate.  Neither figure can be had from the datasheet alone, and
- * the counter cannot be watched: reading it takes a bus cycle, and a bus
- * cycle is what reloads it in this mode.
+ * The first rung of the video phase, and deliberately the dullest: no
+ * CRTC, no font, no configuration register, nothing that could put a
+ * picture on a monitor.  Only "does the board decode where we think it
+ * does, and does its memory hold what we write".
  *
- * So change the reload and measure the effect.  If an undecoded read
- * gets shorter in proportion, the watchdog is what ends the cycle and
- * the write protocol works.  If nothing moves, one or the other is
- * false.  Two commands answer that; no amount of reading does.
+ * Everything above this rung depends on the answer.  A CRTC that will
+ * not program, a font that renders as noise and a screen that stays
+ * blank are one symptom if the board is not answering at all, and three
+ * different investigations if it is.  Phase 6 cost a week to learning
+ * that the hard way with a floppy controller.
  *
- * Runtime only, deliberately.  Nothing here touches POST, so a value
- * that turns out too short costs a power cycle rather than a reflash --
- * and too short is a real risk.  The watchdog supplies READY to a cycle
- * that has not finished, so a reload below the slowest legitimate access
- * ends real transfers early with whatever is on the bus.  Silent bad
- * data, which is the worst failure this board can produce.
+ * Safe to run: CFG clears to zero at RESET, which blanks the video, so
+ * nothing written here can reach a monitor.  It does overwrite the whole
+ * 32K, which holds the font and the display memory both -- reload them
+ * after running it.
+ *
+ *	VGA3			data path, then all 32K
+ *	VGA3 <addr>		read one byte
+ *	VGA3 <addr> <val>	write one byte and read it back
  */
-		if( is_cmd(&cp,"WDTSET") )
+/*
+ * V3CRTC -- is the CRTC there, and which port is the address register?
+ *
+ * Second rung of the video phase.  Still nothing that can reach a
+ * monitor: CFG is zero from RESET so video is blanked, and the cursor
+ * address registers do not affect anything that is not displayed.
+ *
+ * Proving the CRTC answers is worth a rung of its own because the
+ * failure it guards against is silent.  Program the whole register set
+ * through the wrong port and there is no error -- just a display that
+ * never syncs, which looks exactly like a bad font, bad timing values,
+ * a dead monitor, or a board that was never selected.
+ */
+/*
+ * V3KBD -- the keyboard controller, rung by rung.
+ *
+ * The first four need no keyboard plugged in: they are the controller
+ * proving it is an 8042 and that its connector wiring is sound.  Only
+ * then is the keyboard itself asked to reset, and a silence there is
+ * reported as a missing keyboard, not a fault.
+ *
+ *	V3KBD		status, self-test, interface test, command byte,
+ *			keyboard reset
+ *	V3KBD SCAN	print scan codes as keys are struck, until a key
+ *			arrives on the serial console
+ *	V3KBD IRQ	which ICU input the controller raises: hold a key,
+ *			it is not read, and the request stays up to be seen
+ */
+		if( is_cmd(&cp,"V3KBD") )
 		{
-			dword	v, back;
+			byte	st, v, cmdb;
+			word	i, start, base_m, base_s, new_m, new_s;
+			word	omask;
+
+			while( *cp == ' ' || *cp == 0x09 ) ++cp;
+
+			/* The interface comes up disabled after a power cycle and
+			   stays so until told otherwise.  SCAN and IRQ must not
+			   depend on the full probe having run first. */
+			v3_kbd_put(V3_KBD_CMD,K8_ENABLE);
+
+			/* INT 09h is live and would take every code first.  SCAN
+			   and IRQ hold IR1 masked while they run; the ISR gets
+			   it back, and any code left waiting, when they finish. */
+			omask = io_read(0x21,0);
+			io_write(0x21,omask | 0x02,0);
+
+			if( is_cmd(&cp,"SCAN") ) {
+				printf("V3KBD: scan codes.  Any key on the serial console ends it.\n");
+				while( bda.buffer_head == bda.buffer_tail )
+					if( io_read(V3_KBD_CMD,0) & K8_OBF )
+						printf("%02X ",(word)io_read(V3_KBD_DATA,0));
+				KBD_getchar();
+				printf("\n");
+				io_write(0x21,omask,0);
+				continue;
+			}
+
+			if( is_cmd(&cp,"IRQ") ) {
+				word	hi0, lo0, hi1, lo1;
+
+				/* IRQFIND's method, twice refined.
+
+				   The ECB sheet ties ~INT and ~IR1 together into the
+				   386EX INT0 pin, master IR1 -- the PC keyboard line.
+				   IR1 is masked and edge-triggered, so a key held
+				   with its code unread LATCHES in the request register
+				   and needs no luck to see.  IR0 is the timer, pending
+				   a few hundred nanoseconds a tick: it comes and goes
+				   by chance and is ignored.
+
+				   INT0 is also P3.2, and P3PIN reads the pin whatever
+				   mode it is in.  Its level is sampled both ways -- OR
+				   for ever-high, AND for ever-low -- because a line
+				   with the polarity backwards rests HIGH and DIPS for
+				   a key, and an OR alone cannot see a dip.  The bus
+				   lines are active low and inverted on the way in, so
+				   a card that drives an active-high request onto one
+				   does exactly that, and the ICU, wanting a rising
+				   edge, gets one at power-up and never again. */
+				while( io_read(V3_KBD_CMD,0) & K8_OBF )
+					io_read(V3_KBD_DATA,0);
+				base_m = base_s = hi0 = 0;	lo0 = 0xFF;
+				start = bda.timer_count_low;
+				do {
+					io_write(0x20,0x0A,0);	base_m |= io_read(0x20,0);
+					io_write(0xA0,0x0A,0);	base_s |= io_read(0xA0,0);
+					i = io_read(P3PIN,0);	hi0 |= i;	lo0 &= i;
+				} while( (word)(bda.timer_count_low - start) < 18 );
+				printf("idle      IRR master %02X slave %02X   INT0 %s\n"
+				       "NOW PRESS AND HOLD A KEY on the PS/2 keyboard.  Five seconds ...\n",
+					base_m, base_s,
+					(lo0 & 4) ? "HIGH" : (hi0 & 4) ? "toggling" : "low");
+				new_m = new_s = hi1 = 0;	lo1 = 0xFF;
+				start = bda.timer_count_low;
+				do {
+					io_write(0x20,0x0A,0);	new_m |= io_read(0x20,0);
+					io_write(0xA0,0x0A,0);	new_s |= io_read(0xA0,0);
+					i = io_read(P3PIN,0);	hi1 |= i;	lo1 &= i;
+				} while( (word)(bda.timer_count_low - start) < 5*18 );
+				st = (byte)io_read(V3_KBD_CMD,0);
+				while( io_read(V3_KBD_CMD,0) & K8_OBF )
+					io_read(V3_KBD_DATA,0);
+				printf("with key  IRR master %02X slave %02X   INT0 %s   8242 status %02X\n",
+					new_m, new_s,
+					(lo1 & 4) ? "HIGH" : (hi1 & 4) ? "went high" : "low",
+					(word)st);
+
+				if( !(st & K8_OBF) ) {
+					printf("OBF never set: no scan code arrived.  Is a keyboard plugged in?\n");
+					io_write(0x21,omask,0);
+					continue;
+				}
+				if( lo0 & 4 ) {
+					printf("INT0 rests HIGH with no key.  %s\n"
+					       "The card drives the line asserted at rest: polarity is backwards\n"
+					       "for this bus.  Try the /INT position, which is active low by\n"
+					       "definition and reaches the same INT0 pin.\n",
+						(lo1 & 4) ? "It stayed high with a key held."
+							  : "It DIPPED while a key was held.");
+					io_write(0x21,omask,0);
+					continue;
+				}
+				new_m &= ~base_m & 0xFE;	/* not IR0: the timer */
+				new_s &= ~base_s;
+				if( !new_m && !new_s && !(hi1 & 4) )
+					printf("A code is waiting, but INT0 never rose and nothing latched.\n"
+					       "The card is not driving /INT or IR1.\n");
+				else if( !new_m && !new_s )
+					printf("INT0 rose but nothing latched in the ICU: the pin reaches the\n"
+					       "CPU and INTCFG or ICW1 is not taking it.\n");
+				else
+					for( i = 0; i < 16; i++ )
+						if( (i < 8 ? new_m : new_s) & (1 << (i & 7)) )
+							printf("keyboard raises IR%u%s\n", i,
+								i == 1 ? " -- the PC keyboard line; INT 09h with ICW2 = 08h" : "");
+				io_write(0x21,omask,0);
+				continue;
+			}
+
+			io_write(0x21,omask,0);	/* the full probe runs with it live */
+			st = (byte)io_read(V3_KBD_CMD,0);
+			printf("V3KBD: status %02X",(word)st);
+			if( st == 0xFF ) {
+				printf(" -- floating.  Nothing answers at %04X.\n",
+					(word)V3_KBD_CMD);
+				continue;
+			}
+			printf("  (OBF %u  IBF %u  SYS %u  INH %u)\n",
+				(word)(st & 1), (word)(st >> 1 & 1),
+				(word)(st >> 2 & 1), (word)(st >> 4 & 1));
+
+			for( i = 0; i < 16 && (io_read(V3_KBD_CMD,0) & K8_OBF); i++ )
+				printf("       flushed %02X\n",(word)io_read(V3_KBD_DATA,0));
+
+			if( !v3_kbd_ask(K8_SELFTEST,&v) ) {
+				printf("       self-test: no reply.  Not an 8042, or not running.\n");
+				continue;
+			}
+			printf("       self-test %02X %s\n", (word)v,
+				v == 0x55 ? "-- an 8042-class controller is there" : "-- WRONG, expected 55");
+			if( v != 0x55 )	continue;
+
+			if( v3_kbd_ask(K8_IFTEST,&v) )
+				printf("       interface test %02X %s\n", (word)v,
+					v == 0 ? "-- clock and data lines good" :
+					v == 1 ? "-- CLOCK STUCK LOW" :
+					v == 2 ? "-- CLOCK STUCK HIGH" :
+					v == 3 ? "-- DATA STUCK LOW" :
+					v == 4 ? "-- DATA STUCK HIGH" : "-- unknown");
+			else
+				printf("       interface test: no reply\n");
+
+			if( v3_kbd_ask(K8_RDCMD,&cmdb) )
+				printf("       command byte %02X: kbd IRQ %s, translate %s, kbd %s\n",
+					(word)cmdb,
+					cmdb & 0x01 ? "on" : "off",
+					cmdb & 0x40 ? "ON (set 1 delivered)" : "off (set 2 raw)",
+					cmdb & 0x10 ? "DISABLED" : "enabled");
+
+			/* Self-test leaves the interface disabled on many parts;
+			   turn it on before speaking to the keyboard. */
+			v3_kbd_put(V3_KBD_CMD,K8_ENABLE);
+
+			if( !v3_kbd_put(V3_KBD_DATA,KB_RESET) || !v3_kbd_get(&v,18) ) {
+				printf("       keyboard reset: no reply.  No keyboard plugged in,\n"
+				       "       or it is not getting power.  The controller is fine.\n");
+				continue;
+			}
+			printf("       keyboard reset: %02X",(word)v);
+			if( v == KB_ACK && v3_kbd_get(&v,36) )
+				printf(" %02X",(word)v);
+			printf(v == KB_BAT_OK ? " -- keyboard passed its self-test\n"
+						: " -- expected FA then AA\n");
+			printf("       V3KBD SCAN shows codes; V3KBD IRQ finds the interrupt.\n");
+			continue;
+		}
+
+		if( is_cmd(&cp,"V3CRTC") )
+		{
+			word	ap, dp;
+			int	ok;
+
+			ap = V3_CRTC_ADR;
+			dp = V3_CRTC_DAT;
+			ok = v3_crtc_try(ap,dp);
+
+			if( !ok ) {
+				printf("V3CRTC: %04X as address did not answer; trying it the other\n"
+				       "        way round.\n", ap);
+				ap = V3_CRTC_DAT;
+				dp = V3_CRTC_ADR;
+				ok = v3_crtc_try(ap,dp);
+			}
+
+			if( !ok ) {
+				printf("V3CRTC: neither order answers.  R14/R15 read back %02X/%02X\n",
+					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,14),
+					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,15));
+				printf("        The 32K answered, so the board is selected and the\n"
+				       "        fault is the CRTC itself or its own decode -- not the\n"
+				       "        I/O block.\n");
+				continue;
+			}
+
+			printf("V3CRTC: address register %04X, data register %04X\n", ap, dp);
+			printf("        R14/R15 hold two patterns.  The CRTC is there.\n");
+
+			/* R16 and R17 are the light pen, read only, and on a
+			   board with no light pen they are whatever the part
+			   powers up holding.  Printed as information, not as
+			   a test -- there is no right answer to check. */
+			printf("        R14 %02X  R15 %02X  R16 %02X  R17 %02X\n",
+				(word)v3_crtc_get(ap,dp,14),
+				(word)v3_crtc_get(ap,dp,15),
+				(word)v3_crtc_get(ap,dp,16),
+				(word)v3_crtc_get(ap,dp,17));
+
+			/* Leave the cursor somewhere harmless rather than at
+			   the test pattern. */
+			v3_crtc_put(ap,dp,14,0);
+			v3_crtc_put(ap,dp,15,0);
+			continue;
+		}
+
+/*
+ * VIDEO -- paint the test screen through INT 10h.
+ *
+ * The rulers, the frame, the character set and the attribute bars that
+ * V3FONT once wrote straight into the board, now drawn by the driver:
+ * fn 02 to place the cursor, fn 09 to write a cell.  What it proves is
+ * the driver, not the board -- the board was proved before the driver
+ * existed.  The top-right ruler must read 79; the frame must be
+ * unbroken; the cursor lands after the pangram.
+ */
+		if( is_cmd(&cp,"VIDEO") )
+		{
+			word	r, c, i;
+
+			if( !(bda.console & CON_VIDEO) ) {
+				printf("VIDEO: the VGA3 is not on.  Is the board in?\n");
+				continue;
+			}
+			v10_mode();
+			for( c = 0; c < 80; c++ ) {
+				v10_cell(0, c, (byte)('0' + c / 10), 0x07);
+				v10_cell(1, c, (byte)('0' + c % 10), 0x07);
+				v10_cell(24,c, (byte)('0' + c % 10), 0x07);
+				if( c && c < 79 ) {
+					v10_cell(2, c, 0xCD, 0x07);
+					v10_cell(23,c, 0xCD, 0x07);
+				}
+			}
+			for( r = 3; r < 23; r++ ) {
+				v10_cell(r, 0, 0xBA, 0x07);
+				v10_cell(r, 79,0xBA, 0x07);
+			}
+			v10_cell(2, 0, 0xC9, 0x07);	v10_cell(2, 79,0xBB, 0x07);
+			v10_cell(23,0, 0xC8, 0x07);	v10_cell(23,79,0xBC, 0x07);
+
+			for( r = 0; r < 16; r++ )
+				for( c = 0; c < 16; c++ )
+					v10_cell((word)(4 + r), (word)(3 + c*2),
+						(byte)(r*16 + c), 0x07);
+
+			for( i = 0; i < 16; i++ ) {
+				v10_text((word)(4+i), 40, "fg", (byte)i);
+				v10_cell((word)(4+i), 43, "0123456789ABCDEF"[i], (byte)i);
+				v10_text((word)(4+i), 48, "bg", (byte)((i << 4) | (i == 7 ? 0 : 7)));
+				v10_cell((word)(4+i), 51, "0123456789ABCDEF"[i],
+					(byte)((i << 4) | (i == 7 ? 0 : 7)));
+			}
+			v10_text(4, 56, "blink or bright?", 0x8F);
+			v10_text(6, 56, "IBM 3270 face",    0x0F);
+			v10_text(7, 56, "via INT 10h",      0x0F);
+			v10_text(9, 56, "reverse",          0x70);
+
+			v10_text(21, 3, "The quick brown fox jumps over the lazy dog"
+				" 0123456789", 0x07);
+			v10_goto(21, 58);
+			printf("VIDEO: test screen painted through INT 10h.\n");
+			continue;
+		}
+
+/*
+ * V3RDCHK -- are CPU reads of the displayed RAM clean while the beam is
+ * on it?  Fills the screen through the memory window with a pattern that
+ * differs byte to byte, then reads it back eight times, comparing, with
+ * nothing printed until the end so the console cannot scroll under the
+ * test.  Mismatches would mean the CRTC wins the bus during its fetch
+ * and a program copying screen to screen -- a scrolling editor -- picks
+ * up garbage.  None means the CPU wins, as on a CGA, and only the
+ * picture suffers.  vga3_init restores the screen afterwards.
+ */
+		if( is_cmd(&cp,"V3RDCHK") )
+		{
+			word	i, pass, bad, first;
+			byte	far *v;
+			union { byte far *p; struct { word off; word seg; } fp; } m;
+
+			if( !(bda.console & CON_VIDEO) ) {
+				printf("V3RDCHK: the VGA3 is not on.\n");
+				continue;
+			}
+			m.fp.seg = 0xB800;	m.fp.off = 0;	v = m.p;
+			for( i = 0; i < 4000; i++ )
+				v[i] = (byte)(i ^ (i >> 7));
+			bad = 0;	first = 0xFFFF;
+			for( pass = 0; pass < 8; pass++ )
+				for( i = 0; i < 4000; i++ )
+					if( v[i] != (byte)(i ^ (i >> 7)) ) {
+						if( first == 0xFFFF )	first = i;
+						bad++;
+					}
+			vga3_init();
+			if( !bad )
+				printf("V3RDCHK: 32000 reads of the live screen, all correct.\n"
+				       "         The CPU wins the RAM; reads are clean.\n");
+			else
+				printf("V3RDCHK: %u of 32000 reads WRONG, first at offset %04X.\n"
+				       "         Reads during display return the CRTC's data.\n",
+					bad, first);
+			continue;
+		}
+
+/*
+ * V3BEAM -- measure the beam clock against the CRTC's own word.
+ *
+ * Bit 1 of HD6445 register 31, read through the data port, is vertical
+ * blanking -- learned from the SBC-188 BIOS, which scrolled on it.  With
+ * counter 1 (1mhz) this measures the frame, the blanking window, and the
+ * line the retrace interrupt actually marks, which is what vga3.asm
+ * writes in.  vga3.asm waits on this same bit before every write.
+ */
+		if( is_cmd(&cp,"V3BEAM") )
+		{
+			word	t_on, t_off, t_on2, frame, blank, n;
+			dword	lines;
+
+			if( !(bda.console & CON_VIDEO) ) {
+				printf("V3BEAM: the VGA3 is not on.\n");
+				continue;
+			}
+
+			/* Find an edge, then time a whole cycle from it.  Bounded so
+			   a status bit that never moves is reported, not waited for. */
+			for( n = 0; n < 60000U && (v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
+			for( n = 0; n < 60000U && !(v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
+			t_on = t1_sample();
+			for( n = 0; n < 60000U && (v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
+			t_off = t1_sample();
+			for( n = 0; n < 60000U && !(v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31) & 2); n++ ) ;
+			t_on2 = t1_sample();
+			if( n >= 60000U ) {
+				printf("V3BEAM: R31 bit 1 never changed (R31 = %02X).  No blanking status here.\n",
+					(word)v3_crtc_get(V3_CRTC_ADR,V3_CRTC_DAT,31));
+				continue;
+			}
+
+			frame = (word)(t_on - t_on2);		/* counter 1 counts down */
+			blank = (word)(t_on - t_off);
+			lines = ((dword)frame * 1000UL + 15890UL) / 31780UL;
+			printf("V3BEAM: frame %u us = %lu lines, blanking %u us = %lu lines\n",
+				frame, lines, blank, ((dword)blank * 1000UL + 15890UL) / 31780UL);
+
+			continue;
+		}
+
+/*
+ * V3DUMP <addr> [<count>] -- the board's RAM through the register path,
+ * which passed a 32K march and is the truth about what it holds.  The
+ * memory window at B800:0000 is the same RAM; DUMP B800:xxxx sees it too.
+ */
+		if( is_cmd(&cp,"V3DUMP") )
+		{
+			dword	v;
+			word	a, n, i;
 
 			if( !parse_val(&cp,&v) ) {
-				printf("usage: WDTSET <reload>\n"
-				       "       hex, 32-bit.  The power-on default is 3FFFFF.\n"
-				       "       Measure with IOTIME 64 10 before and after.\n");
+				printf("usage: V3DUMP <addr> [<count>]\n");
 				continue;
 			}
-
-			io_write(WDTRLDH,(word)(v >> 16),1);
-			io_write(WDTRLDL,(word)v,1);
-
-			/* The reload registers took the value and nothing changed,
-			   which says the counter is not fed from them by the act of
-			   writing.  On the 386EX the counter is loaded on a reload
-			   event, and the event is this pair of writes to WDTCLR --
-			   9999h then 6666h, the sequence that pets the dog in
-			   software watchdog mode.  Whether it also latches a new
-			   reload in bus monitor mode is exactly what this is for.
-			   Tried, not assumed: if the timing still does not follow,
-			   the watchdog is not what ends an unclaimed cycle and the
-			   55ms belongs to something else on this board. */
-			io_write(WDTCLR,0x9999,1);
-			io_write(WDTCLR,0x6666,1);
-
-			back  = (dword)io_read(WDTRLDH,1) << 16;
-			back |= (dword)io_read(WDTRLDL,1);
-
-			printf("WDTSET: wrote %04X%04X, reads back %04X%04X\n",
-				(word)(v >> 16), (word)v,
-				(word)(back >> 16), (word)back);
-
-			if( back != v )
-				printf("        It did not take.  The reload registers may want a\n"
-				       "        WDTCLR sequence first -- a datasheet question, not a guess.\n");
-			else
-				printf("        Reload sequence sent.  Run IOTIME 64 10 again.\n"
-				       "        Try a LONGER reload too (WDTSET 7FFFFF): if neither\n"
-				       "        direction moves the figure, the watchdog is not what\n"
-				       "        ends the cycle.\n");
+			a = (word)(v & (V3_SIZE - 1));
+			n = parse_val(&cp,&v) ? (word)v : 64;
+			for( i = 0; i < n; i++ ) {
+				if( (i & 15) == 0 )	printf("%s%04X ", i ? "\n" : "", (word)(a + i));
+				printf(" %02X", (word)v3_get((word)(a + i)));
+			}
+			printf("\n");
 			continue;
 		}
 
-/*
- * IOTIME1 -- time one I/O read against counter 1, not against the tick.
- *
- * Every measurement of the 55ms undecoded read so far has used the 18.2hz
- * tick as its clock, and the answer keeps coming back as exactly one tick
- * per read: 16 reads / 16 ticks, 32 reads / 32 ticks, on two different
- * undecoded ports, unchanged across an eight-to-one span of watchdog
- * reloads.  Perfect linearity on the very quantum the instrument counts in
- * is not what a hardware bus timeout looks like.  It is what a measurement
- * artifact looks like.
- *
- * So measure it with a different clock.  Counter 1 runs at 1mhz and wraps
- * every 65.5ms, which is awkward for a 55ms event and perfectly adequate
- * for telling 55000 microseconds from 5.  Those are the two answers on
- * offer, and they mean opposite things:
- *
- *	about 55000	the stall is real, the tick was telling the truth,
- *			 and something on this board supplies READY late
- *	a handful	the read is fast and the tick measurement is wrong;
- *			 the cost is somewhere else in that loop entirely
- *
- * A wrap reads as a small number too, so the tick count across the same
- * read is printed beside it: 55ms cannot pass without the tick moving,
- * and microseconds cannot pass with it moving.  The two together say
- * which of the small numbers is which.
- */
-/*
- * IOWALL -- time a burst of I/O reads against the wall clock.
- *
- * The tiebreaker.  Timer 0 says an undecoded read costs 54925 usec and
- * timer 1 says 13160, a ratio of 4.17 that holds across ports, burst
- * sizes and watchdog reloads.  One of them is lying, and they cannot
- * settle it between themselves -- INT 15h 86h has already shown the two
- * agreeing to within 1% when no undecoded read is involved, so whichever
- * is wrong is wrong only here.
- *
- * The DS1302 owes nothing to either.  It is a separate part with its own
- * crystal, read over a bit-banged interface, and it keeps the time this
- * board would still be keeping if both PIT counters stopped.  Against a
- * measured wall second:
- *
- *	timer 0 right	N reads take N*54925 usec, and the RTC agrees
- *	timer 1 right	N reads take N*13160 usec, and the RTC agrees
- *
- * The tick count is reported beside it either way.  If the tick advances
- * further than the wall clock allows, the tick is being incremented by
- * something other than the passage of time -- which would explain why it
- * has read exactly one per read all along, whatever else changed.
- */
-		if( is_cmd(&cp,"IOWALL") )
+		if( is_cmd(&cp,"VGA3") )
 		{
-			word	port, i, n, s0, s1, tk0, tk1, secs, ticks;
+			dword	v;
+			word	addr, i, bad, first;
+			byte	got, got2, want;
 
-			if( !parse_word(&cp,&port) ) {
-				printf("usage: IOWALL <port> [<reads>]\n"
-				       "       hex.  Times reads against the DS1302, default 40h.\n"
-				       "       Give it enough reads to span a few seconds.\n");
-				continue;
-			}
-			n = 0x40;
-			parse_word(&cp,&n);
-			if( n == 0 )	n = 0x40;
-
-			printf("IOWALL: %u reads of port %04X, timed by the RTC ...\n", n, port);
-
-			/* Start on a second boundary, so the count is whole
-			   seconds and not a fraction either side. */
-			s0 = rtc_sec();
-			while( rtc_sec() == s0 )
-				continue;
-
-			s0  = rtc_sec();
-			tk0 = bda.timer_count_low;
-
-			for( i = 0; i < n; i++ )
-				(void)io_read(port,0);
-
-			tk1 = bda.timer_count_low;
-			s1  = rtc_sec();
-
-			secs  = (word)((s1 + 60 - s0) % 60);
-			ticks = (word)(tk1 - tk0);
-
-			printf("        wall %u sec,  tick moved %u  (%u ticks/sec)\n",
-				secs, ticks, secs ? (word)(ticks / secs) : 0);
-
-			if( secs )
-				printf("        so each read cost about %lu usec by the wall clock\n",
-					((dword)secs * 1000000UL) / (dword)n);
-
-			printf("        A healthy tick is 18 a second.  Far below that means the\n"
-			       "        stalls are losing IRQ0s, so timer 0 undercounts and the\n"
-			       "        board loses time while it probes.\n"
-			       "        This is the clock to trust: the DS1302 shares nothing\n"
-			       "        with either PIT counter.\n");
-			continue;
-		}
-
-		if( is_cmd(&cp,"IOTIME1") )
-		{
-			word	port, i, j, n, t0, t1, tk0, tk1;
-
-			if( !parse_word(&cp,&port) ) {
-				printf("usage: IOTIME1 <port> [<burst>]\n"
-				       "       hex.  Times a burst of back-to-back reads against\n"
-				       "       counter 1.  Default burst 1.  Keep it under 4 for an\n"
-				       "       undecoded port: counter 1 wraps at 65536 usec.\n");
+			if( parse_val(&cp,&v) ) {
+				addr = (word)(v & (V3_SIZE - 1));
+				if( parse_val(&cp,&v) ) {
+					v3_put(addr,(byte)v);
+					printf("VGA3: %04X <- %02X, reads %02X\n",
+						addr, (word)(v & 0xFF),
+						(word)v3_get(addr));
+				} else
+					printf("VGA3: %04X = %02X\n",
+						addr, (word)v3_get(addr));
 				continue;
 			}
 
-			/* Counter 1's gate, opened the way short_delay does it --
-			   the same write carries counter 0's gate bit, so the
-			   18.2hz tick is not disturbed. */
-			n = 1;
-			parse_word(&cp,&n);
-			if( n == 0 )	n = 1;
+			printf("VGA3: I/O %04X..%04X  "
+			       "(kbd %04X/%04X  crtc %04X/%04X  cfg %04X)\n",
+				(word)V3_PORT, (word)(V3_PORT+7),
+				(word)V3_KBD_DATA, (word)V3_KBD_CMD,
+				(word)V3_CRTC_ADR, (word)V3_CRTC_DAT,
+				(word)V3_CFG);
 
-			io_write(TMRCFG,0x4B,0);
+			/* Two patterns at one address.  One proves nothing: a
+			   floating bus reading FF agrees with a write of FF,
+			   and a data line stuck high agrees with any pattern
+			   that happens to have it set. */
+			v3_put(0,0x55);
+			got = v3_get(0);
+			v3_put(0,0xAA);
+			got2 = v3_get(0);
 
-			printf("IOTIME1: bursts of %u read(s) of port %04X, counter 1 at 1mhz\n",
-				n, port);
+			printf("      data path at 0000: wrote 55 read %02X,  wrote AA read %02X\n",
+				(word)got, (word)got2);
 
-			for( i = 0; i < 4; i++ ) {
-				/* Interrupts stay ON.  The tick is half the
-				   measurement -- it is what tells a counter 1
-				   wrap from a genuinely fast read -- and a tick
-				   cannot move with them off.  The cost is that
-				   an IRQ0 landing mid-sample adds its handler to
-				   the figure, which is tens of microseconds
-				   against the tens of thousands in question.
-				   Four samples are taken so one spoiled by an
-				   interrupt is visible as the odd one out. */
-				tk0 = bda.timer_count_low;
-				/* The whole burst inside one pair of samples.
-				   A single read measured this way is bracketed
-				   by t1_sample, which is itself three bus
-				   cycles to a decoded peripheral -- so what it
-				   really times is a read that follows other bus
-				   traffic.  A burst times reads that follow one
-				   another, which is what IOTIME does and what
-				   real probing code does.  If the per-read cost
-				   differs between the two, it depends on what
-				   was on the bus beforehand, and that is the
-				   whole answer. */
-				t0  = t1_sample();
-				for( j = 0; j < n; j++ )
-					(void)io_read(port,0);
-				t1  = t1_sample();
-				tk1 = bda.timer_count_low;
-
-				printf("         %5u usec total,  %5u each,   tick moved %u\n",
-					(word)(t0 - t1),
-					(word)((word)(t0 - t1) / n),
-					(word)(tk1 - tk0));
+			if( got != 0x55 || got2 != 0xAA ) {
+				printf("      Nothing is holding data.  Check P3 is jumpered E0h, and\n"
+				       "      that the board is seated -- an undecoded read gives FF\n"
+				       "      here and costs 209ms a time, so a wrong block is slow\n"
+				       "      as well as wrong.\n");
+				continue;
 			}
 
-			printf("         Counter 1 wraps every 65536 usec.  Past that these are\n"
-			       "         RESIDUES, not durations, and a residue reads like a fast\n"
-			       "         access.  An undecoded read is 209715 usec and shows here\n"
-			       "         as 13107.  Confirm anything above a few hundred usec\n"
-			       "         with IOWALL before believing it.\n");
+			printf("      writing all %u bytes ...\n", (word)V3_SIZE);
+			for( i = 0; i < V3_SIZE; i++ )
+				v3_put(i,v3_pat(i));
+
+			bad = 0;
+			first = 0;
+			for( i = 0; i < V3_SIZE; i++ ) {
+				got  = v3_get(i);
+				want = v3_pat(i);
+				if( got == want )	continue;
+				if( bad < 4 )
+					printf("      %04X: want %02X got %02X\n",
+						i, (word)want, (word)got);
+				if( !bad )	first = i;
+				bad++;
+			}
+
+			if( !bad ) {
+				printf("      all %u bytes verified.  The board is there and its\n"
+				       "      address path is sound.\n",
+					(word)V3_SIZE);
+			} else {
+				printf("      %u byte(s) wrong, first at %04X.\n",
+					bad, first);
+				printf("      Wrong everywhere is a data path fault; wrong in blocks\n"
+				       "      that repeat is an address line, and the repeat interval\n"
+				       "      names which one.\n");
+			}
+			vga3_init();	/* the march overwrote the font and the screen */
 			continue;
 		}
 
@@ -2295,14 +2819,14 @@ void debugmon(void)
 			   on the wrong constant reported "not the watchdog" about a
 			   number that fits the watchdog perfectly well.
 
-			   WDTSET settles it: shorten the reload, measure again, and
-			   see whether this figure follows.  Nothing else on this
-			   board terminates an unclaimed cycle. */
+			   WDTSET tried to settle it by shortening the reload and
+			   found the timeout fixed; the command is gone.  Nothing
+			   else on this board terminates an unclaimed cycle. */
 			printf("        %lu usec a read BY THE TICK -- which undercounts.\n",
 				us_each);
 			printf("        A stall long enough to measure is long enough to lose\n"
 			       "        IRQ0s: the 8259 latches one and drops the rest, so this\n"
-			       "        counts reads, not time.  Use IOWALL for the real figure.\n");
+			       "        counts reads, not time; the RTC gives the real figure.\n");
 			continue;
 		}
 

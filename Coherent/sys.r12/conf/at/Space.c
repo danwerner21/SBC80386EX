@@ -29,6 +29,7 @@ unsigned	ATSREG = ATSREG_SPEC;
 
 unsigned	AT_HFREG = AT_HFREG_SPEC;
 unsigned	AT_8BIT = AT_8BIT_SPEC;
+unsigned	AT_TRACE = 0;		/* nonzero: trace to early_con */
 
 /*
  * Drive parameters (translation mode, if used).

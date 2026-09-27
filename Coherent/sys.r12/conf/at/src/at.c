@@ -116,6 +116,34 @@ extern	unsigned	AT_8BIT;
 #define	SETFEAT_CMD	(0xEF)		/* SET FEATURES */
 #define	FEAT_8BIT	(0x01)		/* ... enable 8-bit data transfers */
 
+/*
+ * SBC-386EX: AT_TRACE nonzero writes a running trace of the driver to
+ * the early console (early_con, polled, safe at interrupt level):
+ *	Rnn Wnn	read/write command issued for nn (hex) sectors
+ *	inn	interrupt, status register nn
+ *	.	one sector transferred
+ *	/	request complete
+ *	Enn	status nn shows an error
+ *	Qnn	gave up waiting for DRQ, status nn
+ *	Bnn	gave up waiting for not-busy, status nn
+ *	Tnn	watchdog expired, tries nn
+ */
+extern	unsigned	AT_TRACE;
+void	early_putc ();
+
+static void
+attr (c, v)
+int c, v;
+{
+	if (! AT_TRACE)
+		return;
+	early_putc (c);
+	if (v >= 0) {
+		early_putc (((v >> 4) & 15) < 10 ? '0' + ((v >> 4) & 15) : 'A' + ((v >> 4) & 15) - 10);
+		early_putc ((v & 15) < 10 ? '0' + (v & 15) : 'A' + (v & 15) - 10);
+	}
+}
+
 
 /*
  * Error from AUX_REG (r)
@@ -678,6 +706,8 @@ atwatch ()
 		return;
 	}
 
+	attr ('T', at.at_tries);
+
 	/*
 	 * Reset hard disk controller, cancel request.
 	 */
@@ -1083,6 +1113,7 @@ atstart ()
 
 	if (at.at_actf->b_req == BWRITE) {
 
+		attr ('W', at.at_nsec & 0xFF);
 		outb (CSR_REG, WRITE_CMD);
 
 		while (ATDRQ () == 0) {
@@ -1098,6 +1129,7 @@ atstart ()
 		atsend (at.at_addr);
 		at.at_state = SWRITE;
 	} else {
+		attr ('R', at.at_nsec & 0xFF);
 		outb (CSR_REG, READ_CMD);
 		at.at_state = SREAD;
 	}
@@ -1119,7 +1151,7 @@ atintr ()
 #if	0
 	do {
 #endif
-		(void) inb (CSR_REG);	/* clears controller interrupt */
+		attr ('i', inb (CSR_REG));	/* clears controller interrupt */
 
 		atdefer ();
 #if	0
@@ -1192,6 +1224,7 @@ atdefer ()
 		 */
 
 		atrecv (at.at_addr);
+		attr ('.', -1);
 
 		/*
 		 * Check for I/O error after reading data.
@@ -1325,6 +1358,7 @@ aterror ()
 	int aux;
 
 	if ((csr = inb (ATSREG)) & (ERR_ST | WFLT_ST)) {
+		attr ('E', csr);
 
 		cmn_err (CE_WARN, "aterror SOFT ERROR csr = %x", csr);
 
@@ -1539,6 +1573,7 @@ int unit;
 {
 	if (busyWait (notBusy, ATSECS * HZ))
 		return 1;
+	attr ('B', inb (ATSREG));
 	report_timeout (unit);
 	return 0;
 }
@@ -1554,6 +1589,7 @@ atdrq ()
 {
 	if (busyWait (dataRequested, ATSECS * HZ))
 		return 1;
+	attr ('Q', inb (ATSREG));
 	report_timeout (at.at_drv);
 	return 0;
 }

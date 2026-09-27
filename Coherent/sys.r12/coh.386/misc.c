@@ -121,7 +121,15 @@ char *a1;
  * Return 0 if timeout occurred, 1 if the desired event occurred.
  */
 
-#define THRESH (T0_RATE/2)	/* half of 11932 */
+/*
+ * SBC-386EX: the timer 0 reload is pit_count in k0.s, not the T0_RATE
+ * constant -- 11932 on a PC, 9216 on the SBC, whose timer runs at
+ * 921600 Hz.  With the constant, rollovers were counted short on the
+ * SBC and busyWait2() delays came out wrong.
+ */
+extern unsigned long pit_count;
+
+#define THRESH (pit_count/2)
 
 int
 busyWait(fn, ticks)
@@ -165,7 +173,7 @@ int ticks;
  * busyWait2() has finer granularity than busyWait().
  *
  * Wait up to "counts" clock counts for an event to occur.
- * A count is 1/(11932*HZ) seconds (about 0.84 usec).
+ * A count is 1/(pit_count*HZ) seconds (0.84 usec on a PC, 1.09 on the SBC).
  * Works whether interrupts are enabled or not.
  * Busy-waits the system.
  * The event occurs when (*fn)() returns a nonzero value.
@@ -198,7 +206,7 @@ unsigned int counts;
 			totCt += ct1 - ct0;
 		} else {
 			/* timer 0 rollover */
-			totCt += ct1 + T0_RATE - ct0;
+			totCt += ct1 + pit_count - ct0;
 		}
 		if (totCt > counts)
 			return 0;

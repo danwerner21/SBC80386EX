@@ -13,7 +13,6 @@ is also why QEMU's chardev logfile=com1.log silently did nothing.
 Git Bash rewrites arguments that start with '/', so call this with
 MSYS_NO_PATHCONV=1 when passing guest paths.
 """
-import binascii
 import os
 import re
 import socket
@@ -91,7 +90,16 @@ def main(argv):
                 if l == 'end':
                     break
                 continue
-            data += binascii.a2b_uu(l)
+            # Decoded by hand: Coherent fills the unused bytes of a line's
+            # last group with whatever followed, which binascii.a2b_uu
+            # rejects as trailing garbage.  Keep the count byte's worth.
+            n = (ord(l[0]) - 32) & 63
+            chars = [(ord(c) - 32) & 63 for c in l[1:1 + (n + 2) // 3 * 4].ljust((n + 2) // 3 * 4, '`')]
+            out = bytearray()
+            for i in range(0, len(chars), 4):
+                a, b, c, d = chars[i:i + 4]
+                out += bytes([(a << 2 | b >> 4) & 255, (b << 4 | c >> 2) & 255, (c << 6 | d) & 255])
+            data += out[:n]
         with open(argv[3], 'wb') as f:
             f.write(data)
         print('%s: %d bytes' % (argv[3], len(data)))

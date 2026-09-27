@@ -153,6 +153,12 @@ stext:					/ kernel code starts at stext+0x100
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%ecx,%cs:[[-SBASE]<<BPCSHIFT]+val11
 
+	/ SBC-386EX: fetch the timer 0 reload now, while the relocated
+	/ address still works; it rides in EDX to the PIT setup below.
+	.byte	PX_ADDR			/ 32-bit address
+	.byte	PX_OPND			/ 32-bit operand
+	movl	%cs:[[-SBASE]<<BPCSHIFT]+pit_count,%edx
+
    					/ last use of boot block's stack
 	.byte	PX_ADDR			/ 32-bit address
 	.byte	PX_OPND			/ 32-bit operand
@@ -183,61 +189,40 @@ next:
 	mov	$stext+0x100,%eax	/ 256 byte stack for initialization
 	mov	%eax,%esp
 
-/ Enable the A20 address line, which is normally disabled by the ROM BIOS.
-/ This line is under the control of the 8042 keyboard interface controller.
+/ Enable the A20 address line.
+/
+/ SBC-386EX: the stock code did this through the 8042 at port 64h,
+/ spinning on its input-buffer-full bit with LOOPNE from ECX=0.  The SBC
+/ has no 8042 there: the read takes the bus monitor's 209 ms timeout and
+/ returns FFh, so the loop would run 2^32 times -- a silent hang right
+/ after entering protected mode.  Use the port 92h "fast A20" gate
+/ instead, which both the 386EX and a PC chipset (and QEMU) provide.
+/ The SBC BIOS has already set it; this keeps a PC working too.  Bit 0
+/ is fast CPU reset and must be written as 0.
 
-	sub	%ecx, %ecx
-loc0:	inb	$KBCTRL		/ Wait for 8042 input buffer to empty.
-	testb	$2,%al
-	loopne	loc0
+	inb	$0x92
 	IODELAY
-
-	movb	$0xD1, %al 	/ Request next output byte to be
-	outb	$KBCTRL		/ sent to the 8042 output port.
-	IODELAY
-
-	sub	%ecx, %ecx
-loc1:	inb	$KBCTRL		/ Wait for 8042 input buffer to empty.
-	testb	$2, %al
-	loopne	loc1
-	IODELAY
-
-	movb	$0xDF,%al	/ Enable A20 address line.
-	outb	$KBDATA		/ See Page 1-44, IBM-AT Tech Ref.
-	IODELAY
-
-	sub	%ecx, %ecx
-loc2:	inb	$KBCTRL		/ Wait for 8042 input buffer to empty.
-	testb	$2,%al
-	loopne	loc2
-	IODELAY
-
-/ A20 may not enabled for up to 400 msec.  The proper handshake is to
-/ send another command - we use 0xAE, keyboard enable - to the keyboard
-/ controller and wait for its input buffer to be empty.  Then A20 should
-/ be enabled.
-
-	movb	$0xAE,%al	/ Send a commnad to the keyboard controller.
-	outb	$KBDATA
-	IODELAY
-
-	sub	%ecx, %ecx
-loc2a:	inb	$KBCTRL		/ Wait for 8042 input buffer to empty.
-	testb	$2,%al
-	loopne	loc2a
+	orb	$0x02,%al	/ A20 on
+	andb	$0xFE,%al	/ never pulse the reset bit
+	outb	$0x92
 	IODELAY
 
 / Reprogram the 8253 timer so that channel 0, 
 / which is used as the clock, interrupts at exactly
 / 100 HZ, instead of 18.2 HZ.
+/
+/ SBC-386EX: the reload is pit_count, fetched into EDX in real mode
+/ above, rather than a constant.  A PC's timer runs at 1.19318 MHz and
+/ wants 11932; the SBC's timer 0 is clocked at COMCLK/2 = 921600 Hz and
+/ wants 9216.  Patch pit_count in the kernel image to suit the machine.
 
 	movb	$0x36,%al	/ Timer 0, LSB, MSB, mode 3
 	outb	$PIT+3
 	IODELAY
-	movb	$0x9C,%al	/ Lsb of 59659/5 = 11932
+	movb	%dl,%al		/ Lsb of pit_count
 	outb	$PIT
 	IODELAY
-	movb	$0x2E,%al	/ Msb of 59659/5 = 11932
+	movb	%dh,%al		/ Msb of pit_count
 	outb	$PIT
 	IODELAY
 
@@ -1097,6 +1082,13 @@ _canl:
 
 val11:		.long	0		/ Value obtained from int11 [in code].
 
+/ SBC-386EX: timer 0 reload for HZ interrupts a second.  In code, like
+/ val11, so that the real-mode start can read it.  11932 for a PC's
+/ 1.19318 MHz timer; 9216 for the SBC's 921600 Hz one.  busyWait() and
+/ busyWait2() in misc.c use it too.  Change it with /conf/patch.
+		.globl	pit_count
+pit_count:	.long	11932
+
 aicode:
 		push	$envp - aicode		/ Empty environment
 		push	$argl - aicode		/ Argument list for init
@@ -1210,7 +1202,7 @@ write_cmos:
         ret                     / Return from read_cmos().
 
 / Read timer channel 0 into int value.  
-/ Clock counts down from 11932 to 0 with each clock tick.
+/ Clock counts down from pit_count to 0 with each clock tick.
 	.globl	read_t0
 read_t0:
 	pushfl

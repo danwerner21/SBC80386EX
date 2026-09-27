@@ -132,8 +132,18 @@ stays debuggable from another room. `INT 10h` gates the entire ANSI path on one 
 
   This closes Phase 3, which had said "complete except for VT100 escape translation" since
   the plan was written.
-- **A SETUP entry to choose the console.** The byte and the switch exist; the menu entry does
-  not, so today the video board is used whenever it answers.
+- **A SETUP entry to choose the console. Done 2026-09-26.** `bda.console_sel`, carved from
+  `nvram_unused` so it is inside the existing checksum and reads zero on every NVRAM written
+  before it existed. Zero means both, which is what the board did before there was a choice.
+
+  The choice is about speed, not tidiness: with both consoles on, every character also goes
+  out the UART at 9600 baud, so the display runs no faster than the serial line however quick
+  the video path is. Video-only is how the board's real speed shows.
+
+  Two deliberate properties. Video-only **falls back to serial when no board answers**, or
+  choosing it and then pulling the card would leave a machine with no console and no way into
+  SETUP to undo it. And it takes effect **at the next boot**, not at once, so that someone at
+  a terminal cannot choose video-only and lose the session they are choosing in.
 - **Keyboard LEDs. Done 2026-09-26.** `kbd_leds` in `16h_kbd.asm` runs after every make
   code and sends `ED` plus the lamp mask when the lock bits have changed, taking both `FA`
   acknowledgements itself so they never reach the scan-code path. `kbd_flag2` records what
@@ -176,33 +186,62 @@ Cheaper savings, in the order they should be taken:
   same argument, once the floppy stops being new.
 - `set1302.o` is 2,475 bytes for a SETUP screen that runs once.
 
-**16 · DOS programs that drive the screen themselves.** Three were tried. Turbo Pascal's IDE
-works. Turbo C's IDE locks the machine up. WordPerfect Program Editor displays badly and does
-not get past its startup screen, though it is fine on the serial console.
+**16 · DOS programs that drive the screen themselves. Done 2026-09-27, with one exception.**
+Turbo C, Turbo Pascal and WordPerfect Program Editor all run correctly. Four separate faults,
+found in that order, each by a program doing something ordinary that nothing here had done
+before.
 
-The likely mechanism, not yet proven, is the **CGA status port at `3DAh`**. A program that
-decides it is talking to a CGA polls that port to avoid snow. No chip select on this board
-claims `3B0`–`3DF`, so the cycle matches nothing, nothing terminates it, and the bus monitor
-times out — 209 ms a read, returning a floating bus. A wait-for-retrace loop then never
-finishes. The BIOS now answers `INT 10h 12h BL=10h` and `1Ah` as VGA colour, which is what
-stops a well-behaved program from going down that path; Turbo C was still locking up when
-last tried, so either it does not ask or something else is wrong.
+**Brief does not work, and is left that way by decision.** It is a different lineage from the
+Borland IDEs and from WordPerfect and presumably probes the hardware differently; what it
+does has not been investigated. The owner's call, and a reasonable one: three editors work,
+full compatibility was never the goal, and chasing a fourth would cost more than it returns.
+Worth reopening only if Brief turns out to matter, and then the first step is `tools/
+vidtest.asm`'s method -- a known screen, one small change, read back what actually happened
+-- not reading Brief's code.
 
-Two possible answers, and they are not equivalent:
+**The port stall, which was the one predicted.** A program that decides it is talking to a
+CGA polls `3DAh` before writing the screen. No chip select claimed `03B0`–`03DF`, so the
+cycle matched nothing, nothing terminated it, and the bus monitor timed out — 209 ms a read.
+Turbo C did this with interrupts disabled and hung outright: Ctrl-Alt-Del was dead.
 
-- **Cheap:** claim `3B0`–`3DF` with a spare chip select (the PLD notes CS5 as an unused second
-  window) so those cycles finish in wait states instead of stalling. This fixes programs that
-  merely *probe* the ports. It does **not** fix retrace polling, because a claimed but empty
-  port reads `FF` forever and the loop still never exits.
-- **Real:** run DOS in virtual-8086 mode with a monitor in the BIOS that traps I/O to
-  `3B0`–`3DF` and answers it — `3DAh`'s retrace bits from the CRTC's own status, `3D4h`/`3D5h`
-  cursor writes forwarded to the HD6445. This fixes everything and is a genuine project with
-  its own bring-up ladder. It is also the mechanism that would let any other PC hardware this
-  board lacks be emulated, which may matter for item 13.
+CS5 was spare, and now claims `03C0`–`03DF` at seven wait states (`start.asm`). The read
+finishes and returns a floating `FF`. **That was enough**, which is itself the finding: Turbo
+C was waiting for a status bit to be *set*, not to *change*. A constant can satisfy the
+first and never the second, so the cheap fix might have failed — it did not, and nothing
+seen since has needed more. `03C0` and not `03B0` because the window must be a power of two
+on its own boundary and `0380`–`03FF` would swallow COM1; the MDA registers at `03B0`–`03BF`
+are still undecoded and nothing has wanted them.
 
-Do not start either until it is known how many programs that are actually wanted fall into
-which category. One program that matters is worth the emulator; three that do not are worth
-nothing.
+**`INT 10h` fn 09 wrote the wrong character.** `vga3_cells` kept the character in `BL` and
+then called `g_cell`, which returns the cell's byte offset in `BX`. Every character written
+that way came out as the low byte of its own screen address. Teletype was unaffected because
+it keeps the character in `DL`, which is why the Borland IDEs looked *mostly* right and
+produced one garbled row — the row they draw with fn 09.
+
+**The dedicated cursor keys typed digits.** An `E0` prefix marks the cursor cluster, which is
+always a cursor key; the code treated it as one more thing that *flips* the Num Lock sense,
+so with Num Lock off it flipped the wrong way. The keypad arrows worked throughout, which is
+what made it visible.
+
+**The cursor came back one line up and thinner.** `bda.vid_cursor_mode` was written by fn 01
+and read by fn 03 but never initialised. Every full-screen program saves the cursor shape on
+entry and restores it on exit; told zero, they set scan line 0 to 0 — one line at the top of
+a sixteen-line cell. It survived `CLS` because a cursor shape is a CRTC register, not
+something on the screen. Set mode now states it, matching what `vga3.asm` programs.
+
+**What remains, and is not a defect:** these programs write `B800` themselves, so they snow.
+The RAM is not arbitrated and nothing in software can stop a write the BIOS did not make.
+Our own output is clean because `INT 10h` writes during blanking only.
+
+**The V86 port emulator is therefore not needed and should not be built on spec.** It would
+be the answer for a program that waits for `3DAh` to *change*; none has been seen. Build it
+when one is, and not before.
+
+**A program written for a CGA thinks in an eight-line character cell.** If one sets a cursor
+of lines 6-7 we draw it mid-cell rather than at the bottom, where a real VGA BIOS would scale
+the shape up. **Closed as accepted 2026-09-27**: the owner has seen it and would rather live
+with it than have the BIOS guess at a rule. Cosmetic, and it only affects programs that set
+their own cursor shape.
 
 **17 · Nothing verifies the font table.** `mkfont.py` regenerates `font3270.inc` from
 `3270.SFD`, and hand edits to the output would be silently lost on the next run. If any glyph

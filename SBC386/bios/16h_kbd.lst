@@ -1120,7 +1120,7 @@
    302                                  .hit:
    303 00000147 2E8A6701                   cs	mov	ah,[bx+1]		; the scan code
    304 0000014B 30C0                    	xor	al,al			; no ASCII, as a PC gives these keys
-   305 0000014D E84D04                  	call	kbd_stuff_ax
+   305 0000014D E84C04                  	call	kbd_stuff_ax
    306                                  .9:
    307 00000150 585B                    	popm	ax,bx
    308 00000152 C3                      	ret
@@ -1632,7 +1632,7 @@
    812                                  .lookup:
    813 000003E6 E8B100                  	call	kbd_lookup		; AX = the word, or CF if nothing
    814 000003E9 7203                    	jc	.done
-   815 000003EB E8AF01                  	call	kbd_stuff_ax
+   815 000003EB E8AE01                  	call	kbd_stuff_ax
    816                                  .done:
    817 000003EE E899FF                  	call	kbd_leds		; cheap unless a lock key just changed
    818 000003F1 C3                      	ret
@@ -1861,105 +1861,107 @@
   1041 00000556 F6C108                  	test	cl,KF_ALT
   1042 00000559 75AE                    	jnz	.alt
   1043 0000055B F6C104                  	test	cl,KF_CTRL
-  1044 0000055E 752C                    	jnz	.kp_ctrl
+  1044 0000055E 752B                    	jnz	.kp_ctrl
   1045                                  
-  1046                                  ; Num Lock, an E0 (the cursor cluster), or Shift: each one flips it
-  1047 00000560 F6C120                  	test	cl,KF_NUM
-  1048 00000563 0F95C2                  	setnz	dl
-  1049 00000566 F6C602                  	test	dh,KF3_E0
-  1050 00000569 7403                    	jz	.kp1
-  1051 0000056B 80F201                  	xor	dl,1
-  1052                                  .kp1:
-  1053 0000056E F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
-  1054 00000571 7403                    	jz	.kp2
-  1055 00000573 80F201                  	xor	dl,1
-  1056                                  .kp2:
-  1057 00000576 2E8A87[5106]               cs	mov	al,[bx+kt_keypad]	; the digit, or '-' '+' regardless
-  1058 0000057B 3C2D                    	cmp	al,'-'
-  1059 0000057D 740B                    	je	.kp_out
-  1060 0000057F 3C2B                    	cmp	al,'+'
-  1061 00000581 7407                    	je	.kp_out
-  1062 00000583 F6C201                  	test	dl,1
-  1063 00000586 7502                    	jnz	.kp_out			; digits wanted
-  1064 00000588 30C0                    	xor	al,al			; a cursor key: no ASCII
-  1065                                  .kp_out:
-  1066 0000058A F8                      	clc
-  1067 0000058B C3                      	ret
-  1068                                  .kp_ctrl:
-  1069 0000058C 2E8A87[5E06]               cs	mov	al,[bx+kt_kp_ctrl]
-  1070 00000591 3CFF                    	cmp	al,0xFF
-  1071 00000593 0F8429FF                	je	.none
-  1072 00000597 88C4                    	mov	ah,al			; Ctrl-cursor: the scan code is the meaning
-  1073 00000599 30C0                    	xor	al,al
-  1074 0000059B F8                      	clc
-  1075 0000059C C3                      	ret
-  1076                                  
-  1077                                  
-  1078                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1079                                  ; kbd_stuff_ax -- AX is the complete word: scan in AH, ASCII in AL
-  1080                                  ;
-  1081                                  ; The tail of kbd_stuff, entered when the caller already knows the scan
-  1082                                  ; code and does not want one synthesised from the ASCII.
-  1083                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1084                                  kbd_stuff_ax:
-  1085 0000059D 52515350                	pushm	ax,bx,cx,dx
-  1086 000005A1 89C1                    	mov	cx,ax
-  1087 000005A3 E92FFC                  	jmp	kbd_stuff_word
-  1088                                  
-  1089                                  
-  1090                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1091                                  ; Set-1 scan code to ASCII, scan codes 01 to 39.  US layout.
-  1092                                  ;
-  1093                                  ; No line here may END with a backslash -- not even a comment.  NASM
-  1094                                  ; takes that as a continuation and swallows the next line whole, which
-  1095                                  ; is how the a..\ row once vanished and shifted every key after it by
-  1096                                  ; fourteen places.  The listing shows it as a line number that skips.
-  1097                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  1098                                  	align	2
-  1099                                  kt_normal:
-  1100                                  ;	  Esc  1    2    3    4    5    6    7    8    9    0    -    =    BS   Tab
-  1101 000005A6 1B3132333435363738-     	db 0x1B,'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08,0x09
-  1101 000005AF 39302D3D0809       
-  1102                                  ;	  q    w    e    r    t    y    u    i    o    p    [    ]    Ent  Ctl
-  1103 000005B5 71776572747975696F-     	db 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D,0x00
-  1103 000005BE 705B5D0D00         
-  1104                                  ;	  a    s    d    f    g    h    j    k    l    ;    '    `    LSh  backslash
-  1105 000005C3 6173646667686A6B6C-     	db 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 0x27,'`', 0x00,'\'
-  1105 000005CC 3B2760005C         
-  1106                                  ;	  z    x    c    v    b    n    m    ,    .    /    RSh  *    Alt  Sp
-  1107 000005D1 7A786376626E6D2C2E-     	db 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00,'*', 0x00,' '
-  1107 000005DA 2F002A0020         
-  1108                                  
-  1109                                  kt_shift:
-  1110 000005DF 1B21402324255E262A-     	db 0x1B,'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0x08,0x00
-  1110 000005E8 28295F2B0800       
-  1111 000005EE 51574552545955494F-     	db 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0x0D,0x00
-  1111 000005F7 507B7D0D00         
-  1112 000005FC 4153444647484A4B4C-     	db 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0x00,'|'
-  1112 00000605 3A227E007C         
-  1113 0000060A 5A584356424E4D3C3E-     	db 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0x00,'*', 0x00,' '
-  1113 00000613 3F002A0020         
-  1114                                  
-  1115                                  ; FF: no Ctrl meaning.  Ctrl-BS is DEL, Ctrl-Enter is LF, Ctrl-[ ESC,
-  1116                                  ; Ctrl-\ FS, Ctrl-] GS, Ctrl-- US, Ctrl-6 RS, as on a PC.
-  1117                                  kt_ctrl:
-  1118 00000618 1BFFFFFFFFFF1EFFFF-     	db 0x1B,0xFF,0xFF,0xFF,0xFF,0xFF,0x1E,0xFF,0xFF,0xFF,0xFF,0x1F,0xFF,0x7F,0xFF
-  1118 00000621 FFFF1FFF7FFF       
-  1119 00000627 11170512141915090F-     	db 0x11,0x17,0x05,0x12,0x14,0x19,0x15,0x09,0x0F,0x10,0x1B,0x1D,0x0A,0xFF
-  1119 00000630 101B1D0AFF         
-  1120 00000635 0113040607080A0B0C-     	db 0x01,0x13,0x04,0x06,0x07,0x08,0x0A,0x0B,0x0C,0xFF,0xFF,0xFF,0xFF,0x1C
-  1120 0000063E FFFFFFFF1C         
-  1121 00000643 1A180316020E0DFFFF-     	db 0x1A,0x18,0x03,0x16,0x02,0x0E,0x0D,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,' '
-  1121 0000064C FFFFFFFF20         
-  1122                                  
-  1123                                  ; The keypad, scan codes 47 to 53, as digits
-  1124                                  kt_keypad:
-  1125                                  ;	  7    8    9    -    4    5    6    +    1    2    3    0    .
-  1126 00000651 3738392D3435362B31-     	db '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
-  1126 0000065A 3233302E           
-  1127                                  
-  1128                                  ; The keypad with Ctrl: the extended scan codes a PC returns, FF for none
-  1129                                  kt_kp_ctrl:
-  1130                                  ;	  Home Up   PgUp -    Left 5    Rght +    End  Down PgDn Ins  Del
-  1131 0000065E 77FF84FF73FF74FF75-     	db 0x77,0xFF,0x84,0xFF,0x73,0xFF,0x74,0xFF,0x75,0xFF,0x76,0xFF,0xFF
-  1131 00000667 FF76FFFF           
+  1046                                  ; An E0 means the dedicated cursor cluster, which is always a cursor key:
+  1047                                  ; those keys are not on the keypad and Num Lock has nothing to say about
+  1048                                  ; them.  Only the keypad proper is switched, by Num Lock and by Shift,
+  1049                                  ; either of which flips it.
+  1050 00000560 30D2                    	xor	dl,dl			; DL = 1 wants the digit
+  1051 00000562 F6C602                  	test	dh,KF3_E0
+  1052 00000565 750E                    	jnz	.kp2			; the cluster: a cursor key, always
+  1053 00000567 F6C120                  	test	cl,KF_NUM
+  1054 0000056A 0F95C2                  	setnz	dl
+  1055 0000056D F6C103                  	test	cl,KF_LSHIFT+KF_RSHIFT
+  1056 00000570 7403                    	jz	.kp2
+  1057 00000572 80F201                  	xor	dl,1
+  1058                                  .kp2:
+  1059 00000575 2E8A87[5106]               cs	mov	al,[bx+kt_keypad]	; the digit, or '-' '+' regardless
+  1060 0000057A 3C2D                    	cmp	al,'-'
+  1061 0000057C 740B                    	je	.kp_out
+  1062 0000057E 3C2B                    	cmp	al,'+'
+  1063 00000580 7407                    	je	.kp_out
+  1064 00000582 F6C201                  	test	dl,1
+  1065 00000585 7502                    	jnz	.kp_out			; digits wanted
+  1066 00000587 30C0                    	xor	al,al			; a cursor key: no ASCII
+  1067                                  .kp_out:
+  1068 00000589 F8                      	clc
+  1069 0000058A C3                      	ret
+  1070                                  .kp_ctrl:
+  1071 0000058B 2E8A87[5E06]               cs	mov	al,[bx+kt_kp_ctrl]
+  1072 00000590 3CFF                    	cmp	al,0xFF
+  1073 00000592 0F842AFF                	je	.none
+  1074 00000596 88C4                    	mov	ah,al			; Ctrl-cursor: the scan code is the meaning
+  1075 00000598 30C0                    	xor	al,al
+  1076 0000059A F8                      	clc
+  1077 0000059B C3                      	ret
+  1078                                  
+  1079                                  
+  1080                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1081                                  ; kbd_stuff_ax -- AX is the complete word: scan in AH, ASCII in AL
+  1082                                  ;
+  1083                                  ; The tail of kbd_stuff, entered when the caller already knows the scan
+  1084                                  ; code and does not want one synthesised from the ASCII.
+  1085                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1086                                  kbd_stuff_ax:
+  1087 0000059C 52515350                	pushm	ax,bx,cx,dx
+  1088 000005A0 89C1                    	mov	cx,ax
+  1089 000005A2 E930FC                  	jmp	kbd_stuff_word
+  1090                                  
+  1091                                  
+  1092                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1093                                  ; Set-1 scan code to ASCII, scan codes 01 to 39.  US layout.
+  1094                                  ;
+  1095                                  ; No line here may END with a backslash -- not even a comment.  NASM
+  1096                                  ; takes that as a continuation and swallows the next line whole, which
+  1097                                  ; is how the a..\ row once vanished and shifted every key after it by
+  1098                                  ; fourteen places.  The listing shows it as a line number that skips.
+  1099                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1100 000005A5 90                      	align	2
+  1101                                  kt_normal:
+  1102                                  ;	  Esc  1    2    3    4    5    6    7    8    9    0    -    =    BS   Tab
+  1103 000005A6 1B3132333435363738-     	db 0x1B,'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 0x08,0x09
+  1103 000005AF 39302D3D0809       
+  1104                                  ;	  q    w    e    r    t    y    u    i    o    p    [    ]    Ent  Ctl
+  1105 000005B5 71776572747975696F-     	db 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', 0x0D,0x00
+  1105 000005BE 705B5D0D00         
+  1106                                  ;	  a    s    d    f    g    h    j    k    l    ;    '    `    LSh  backslash
+  1107 000005C3 6173646667686A6B6C-     	db 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 0x27,'`', 0x00,'\'
+  1107 000005CC 3B2760005C         
+  1108                                  ;	  z    x    c    v    b    n    m    ,    .    /    RSh  *    Alt  Sp
+  1109 000005D1 7A786376626E6D2C2E-     	db 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0x00,'*', 0x00,' '
+  1109 000005DA 2F002A0020         
+  1110                                  
+  1111                                  kt_shift:
+  1112 000005DF 1B21402324255E262A-     	db 0x1B,'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0x08,0x00
+  1112 000005E8 28295F2B0800       
+  1113 000005EE 51574552545955494F-     	db 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', 0x0D,0x00
+  1113 000005F7 507B7D0D00         
+  1114 000005FC 4153444647484A4B4C-     	db 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0x00,'|'
+  1114 00000605 3A227E007C         
+  1115 0000060A 5A584356424E4D3C3E-     	db 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0x00,'*', 0x00,' '
+  1115 00000613 3F002A0020         
+  1116                                  
+  1117                                  ; FF: no Ctrl meaning.  Ctrl-BS is DEL, Ctrl-Enter is LF, Ctrl-[ ESC,
+  1118                                  ; Ctrl-\ FS, Ctrl-] GS, Ctrl-- US, Ctrl-6 RS, as on a PC.
+  1119                                  kt_ctrl:
+  1120 00000618 1BFFFFFFFFFF1EFFFF-     	db 0x1B,0xFF,0xFF,0xFF,0xFF,0xFF,0x1E,0xFF,0xFF,0xFF,0xFF,0x1F,0xFF,0x7F,0xFF
+  1120 00000621 FFFF1FFF7FFF       
+  1121 00000627 11170512141915090F-     	db 0x11,0x17,0x05,0x12,0x14,0x19,0x15,0x09,0x0F,0x10,0x1B,0x1D,0x0A,0xFF
+  1121 00000630 101B1D0AFF         
+  1122 00000635 0113040607080A0B0C-     	db 0x01,0x13,0x04,0x06,0x07,0x08,0x0A,0x0B,0x0C,0xFF,0xFF,0xFF,0xFF,0x1C
+  1122 0000063E FFFFFFFF1C         
+  1123 00000643 1A180316020E0DFFFF-     	db 0x1A,0x18,0x03,0x16,0x02,0x0E,0x0D,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,' '
+  1123 0000064C FFFFFFFF20         
+  1124                                  
+  1125                                  ; The keypad, scan codes 47 to 53, as digits
+  1126                                  kt_keypad:
+  1127                                  ;	  7    8    9    -    4    5    6    +    1    2    3    0    .
+  1128 00000651 3738392D3435362B31-     	db '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '0', '.'
+  1128 0000065A 3233302E           
+  1129                                  
+  1130                                  ; The keypad with Ctrl: the extended scan codes a PC returns, FF for none
+  1131                                  kt_kp_ctrl:
+  1132                                  ;	  Home Up   PgUp -    Left 5    Rght +    End  Down PgDn Ins  Del
+  1133 0000065E 77FF84FF73FF74FF75-     	db 0x77,0xFF,0x84,0xFF,0x73,0xFF,0x74,0xFF,0x75,0xFF,0x76,0xFF,0xFF
+  1133 00000667 FF76FFFF           

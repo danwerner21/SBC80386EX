@@ -912,24 +912,24 @@
     94                                  	align	2
     95                                  v_tab:
     96 0000001E [5501]                  	dw	v_fn00		; 00 set mode
-    97 00000020 [CD01]                  	dw	v_fn01		; 01 set cursor shape
-    98 00000022 [E401]                  	dw	v_fn02		; 02 set cursor position
-    99 00000024 [0702]                  	dw	v_fn03		; 03 get cursor position
+    97 00000020 [D301]                  	dw	v_fn01		; 01 set cursor shape
+    98 00000022 [EA01]                  	dw	v_fn02		; 02 set cursor position
+    99 00000024 [0D02]                  	dw	v_fn03		; 03 get cursor position
    100 00000026 [1A00]                  	dw	v_done		; 04 read light pen -- no
-   101 00000028 [2002]                  	dw	v_fn05		; 05 set active page
-   102 0000002A [FE02]                  	dw	v_fn06		; 06 scroll up
-   103 0000002C [0203]                  	dw	v_fn07		; 07 scroll down
-   104 0000002E [EB02]                  	dw	v_fn08		; 08 read character/attribute
-   105 00000030 [BC02]                  	dw	v_fn09		; 09 write character and attribute
-   106 00000032 [BC02]                  	dw	v_fn0A		; 0A write character
+   101 00000028 [2602]                  	dw	v_fn05		; 05 set active page
+   102 0000002A [0403]                  	dw	v_fn06		; 06 scroll up
+   103 0000002C [0803]                  	dw	v_fn07		; 07 scroll down
+   104 0000002E [F102]                  	dw	v_fn08		; 08 read character/attribute
+   105 00000030 [C202]                  	dw	v_fn09		; 09 write character and attribute
+   106 00000032 [C202]                  	dw	v_fn0A		; 0A write character
    107 00000034 [1A00]                  	dw	v_done		; 0B set palette -- nothing to set
    108 00000036 [1A00]                  	dw	v_done		; 0C write pixel -- text only
    109 00000038 [1A00]                  	dw	v_done		; 0D read pixel  -- text only
-   110 0000003A [7102]                  	dw	v_fn0E		; 0E teletype
-   111 0000003C [2E02]                  	dw	v_fn0F		; 0F get mode
+   110 0000003A [7702]                  	dw	v_fn0E		; 0E teletype
+   111 0000003C [3402]                  	dw	v_fn0F		; 0F get mode
    112 0000003E [1A00]                  	dw	v_done		; 10 palette -- nothing to set
    113 00000040 [1A00]                  	dw	v_done		; 11 character generator -- one font, in ROM
-   114 00000042 [4502]                  	dw	v_fn12		; 12 alternate select: the EGA information call
+   114 00000042 [4B02]                  	dw	v_fn12		; 12 alternate select: the EGA information call
    115 00000044 [1A00]                  	dw	v_done		; 13 write string -- not yet
    116 00000046 [1A00]                  	dw	v_done		; 14..19
    117 00000048 [1A00]                  	dw	v_done
@@ -937,7 +937,7 @@
    119 0000004C [1A00]                  	dw	v_done
    120 0000004E [1A00]                  	dw	v_done
    121 00000050 [1A00]                  	dw	v_done
-   122 00000052 [5C02]                  	dw	v_fn1A		; 1A display combination code
+   122 00000052 [6202]                  	dw	v_fn1A		; 1A display combination code
    123                                  len_v_tab	equ	($-v_tab)/2
    124                                  
    125                                  
@@ -1135,335 +1135,347 @@
    317 0000018B C7066300D403            	mov	word [vid_addr_chip],0x03D4
    318 00000191 C606660000              	mov	byte [vid_palette],0
    319                                  
-   320 00000196 5153                    	pushm	bx,cx
-   321 00000198 31DB                    	xor	bx,bx
-   322 0000019A B90800                  	mov	cx,8
-   323 0000019D C747500000              .1:	mov	word [bx+vid_cursor],0
-   324 000001A2 83C302                  	add	bx,2
-   325 000001A5 E2F6                    	loop	.1
-   326 000001A7 5B59                    	popm	bx,cx
-   327                                  
-   328 000001A9 F6C480                  	test	ah,0x80			; caller asked us not to clear?
-   329 000001AC 0F856AFE                	jnz	v_done			; then leave the terminal alone entirely
-   330                                  
-   331 000001B0 E8D2FE                  	call	vcsi			; ESC [ 2 J -- erase the screen
-   332 000001B3 B032                    	mov	al,'2'
-   333 000001B5 E89CFE                  	call	vputc
-   334 000001B8 B04A                    	mov	al,'J'
-   335 000001BA E897FE                  	call	vputc
-   336 000001BD F606890002              	test	byte [console],CON_VIDEO
-   337 000001C2 7403                    	jz	.2
-   338 000001C4 E8(0000)                	call	vga3_clear
-   339 000001C7 E8F2FE                  .2:	call	vgoto
-   340 000001CA E94DFE                  	jmp	v_done
-   341                                  
+   320                                  ; The cursor shape has to be stated, not left as whatever the BDA held at
+   321                                  ; power-up.  Function 03 reports this word, and a program that saves the
+   322                                  ; shape on entry and restores it on exit -- which every full-screen DOS
+   323                                  ; program does -- will faithfully put back what it was told.  Told zero,
+   324                                  ; it sets scan line 0 to 0: a cursor one line thick at the top of the
+   325                                  ; cell, which on a sixteen-line cell reads as the row above.  Turbo C did
+   326                                  ; exactly that, and it survived CLS because a shape is a CRTC register
+   327                                  ; and not something on the screen.
+   328                                  ;
+   329                                  ; 13 and 14 are the lines vga3.asm programs at reset, so the two agree.
+   330 00000196 C70660000E0D            	mov	word [vid_cursor_mode],(13<<8)|14
+   331                                  
+   332 0000019C 5153                    	pushm	bx,cx
+   333 0000019E 31DB                    	xor	bx,bx
+   334 000001A0 B90800                  	mov	cx,8
+   335 000001A3 C747500000              .1:	mov	word [bx+vid_cursor],0
+   336 000001A8 83C302                  	add	bx,2
+   337 000001AB E2F6                    	loop	.1
+   338 000001AD 5B59                    	popm	bx,cx
+   339                                  
+   340 000001AF F6C480                  	test	ah,0x80			; caller asked us not to clear?
+   341 000001B2 0F8564FE                	jnz	v_done			; then leave the terminal alone entirely
    342                                  
-   343                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   344                                  ; fn 01 -- set cursor shape.  Recorded; the board takes it, a terminal
-   345                                  ; has one of its own.
-   346                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   347                                  v_fn01:
-   348 000001CD 8B460C                  	mov	ax,[bp+offset_cx]
-   349 000001D0 A36000                  	mov	[vid_cursor_mode],ax
-   350 000001D3 F606890002              	test	byte [console],CON_VIDEO
-   351 000001D8 0F843EFE                	jz	v_done
-   352 000001DC 89C1                    	mov	cx,ax
-   353 000001DE E8(0000)                	call	vga3_shape
-   354 000001E1 E936FE                  	jmp	v_done
-   355                                  
-   356                                  
-   357                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   358                                  ; fn 02 -- set cursor position.  DH = row, DL = column, BH = page.
-   359                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   360                                  v_fn02:
-   361 000001E4 8B5E08                  	mov	bx,[bp+offset_bx]
-   362 000001E7 88F8                    	mov	al,bh
-   363 000001E9 2407                    	and	al,7
-   364 000001EB A26200                  	mov	[vid_active_page],al
-   365                                  
-   366 000001EE 8B460A                  	mov	ax,[bp+offset_dx]	; AH = row, AL = column
-   367 000001F1 80FC19                  	cmp	ah,VID_ROWS
-   368 000001F4 7202                    	jb	.1
-   369 000001F6 B418                    	mov	ah,VID_ROWS-1
-   370 000001F8 3C50                    .1:	cmp	al,VID_COLS
-   371 000001FA 7202                    	jb	.2
-   372 000001FC B04F                    	mov	al,VID_COLS-1
-   373                                  .2:
-   374 000001FE E8A0FE                  	call	vsetcur
-   375 00000201 E8B8FE                  	call	vgoto
-   376 00000204 E913FE                  	jmp	v_done
+   343 000001B6 E8CCFE                  	call	vcsi			; ESC [ 2 J -- erase the screen
+   344 000001B9 B032                    	mov	al,'2'
+   345 000001BB E896FE                  	call	vputc
+   346 000001BE B04A                    	mov	al,'J'
+   347 000001C0 E891FE                  	call	vputc
+   348 000001C3 F606890002              	test	byte [console],CON_VIDEO
+   349 000001C8 7403                    	jz	.2
+   350 000001CA E8(0000)                	call	vga3_clear
+   351 000001CD E8ECFE                  .2:	call	vgoto
+   352 000001D0 E947FE                  	jmp	v_done
+   353                                  
+   354                                  
+   355                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   356                                  ; fn 01 -- set cursor shape.  Recorded; the board takes it, a terminal
+   357                                  ; has one of its own.
+   358                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   359                                  v_fn01:
+   360 000001D3 8B460C                  	mov	ax,[bp+offset_cx]
+   361 000001D6 A36000                  	mov	[vid_cursor_mode],ax
+   362 000001D9 F606890002              	test	byte [console],CON_VIDEO
+   363 000001DE 0F8438FE                	jz	v_done
+   364 000001E2 89C1                    	mov	cx,ax
+   365 000001E4 E8(0000)                	call	vga3_shape
+   366 000001E7 E930FE                  	jmp	v_done
+   367                                  
+   368                                  
+   369                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   370                                  ; fn 02 -- set cursor position.  DH = row, DL = column, BH = page.
+   371                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   372                                  v_fn02:
+   373 000001EA 8B5E08                  	mov	bx,[bp+offset_bx]
+   374 000001ED 88F8                    	mov	al,bh
+   375 000001EF 2407                    	and	al,7
+   376 000001F1 A26200                  	mov	[vid_active_page],al
    377                                  
-   378                                  
-   379                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   380                                  ; fn 03 -- get cursor position.  BH = page.
-   381                                  ;
-   382                                  ;  Returns DH = row, DL = column, CX = cursor shape.
-   383                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   384                                  v_fn03:
-   385 00000207 8B5E08                  	mov	bx,[bp+offset_bx]
-   386 0000020A 88F8                    	mov	al,bh
-   387 0000020C 2407                    	and	al,7
-   388 0000020E A26200                  	mov	[vid_active_page],al
+   378 000001F4 8B460A                  	mov	ax,[bp+offset_dx]	; AH = row, AL = column
+   379 000001F7 80FC19                  	cmp	ah,VID_ROWS
+   380 000001FA 7202                    	jb	.1
+   381 000001FC B418                    	mov	ah,VID_ROWS-1
+   382 000001FE 3C50                    .1:	cmp	al,VID_COLS
+   383 00000200 7202                    	jb	.2
+   384 00000202 B04F                    	mov	al,VID_COLS-1
+   385                                  .2:
+   386 00000204 E89AFE                  	call	vsetcur
+   387 00000207 E8B2FE                  	call	vgoto
+   388 0000020A E90DFE                  	jmp	v_done
    389                                  
-   390 00000211 E87EFE                  	call	vcursor			; AH = row, AL = column
-   391 00000214 89460A                  	mov	[bp+offset_dx],ax
-   392 00000217 A16000                  	mov	ax,[vid_cursor_mode]
-   393 0000021A 89460C                  	mov	[bp+offset_cx],ax
-   394 0000021D E9FAFD                  	jmp	v_done
-   395                                  
-   396                                  
-   397                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   398                                  ; fn 05 -- set the active display page
-   399                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   400                                  v_fn05:
-   401 00000220 8A460E                  	mov	al,[bp+offset_ax]
-   402 00000223 2407                    	and	al,7
-   403 00000225 A26200                  	mov	[vid_active_page],al
-   404 00000228 E891FE                  	call	vgoto
-   405 0000022B E9ECFD                  	jmp	v_done
-   406                                  
+   390                                  
+   391                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   392                                  ; fn 03 -- get cursor position.  BH = page.
+   393                                  ;
+   394                                  ;  Returns DH = row, DL = column, CX = cursor shape.
+   395                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   396                                  v_fn03:
+   397 0000020D 8B5E08                  	mov	bx,[bp+offset_bx]
+   398 00000210 88F8                    	mov	al,bh
+   399 00000212 2407                    	and	al,7
+   400 00000214 A26200                  	mov	[vid_active_page],al
+   401                                  
+   402 00000217 E878FE                  	call	vcursor			; AH = row, AL = column
+   403 0000021A 89460A                  	mov	[bp+offset_dx],ax
+   404 0000021D A16000                  	mov	ax,[vid_cursor_mode]
+   405 00000220 89460C                  	mov	[bp+offset_cx],ax
+   406 00000223 E9F4FD                  	jmp	v_done
    407                                  
-   408                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   409                                  ; fn 0F -- get the current mode
-   410                                  ;
-   411                                  ;  Returns AL = mode, AH = column count, BH = active page.
-   412                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   413                                  v_fn0F:
-   414 0000022E A04900                  	mov	al,[vid_mode]
-   415 00000231 8A264A00                	mov	ah,[vid_columns]
-   416 00000235 89460E                  	mov	[bp+offset_ax],ax
-   417 00000238 8B5E08                  	mov	bx,[bp+offset_bx]
-   418 0000023B 8A3E6200                	mov	bh,[vid_active_page]
-   419 0000023F 895E08                  	mov	[bp+offset_bx],bx
-   420 00000242 E9D5FD                  	jmp	v_done
-   421                                  
-   422                                  
-   423                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   424                                  ; fn 12, BL = 10 -- EGA information;  fn 1A, AL = 00 -- display combination
-   425                                  ;
-   426                                  ; The two questions a program asks before writing the screen itself.  A
-   427                                  ; program that hears "CGA" -- which is what silence means -- avoids snow
-   428                                  ; the CGA way: it polls the status port at 3DAh before every write.  On
-   429                                  ; this board that port is undecoded, 209 ms a read and a floating bus,
-   430                                  ; so the program hangs or crawls.  One that hears "VGA" writes B800
-   431                                  ; directly and moves the cursor through fn 02, both of which work.  So:
-   432                                  ; VGA, colour, 256K -- the answers, not the hardware, but the answers a
-   433                                  ; program acts on correctly.  Other subfunctions are left untouched, as
-   434                                  ; the convention is for an unsupported call.
+   408                                  
+   409                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   410                                  ; fn 05 -- set the active display page
+   411                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   412                                  v_fn05:
+   413 00000226 8A460E                  	mov	al,[bp+offset_ax]
+   414 00000229 2407                    	and	al,7
+   415 0000022B A26200                  	mov	[vid_active_page],al
+   416 0000022E E88BFE                  	call	vgoto
+   417 00000231 E9E6FD                  	jmp	v_done
+   418                                  
+   419                                  
+   420                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   421                                  ; fn 0F -- get the current mode
+   422                                  ;
+   423                                  ;  Returns AL = mode, AH = column count, BH = active page.
+   424                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   425                                  v_fn0F:
+   426 00000234 A04900                  	mov	al,[vid_mode]
+   427 00000237 8A264A00                	mov	ah,[vid_columns]
+   428 0000023B 89460E                  	mov	[bp+offset_ax],ax
+   429 0000023E 8B5E08                  	mov	bx,[bp+offset_bx]
+   430 00000241 8A3E6200                	mov	bh,[vid_active_page]
+   431 00000245 895E08                  	mov	[bp+offset_bx],bx
+   432 00000248 E9CFFD                  	jmp	v_done
+   433                                  
+   434                                  
    435                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   436                                  v_fn12:
-   437 00000245 8B5E08                  	mov	bx,[bp+offset_bx]
-   438 00000248 80FB10                  	cmp	bl,0x10
-   439 0000024B 0F85CBFD                	jne	v_done
-   440 0000024F C746080300              	mov	word [bp+offset_bx],0x0003	; BH 0 colour, BL 3 = 256K
-   441 00000254 C7460C0900              	mov	word [bp+offset_cx],0x0009	; CH feature bits, CL switches: colour 80x25
-   442 00000259 E9BEFD                  	jmp	v_done
-   443                                  
-   444                                  v_fn1A:
-   445 0000025C 8B460E                  	mov	ax,[bp+offset_ax]
-   446 0000025F 08C0                    	or	al,al
-   447 00000261 0F85B5FD                	jnz	v_done			; only the read form
-   448 00000265 C6460E1A                	mov	byte [bp+offset_ax],0x1A	; "supported"
-   449 00000269 C746080800              	mov	word [bp+offset_bx],0x0008	; BL 8 VGA colour, BH 0 no second display
-   450 0000026E E9A9FD                  	jmp	v_done
-   451                                  
-   452                                  
-   453                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   454                                  ; fn 0E -- teletype output.  AL = character.
-   455                                  ;
-   456                                  ; The one function DOS leans on hardest.  Printable characters go out
-   457                                  ; and move the cursor; the four control codes that matter are passed
-   458                                  ; through and tracked.  The terminal does its own wrapping and
-   459                                  ; scrolling, so there is nothing to do but keep our idea of the cursor
-   460                                  ; in step.
-   461                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   462                                  v_fn0E:
-   463 00000271 8A460E                  	mov	al,[bp+offset_ax]
+   436                                  ; fn 12, BL = 10 -- EGA information;  fn 1A, AL = 00 -- display combination
+   437                                  ;
+   438                                  ; The two questions a program asks before writing the screen itself.  A
+   439                                  ; program that hears "CGA" -- which is what silence means -- avoids snow
+   440                                  ; the CGA way: it polls the status port at 3DAh before every write.  On
+   441                                  ; this board that port is undecoded, 209 ms a read and a floating bus,
+   442                                  ; so the program hangs or crawls.  One that hears "VGA" writes B800
+   443                                  ; directly and moves the cursor through fn 02, both of which work.  So:
+   444                                  ; VGA, colour, 256K -- the answers, not the hardware, but the answers a
+   445                                  ; program acts on correctly.  Other subfunctions are left untouched, as
+   446                                  ; the convention is for an unsupported call.
+   447                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   448                                  v_fn12:
+   449 0000024B 8B5E08                  	mov	bx,[bp+offset_bx]
+   450 0000024E 80FB10                  	cmp	bl,0x10
+   451 00000251 0F85C5FD                	jne	v_done
+   452 00000255 C746080300              	mov	word [bp+offset_bx],0x0003	; BH 0 colour, BL 3 = 256K
+   453 0000025A C7460C0900              	mov	word [bp+offset_cx],0x0009	; CH feature bits, CL switches: colour 80x25
+   454 0000025F E9B8FD                  	jmp	v_done
+   455                                  
+   456                                  v_fn1A:
+   457 00000262 8B460E                  	mov	ax,[bp+offset_ax]
+   458 00000265 08C0                    	or	al,al
+   459 00000267 0F85AFFD                	jnz	v_done			; only the read form
+   460 0000026B C6460E1A                	mov	byte [bp+offset_ax],0x1A	; "supported"
+   461 0000026F C746080800              	mov	word [bp+offset_bx],0x0008	; BL 8 VGA colour, BH 0 no second display
+   462 00000274 E9A3FD                  	jmp	v_done
+   463                                  
    464                                  
-   465 00000274 3C0D                    	cmp	al,ASCII_CR
-   466 00000276 7423                    	je	.cr
-   467 00000278 3C0A                    	cmp	al,ASCII_LF
-   468 0000027A 7428                    	je	.lf
-   469 0000027C 3C08                    	cmp	al,ASCII_BS
-   470 0000027E 742D                    	je	.bs
-   471 00000280 3C07                    	cmp	al,ASCII_BEL
-   472 00000282 7432                    	je	.bell
-   473 00000284 3C20                    	cmp	al,ASCII_SP
-   474 00000286 722E                    	jb	.bell			; any other control: emit, do not track
-   475                                  
-   476 00000288 E8C9FD                  	call	vputc
-   477 0000028B F606890002              	test	byte [console],CON_VIDEO
-   478 00000290 7403                    	jz	.adv
-   479 00000292 E8(0000)                	call	vga3_putc
-   480 00000295 E867FE                  .adv:	call	v_advance
-   481 00000298 E97FFD                  	jmp	v_done
-   482                                  .cr:
-   483 0000029B E8B6FD                  	call	vputc
-   484 0000029E E87FFE                  	call	v_col0
-   485 000002A1 E976FD                  	jmp	v_done
-   486                                  .lf:
-   487 000002A4 E8ADFD                  	call	vputc
-   488 000002A7 E883FE                  	call	v_nextrow
-   489 000002AA E96DFD                  	jmp	v_done
-   490                                  .bs:
-   491 000002AD E8A4FD                  	call	vputc
-   492 000002B0 E891FE                  	call	v_backsp
-   493 000002B3 E964FD                  	jmp	v_done
-   494                                  .bell:
-   495 000002B6 E89BFD                  	call	vputc
-   496 000002B9 E95EFD                  	jmp	v_done
-   497                                  
-   498                                  
-   499                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   500                                  ; fn 09 -- write character and attribute, CX times
-   501                                  ; fn 0A -- write character, CX times
-   502                                  ;
-   503                                  ;  AL = character, BH = page, BL = attribute (09 only), CX = count
-   504                                  ;
-   505                                  ; The BIOS contract is that the cursor does NOT move.  On a terminal the
-   506                                  ; characters move it anyway, so it is put back afterwards.  The
-   507                                  ; attribute is discarded: there is nowhere to keep it, and emitting SGR
-   508                                  ; for it would fight with whatever the application is doing.
-   509                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   510                                  v_fn09:
-   511                                  v_fn0A:
-   512 000002BC 8B4E0C                  	mov	cx,[bp+offset_cx]
-   513 000002BF 09C9                    	or	cx,cx
-   514 000002C1 0F8455FD                	jz	v_done			; a count of zero writes nothing
-   515                                  
-   516 000002C5 8B460E                  	mov	ax,[bp+offset_ax]	; AL character, AH the function
-   517 000002C8 F606890002              	test	byte [console],CON_VIDEO
-   518 000002CD 740F                    	jz	.1
-   519 000002CF 8A5E08                  	mov	bl,[bp+offset_bx]	; the attribute, for 09
-   520 000002D2 30D2                    	xor	dl,dl
-   521 000002D4 80FC09                  	cmp	ah,0x09
-   522 000002D7 7502                    	jne	.v
-   523 000002D9 FEC2                    	inc	dl			; 09 writes the attribute too
-   524 000002DB E8(0000)                .v:	call	vga3_cells
-   525                                  .1:
-   526 000002DE 51                      	push	cx
-   527 000002DF E872FD                  	call	vputc
-   528 000002E2 59                      	pop	cx
-   529 000002E3 E2F9                    	loop	.1
-   530                                  
-   531 000002E5 E8D4FD                  	call	vgoto			; the cursor did not officially move
-   532 000002E8 E92FFD                  	jmp	v_done
-   533                                  
-   534                                  
-   535                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   536                                  ; fn 08 -- read the character and attribute at the cursor
-   537                                  ;
-   538                                  ; There is no buffer to read, and no terminal answers this.  A space in
-   539                                  ; the normal attribute is returned: it is what an unwritten cell holds,
-   540                                  ; it is what the few callers that use this are usually testing for, and
-   541                                  ; it is at least consistent.  This is the one function the no-buffer
-   542                                  ; decision makes dishonest, and it is recorded here rather than left for
-   543                                  ; someone to discover.
-   544                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   545                                  v_fn08:
-   546 000002EB B82007                  	mov	ax,(VID_ATTR<<8) | ASCII_SP
-   547 000002EE F606890002              	test	byte [console],CON_VIDEO
-   548 000002F3 7403                    	jz	.1
-   549 000002F5 E8(0000)                	call	vga3_getcell		; the board can be asked
-   550 000002F8 89460E                  .1:	mov	[bp+offset_ax],ax
-   551 000002FB E91CFD                  	jmp	v_done
-   552                                  
-   553                                  
-   554                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   555                                  ; fn 06 -- scroll a window up
-   556                                  ; fn 07 -- scroll a window down
-   557                                  ;
-   558                                  ;  AL = lines to scroll, zero means blank the whole window
-   559                                  ;  CH,CL = top-left row,column     DH,DL = bottom-right row,column
-   560                                  ;  BH = attribute for the blanked lines
-   561                                  ;
-   562                                  ; A whole-screen scroll becomes a real terminal scroll.  Anything
-   563                                  ; smaller is served by setting a scrolling region, scrolling inside it,
-   564                                  ; and putting the region back -- which is what DOS's full-screen
-   565                                  ; programs are asking for.  A window that is the whole screen and a
-   566                                  ; count of zero is the common "clear the screen" call.
-   567                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   568                                  v_fn06:
-   569 000002FE B353                    	mov	bl,'S'			; ESC [ n S -- scroll up
-   570 00000300 EB02                    	jmp	short v_scroll
-   571                                  v_fn07:
-   572 00000302 B354                    	mov	bl,'T'			; ESC [ n T -- scroll down
-   573                                  
-   574                                  v_scroll:
-   575 00000304 8B4E0C                  	mov	cx,[bp+offset_cx]	; CH = top row, CL = left column
-   576 00000307 8B560A                  	mov	dx,[bp+offset_dx]	; DH = bottom row, DL = right column
-   577 0000030A 8A460E                  	mov	al,[bp+offset_ax]	; lines
-   578                                  
-   579 0000030D F606890002              	test	byte [console],CON_VIDEO
-   580 00000312 7412                    	jz	.serial
-   581 00000314 53                      	push	bx
-   582 00000315 8A7E09                  	mov	bh,[bp+offset_bx+1]	; the attribute for the blanked lines
-   583 00000318 80FB53                  	cmp	bl,'S'
-   584 0000031B 7505                    	jne	.dn
-   585 0000031D E8(0000)                	call	vga3_scroll_up
-   586 00000320 EB03                    	jmp	short .vd
-   587 00000322 E8(0000)                .dn:	call	vga3_scroll_dn
-   588 00000325 5B                      .vd:	pop	bx
-   589                                  .serial:
-   590                                  ; A count of zero, or a count covering the window, blanks it.
-   591 00000326 08C0                    	or	al,al
-   592 00000328 7440                    	jz	.blank
-   593 0000032A 88F4                    	mov	ah,dh
-   594 0000032C 28EC                    	sub	ah,ch
-   595 0000032E FEC4                    	inc	ah			; window height
-   596 00000330 38E0                    	cmp	al,ah
-   597 00000332 7336                    	jnb	.blank
-   598                                  
-   599                                  ; Set the scrolling region to the window, scroll, then release it.
-   600 00000334 50                      	push	ax
-   601 00000335 E84DFD                  	call	vcsi
-   602 00000338 88E8                    	mov	al,ch
-   603 0000033A FEC0                    	inc	al
-   604 0000033C E82FFD                  	call	vputdec2
-   605 0000033F B03B                    	mov	al,';'
-   606 00000341 E810FD                  	call	vputc
-   607 00000344 88F0                    	mov	al,dh
-   608 00000346 FEC0                    	inc	al
-   609 00000348 E823FD                  	call	vputdec2
-   610 0000034B B072                    	mov	al,'r'			; ESC [ top ; bottom r
-   611 0000034D E804FD                  	call	vputc
-   612                                  
-   613 00000350 E832FD                  	call	vcsi
-   614 00000353 58                      	pop	ax
-   615 00000354 E817FD                  	call	vputdec2
-   616 00000357 88D8                    	mov	al,bl			; 'S' or 'T'
-   617 00000359 E8F8FC                  	call	vputc
-   618                                  
-   619 0000035C E826FD                  	call	vcsi			; ESC [ r -- region back to full screen
-   620 0000035F B072                    	mov	al,'r'
-   621 00000361 E8F0FC                  	call	vputc
-   622 00000364 E855FD                  	call	vgoto
-   623 00000367 E9B0FC                  	jmp	v_done
+   465                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   466                                  ; fn 0E -- teletype output.  AL = character.
+   467                                  ;
+   468                                  ; The one function DOS leans on hardest.  Printable characters go out
+   469                                  ; and move the cursor; the four control codes that matter are passed
+   470                                  ; through and tracked.  The terminal does its own wrapping and
+   471                                  ; scrolling, so there is nothing to do but keep our idea of the cursor
+   472                                  ; in step.
+   473                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   474                                  v_fn0E:
+   475 00000277 8A460E                  	mov	al,[bp+offset_ax]
+   476                                  
+   477 0000027A 3C0D                    	cmp	al,ASCII_CR
+   478 0000027C 7423                    	je	.cr
+   479 0000027E 3C0A                    	cmp	al,ASCII_LF
+   480 00000280 7428                    	je	.lf
+   481 00000282 3C08                    	cmp	al,ASCII_BS
+   482 00000284 742D                    	je	.bs
+   483 00000286 3C07                    	cmp	al,ASCII_BEL
+   484 00000288 7432                    	je	.bell
+   485 0000028A 3C20                    	cmp	al,ASCII_SP
+   486 0000028C 722E                    	jb	.bell			; any other control: emit, do not track
+   487                                  
+   488 0000028E E8C3FD                  	call	vputc
+   489 00000291 F606890002              	test	byte [console],CON_VIDEO
+   490 00000296 7403                    	jz	.adv
+   491 00000298 E8(0000)                	call	vga3_putc
+   492 0000029B E861FE                  .adv:	call	v_advance
+   493 0000029E E979FD                  	jmp	v_done
+   494                                  .cr:
+   495 000002A1 E8B0FD                  	call	vputc
+   496 000002A4 E879FE                  	call	v_col0
+   497 000002A7 E970FD                  	jmp	v_done
+   498                                  .lf:
+   499 000002AA E8A7FD                  	call	vputc
+   500 000002AD E87DFE                  	call	v_nextrow
+   501 000002B0 E967FD                  	jmp	v_done
+   502                                  .bs:
+   503 000002B3 E89EFD                  	call	vputc
+   504 000002B6 E88BFE                  	call	v_backsp
+   505 000002B9 E95EFD                  	jmp	v_done
+   506                                  .bell:
+   507 000002BC E895FD                  	call	vputc
+   508 000002BF E958FD                  	jmp	v_done
+   509                                  
+   510                                  
+   511                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   512                                  ; fn 09 -- write character and attribute, CX times
+   513                                  ; fn 0A -- write character, CX times
+   514                                  ;
+   515                                  ;  AL = character, BH = page, BL = attribute (09 only), CX = count
+   516                                  ;
+   517                                  ; The BIOS contract is that the cursor does NOT move.  On a terminal the
+   518                                  ; characters move it anyway, so it is put back afterwards.  The
+   519                                  ; attribute is discarded: there is nowhere to keep it, and emitting SGR
+   520                                  ; for it would fight with whatever the application is doing.
+   521                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   522                                  v_fn09:
+   523                                  v_fn0A:
+   524 000002C2 8B4E0C                  	mov	cx,[bp+offset_cx]
+   525 000002C5 09C9                    	or	cx,cx
+   526 000002C7 0F844FFD                	jz	v_done			; a count of zero writes nothing
+   527                                  
+   528 000002CB 8B460E                  	mov	ax,[bp+offset_ax]	; AL character, AH the function
+   529 000002CE F606890002              	test	byte [console],CON_VIDEO
+   530 000002D3 740F                    	jz	.1
+   531 000002D5 8A5E08                  	mov	bl,[bp+offset_bx]	; the attribute, for 09
+   532 000002D8 30D2                    	xor	dl,dl
+   533 000002DA 80FC09                  	cmp	ah,0x09
+   534 000002DD 7502                    	jne	.v
+   535 000002DF FEC2                    	inc	dl			; 09 writes the attribute too
+   536 000002E1 E8(0000)                .v:	call	vga3_cells
+   537                                  .1:
+   538 000002E4 51                      	push	cx
+   539 000002E5 E86CFD                  	call	vputc
+   540 000002E8 59                      	pop	cx
+   541 000002E9 E2F9                    	loop	.1
+   542                                  
+   543 000002EB E8CEFD                  	call	vgoto			; the cursor did not officially move
+   544 000002EE E929FD                  	jmp	v_done
+   545                                  
+   546                                  
+   547                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   548                                  ; fn 08 -- read the character and attribute at the cursor
+   549                                  ;
+   550                                  ; There is no buffer to read, and no terminal answers this.  A space in
+   551                                  ; the normal attribute is returned: it is what an unwritten cell holds,
+   552                                  ; it is what the few callers that use this are usually testing for, and
+   553                                  ; it is at least consistent.  This is the one function the no-buffer
+   554                                  ; decision makes dishonest, and it is recorded here rather than left for
+   555                                  ; someone to discover.
+   556                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   557                                  v_fn08:
+   558 000002F1 B82007                  	mov	ax,(VID_ATTR<<8) | ASCII_SP
+   559 000002F4 F606890002              	test	byte [console],CON_VIDEO
+   560 000002F9 7403                    	jz	.1
+   561 000002FB E8(0000)                	call	vga3_getcell		; the board can be asked
+   562 000002FE 89460E                  .1:	mov	[bp+offset_ax],ax
+   563 00000301 E916FD                  	jmp	v_done
+   564                                  
+   565                                  
+   566                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   567                                  ; fn 06 -- scroll a window up
+   568                                  ; fn 07 -- scroll a window down
+   569                                  ;
+   570                                  ;  AL = lines to scroll, zero means blank the whole window
+   571                                  ;  CH,CL = top-left row,column     DH,DL = bottom-right row,column
+   572                                  ;  BH = attribute for the blanked lines
+   573                                  ;
+   574                                  ; A whole-screen scroll becomes a real terminal scroll.  Anything
+   575                                  ; smaller is served by setting a scrolling region, scrolling inside it,
+   576                                  ; and putting the region back -- which is what DOS's full-screen
+   577                                  ; programs are asking for.  A window that is the whole screen and a
+   578                                  ; count of zero is the common "clear the screen" call.
+   579                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   580                                  v_fn06:
+   581 00000304 B353                    	mov	bl,'S'			; ESC [ n S -- scroll up
+   582 00000306 EB02                    	jmp	short v_scroll
+   583                                  v_fn07:
+   584 00000308 B354                    	mov	bl,'T'			; ESC [ n T -- scroll down
+   585                                  
+   586                                  v_scroll:
+   587 0000030A 8B4E0C                  	mov	cx,[bp+offset_cx]	; CH = top row, CL = left column
+   588 0000030D 8B560A                  	mov	dx,[bp+offset_dx]	; DH = bottom row, DL = right column
+   589 00000310 8A460E                  	mov	al,[bp+offset_ax]	; lines
+   590                                  
+   591 00000313 F606890002              	test	byte [console],CON_VIDEO
+   592 00000318 7412                    	jz	.serial
+   593 0000031A 53                      	push	bx
+   594 0000031B 8A7E09                  	mov	bh,[bp+offset_bx+1]	; the attribute for the blanked lines
+   595 0000031E 80FB53                  	cmp	bl,'S'
+   596 00000321 7505                    	jne	.dn
+   597 00000323 E8(0000)                	call	vga3_scroll_up
+   598 00000326 EB03                    	jmp	short .vd
+   599 00000328 E8(0000)                .dn:	call	vga3_scroll_dn
+   600 0000032B 5B                      .vd:	pop	bx
+   601                                  .serial:
+   602                                  ; A count of zero, or a count covering the window, blanks it.
+   603 0000032C 08C0                    	or	al,al
+   604 0000032E 7440                    	jz	.blank
+   605 00000330 88F4                    	mov	ah,dh
+   606 00000332 28EC                    	sub	ah,ch
+   607 00000334 FEC4                    	inc	ah			; window height
+   608 00000336 38E0                    	cmp	al,ah
+   609 00000338 7336                    	jnb	.blank
+   610                                  
+   611                                  ; Set the scrolling region to the window, scroll, then release it.
+   612 0000033A 50                      	push	ax
+   613 0000033B E847FD                  	call	vcsi
+   614 0000033E 88E8                    	mov	al,ch
+   615 00000340 FEC0                    	inc	al
+   616 00000342 E829FD                  	call	vputdec2
+   617 00000345 B03B                    	mov	al,';'
+   618 00000347 E80AFD                  	call	vputc
+   619 0000034A 88F0                    	mov	al,dh
+   620 0000034C FEC0                    	inc	al
+   621 0000034E E81DFD                  	call	vputdec2
+   622 00000351 B072                    	mov	al,'r'			; ESC [ top ; bottom r
+   623 00000353 E8FEFC                  	call	vputc
    624                                  
-   625                                  .blank:
-   626                                  ; Blank the window a row at a time: position, then erase to end of line.
-   627                                  ; ESC [ 2 J would be wrong for anything but the full screen.
-   628 0000036A 88E8                    	mov	al,ch			; current row
-   629                                  .1:
-   630 0000036C 38F0                    	cmp	al,dh
-   631 0000036E 7727                    	ja	.9
-   632 00000370 50                      	push	ax
-   633 00000371 E811FD                  	call	vcsi
-   634 00000374 FEC0                    	inc	al
-   635 00000376 E8F5FC                  	call	vputdec2
-   636 00000379 B03B                    	mov	al,';'
-   637 0000037B E8D6FC                  	call	vputc
-   638 0000037E 88C8                    	mov	al,cl			; left column
-   639 00000380 FEC0                    	inc	al
-   640 00000382 E8E9FC                  	call	vputdec2
-   641 00000385 B048                    	mov	al,'H'
-   642 00000387 E8CAFC                  	call	vputc
-   643 0000038A E8F8FC                  	call	vcsi
-   644 0000038D B04B                    	mov	al,'K'			; erase to end of line
-   645 0000038F E8C2FC                  	call	vputc
-   646 00000392 58                      	pop	ax
-   647 00000393 FEC0                    	inc	al
-   648 00000395 EBD5                    	jmp	.1
-   649                                  .9:
-   650 00000397 E822FD                  	call	vgoto
-   651 0000039A E97DFC                  	jmp	v_done
+   625 00000356 E82CFD                  	call	vcsi
+   626 00000359 58                      	pop	ax
+   627 0000035A E811FD                  	call	vputdec2
+   628 0000035D 88D8                    	mov	al,bl			; 'S' or 'T'
+   629 0000035F E8F2FC                  	call	vputc
+   630                                  
+   631 00000362 E820FD                  	call	vcsi			; ESC [ r -- region back to full screen
+   632 00000365 B072                    	mov	al,'r'
+   633 00000367 E8EAFC                  	call	vputc
+   634 0000036A E84FFD                  	call	vgoto
+   635 0000036D E9AAFC                  	jmp	v_done
+   636                                  
+   637                                  .blank:
+   638                                  ; Blank the window a row at a time: position, then erase to end of line.
+   639                                  ; ESC [ 2 J would be wrong for anything but the full screen.
+   640 00000370 88E8                    	mov	al,ch			; current row
+   641                                  .1:
+   642 00000372 38F0                    	cmp	al,dh
+   643 00000374 7727                    	ja	.9
+   644 00000376 50                      	push	ax
+   645 00000377 E80BFD                  	call	vcsi
+   646 0000037A FEC0                    	inc	al
+   647 0000037C E8EFFC                  	call	vputdec2
+   648 0000037F B03B                    	mov	al,';'
+   649 00000381 E8D0FC                  	call	vputc
+   650 00000384 88C8                    	mov	al,cl			; left column
+   651 00000386 FEC0                    	inc	al
+   652 00000388 E8E3FC                  	call	vputdec2
+   653 0000038B B048                    	mov	al,'H'
+   654 0000038D E8C4FC                  	call	vputc
+   655 00000390 E8F2FC                  	call	vcsi
+   656 00000393 B04B                    	mov	al,'K'			; erase to end of line
+   657 00000395 E8BCFC                  	call	vputc
+   658 00000398 58                      	pop	ax
+   659 00000399 FEC0                    	inc	al
+   660 0000039B EBD5                    	jmp	.1
+   661                                  .9:
+   662 0000039D E81CFD                  	call	vgoto
+   663 000003A0 E977FC                  	jmp	v_done

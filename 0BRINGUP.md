@@ -2130,10 +2130,36 @@ where every read stalls 209 ms on the bus monitor. See item 16.
 | `mkfont.py` | The rasteriser. `py mkfont.py 3270.SFD font3270.inc` |
 | `8088BIOSVGA3/` | The SBC-188 BIOS drivers, for reference. Not built |
 | `tools/kbdiag.asm` | A DOS `.COM` that reports why the keyboard is quiet. Six tests, of which the fourth — poll the device directly — is the one that matters |
+| `tools/vidtest.asm` | A DOS `.COM` that fills the screen with a known pattern, then writes to it through INT 10h and reports what is actually in memory. Found the fn 09 register clobber in one run |
 
 `10h_video.asm`, `16h_kbd.asm`, `main.c`, `bda.h`, `stub.asm` and `makefile` were extended.
 `debugmon.c` gained `VGA3`, `V3CRTC`, `V3KBD`, `V3DUMP`, `V3BEAM`, `V3RDCHK`, `VIDEO` and
 `FILL`, and lost `WDTSET`, `IOTIME1` and `IOWALL` to make room.
+
+### Making DOS programs work
+
+Item 16. Three editors — Turbo C, Turbo Pascal, WordPerfect Program Editor — none of which
+worked at first and all of which now do. The faults are written up in `0TODO.md` item 16;
+what is worth keeping here is how they were found, because it was not by reading the code.
+
+**A reproducer beat a test screen.** The monitor's `VIDEO` command drew rulers, a frame, all
+256 glyphs and attribute bars through `INT 10h` fn 09, and looked perfect. Fn 09 was writing
+the low byte of each cell's own address instead of the character. It looked perfect because
+it drew a *known pattern onto a blank screen*, where a wrong character is indistinguishable
+from a right one. `tools/vidtest.asm` fills all 2000 cells with a pattern first and then
+makes one small change through the BIOS; the difference is what carries the information. It
+named the fault in a single run, to the byte.
+
+**Turning a console off was a measurement.** The garbled row appeared in two unrelated
+programs, which pointed at something systematic rather than at either program. Setting
+SETUP's console to serial only — so `INT 10h` never touches the board while the program still
+writes `B800` directly — made it vanish, which proved the fault was ours before a line of
+code had been read.
+
+**Two of the four faults were state that was never established**, not logic that was wrong:
+an `E0` prefix treated as a modifier of Num Lock rather than as a fact overriding it, and a
+cursor-shape word that fn 03 reported and nobody had ever written. Both looked reasonable in
+isolation. Both were exposed immediately by a program doing the ordinary thing.
 
 ### What Phase 7 cost
 

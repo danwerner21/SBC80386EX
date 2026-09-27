@@ -255,6 +255,30 @@ XFER_AD equ	0x00020000
 	winit	CS4MSKL, (SRAM_MS&0xF800)|0x400	;32Kb, mask SMM, disable
 %endif
 
+; set up CS5# for the CGA/EGA/VGA register range at 03C0..03DF
+;
+; Nothing on this board lives there.  The point is that the cycle should
+; END: an address matching no chip select has nothing to terminate it, so
+; the bus monitor times out and the read costs 209 ms -- see 06d.  A DOS
+; program that writes the screen itself polls 3DAh before every write to
+; avoid CGA snow, and at 209 ms a read that is not slow, it is stopped.
+; Turbo C hung there with interrupts disabled and no way back.
+;
+; With the window claimed the read finishes in wait states and returns a
+; floating FF.  That is enough for a program waiting for a status bit to
+; be SET -- which is what Turbo C was doing, proven by its coming up.  It
+; is not enough for one waiting for the bit to CHANGE, because a constant
+; never does; that case needs the ports emulated, which is item 16.
+;
+; 03C0..03DF and not 03B0..03DF because the window must be a power of two
+; on its own boundary, and because 0380..03FF would swallow COM1 at 03F8.
+; The MDA registers at 03B0..03BF are therefore still undecoded; nothing
+; has yet been seen to want them.
+	winit	CS5ADH, (0x3C0 >> 6) & 0xFFFF
+	winit	CS5ADL, (0x3C0 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 7;w.s.
+	winit	CS5MSKH, ~(0x001F00 >> 6) & 0xFFFF
+	winit	CS5MSKL, ~(0x001F00 <<10) & 0xF800 | BIT10+BIT0
+;
 ; set up CS0# for the external I/O at 0400..04FF
 	winit	CS0ADH, (0x400 >> 6) & 0xFFFF
 	winit	CS0ADL, (0x400 <<10) & 0xFFFF | ZBIT9+ZBIT8 + ZBIT7+ 7;w.s.

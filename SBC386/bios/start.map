@@ -1,6 +1,6 @@
 Open Watcom Linker Version 1.9
 Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
-Created on:       26/09/27 04:18:39
+Created on:       26/09/27 16:43:39
 Executable Image: start.exe
 creating a DOS executable
 
@@ -12,7 +12,7 @@ creating a DOS executable
 Group                           Address              Size
 =====                           =======              ====
 
-DGROUP                          0000:0000            0000eb50
+DGROUP                          0000:0000            0000eb70
 
 
 
@@ -23,12 +23,12 @@ DGROUP                          0000:0000            0000eb50
 Segment                Class          Group          Address         Size
 =======                =====          =====          =======         ====
 
-_TEXT                  CODE           DGROUP         0000:0000       0000a40b
-CONST                  DATA           DGROUP         0a41:0000       00004280
-CONST2                 DATA           DGROUP         0e69:0000       000004b2
-_DATA                  DATA           DGROUP         0eb5:0000       00000000
-_BSS                   DATA           DGROUP         0eb5:0000       00000000
-BOOT                   BOOT           AUTO           0eb5:0000       00000030
+_TEXT                  CODE           DGROUP         0000:0000       0000a41b
+CONST                  DATA           DGROUP         0a42:0000       00004290
+CONST2                 DATA           DGROUP         0e6b:0000       000004b2
+_DATA                  DATA           DGROUP         0eb7:0000       00000000
+_BSS                   DATA           DGROUP         0eb7:0000       00000000
+BOOT                   BOOT           AUTO           0eb7:0000       00000030
 
 
                         +----------------+
@@ -56,13 +56,13 @@ Module: start.o(start.asm)
 0000:0364*     nout
 0000:0388      get_nvram_crc_
 0000:03b1      put_nvram_info_
-0000:a60d      _bda_ptr
-0000:a60d*     bda_ptr
-0000:a630      _SecBuffer
+0000:a62d      _bda_ptr
+0000:a62d*     bda_ptr
+0000:a650      _SecBuffer
 Module: sizer.o(sizer.asm)
 0000:03e0      ext_mem_size
 0000:0444      _pm_read
-0000:a640*     gdt0
+0000:a660*     gdt0
 Module: crc16.o(crc.asm)
 0000:04c0      crc16
 Module: diskide.o(diskide.asm)
@@ -132,19 +132,19 @@ Module: set1302.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/set130
 0000:21da+     set_stop_bits_
 0000:223e+     set_char_format_
 0000:2307+     set_serial_
-0000:e9a2+     _name
-0000:e9ae+     _value
-0000:e9b1+     _top_name
-0000:e9d1*     _fixed_disks
-0000:e9e9+     _floppy_types
-0000:e9fd+     _boot_orders
-0000:ea0d+     _consoles
-0000:ea19+     _clock_name
-0000:ea25+     _Day
-0000:ea41+     _speeds
-0000:ea79+     _stop_bits
-0000:ea81+     _char_char
-0000:ea8d+     _serial
+0000:e9c2+     _name
+0000:e9ce+     _value
+0000:e9d1+     _top_name
+0000:e9f1*     _fixed_disks
+0000:ea09+     _floppy_types
+0000:ea1d+     _boot_orders
+0000:ea2d+     _consoles
+0000:ea39+     _clock_name
+0000:ea45+     _Day
+0000:ea61+     _speeds
+0000:ea99+     _stop_bits
+0000:eaa1+     _char_char
+0000:eaad+     _serial
 Module: icu.o(icu.asm)
 0000:2370*     mask_interrupt_
 0000:238e      unmask_interrupt_
@@ -165,7 +165,7 @@ Module: testmain.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/testm
 0000:26be*     _set_tick_count
 0000:26d7*     _get_time
 0000:26f1      testmain_
-0000:ea9a+     _bitrev
+0000:eaba+     _bitrev
 Module: stub.o(stub.asm)
 0000:2900      int_zero_divide
 0000:2900      int_single_step
@@ -244,70 +244,70 @@ Module: 17h_prn.o(17h_prn.asm)
 Module: 10h_video.o(10h_video.asm)
 0000:3370      int_10h
 Module: 16h_kbd.o(16h_kbd.asm)
-0000:3710      kbd_init_
-0000:375f      int_irq4
-0000:3863      vt_tick
-0000:3910      int_16h
-0000:3a79      int_irq1
+0000:3720      kbd_init_
+0000:376f      int_irq4
+0000:3873      vt_tick
+0000:3920      int_16h
+0000:3a89      int_irq1
 Module: fdcpio.o(fdcpio.asm)
-0000:3d80      _fdc_pio_in
-0000:3dff      _fdc_pio_out
-0000:3e7e      FDC_stop_motor
-0000:3e7e*     FDC_stop_motor_
+0000:3d90      _fdc_pio_in
+0000:3e0f      _fdc_pio_out
+0000:3e8e      FDC_stop_motor
+0000:3e8e*     FDC_stop_motor_
 Module: diskfdc.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/diskfdc.c)
-0000:3fc9      _fd_reset
-0000:407e+     _fd_rate
-0000:413c+     _fd_seek
-0000:42d8      _fd_rw
-0000:4458      _fd_format
+0000:3fd9      _fd_reset
+0000:408e+     _fd_rate
+0000:414c+     _fd_seek
+0000:42e8      _fd_rw
+0000:4468      _fd_format
 Module: 40h_flop.o(40h_flop.asm)
-0000:45e0*     fd_param_table
-0000:45ea      disk_base_1440
-0000:45f5*     disk_base_1200
-0000:4600*     disk_base_720
-0000:460b*     disk_base_360
-0000:4646      int_40h
-0000:4972      fd_set_1E_
+0000:45f0*     fd_param_table
+0000:45fa      disk_base_1440
+0000:4605*     disk_base_1200
+0000:4610*     disk_base_720
+0000:461b*     disk_base_360
+0000:4656      int_40h
+0000:4982      fd_set_1E_
 Module: vga3.o(vga3.asm)
-0000:4a53      vga3_putc
-0000:4a74      vga3_cells
-0000:4adc      vga3_getcell
-0000:4af7      vga3_cursor
-0000:4b0f      vga3_shape
-0000:4b30      vga3_scroll_up
-0000:4b35      vga3_scroll_dn
-0000:4c20      vga3_clear
-0000:4c3a      vga3_init_
+0000:4a63      vga3_putc
+0000:4a84      vga3_cells
+0000:4aec      vga3_getcell
+0000:4b07      vga3_cursor
+0000:4b1f      vga3_shape
+0000:4b40      vga3_scroll_up
+0000:4b45      vga3_scroll_dn
+0000:4c30      vga3_clear
+0000:4c4a      vga3_init_
 Module: debugmon.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/debugmon.c)
-0000:eabc+     _disk_short
-0000:6149+     DumpMemory_
-0000:62a8+     DumpBDA_
-0000:6698+     DumpIdentify_
-0000:6856+     DumpSector_
-0000:68ee      debugmon_
+0000:eadc+     _disk_short
+0000:6159+     DumpMemory_
+0000:62b8+     DumpBDA_
+0000:66a8+     DumpIdentify_
+0000:6866+     DumpSector_
+0000:68fe      debugmon_
 Module: monitor.o(monitor.asm)
-0000:9cb0      _go_call
-0000:9d32      _int15_call
-0000:9da1      _int13_call
+0000:9cc0      _go_call
+0000:9d42      _int15_call
+0000:9db1      _int13_call
 Module: strtoint.o(/mnt/fileserver/Vintage/Projects/SBC80386EX/SBC386/bios/strtoint.c)
-0000:9e34      strtoint_
+0000:9e44      strtoint_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/cprintf.c)
-0000:9f47*     @nstring
-0000:9f6b      _cprintf
+0000:9f57*     @nstring
+0000:9f7b      _cprintf
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4m)
-0000:a25e*     __I4M
-0000:a25e      __U4M
+0000:a26e*     __I4M
+0000:a26e      __U4M
 Module: /opt/openwatcom/lib286/dos/clibc.lib(i4d)
-0000:a276*     __I4D
-0000:a2bf      __U4D
+0000:a286*     __I4D
+0000:a2cf      __U4D
 Module: /opt/openwatcom/lib286/dos/clibc.lib(outp.c)
-0000:a343      outp_
+0000:a353      outp_
 Module: /opt/openwatcom/lib286/dos/clibc.lib(inp.c)
-0000:a34d      inp_
+0000:a35d      inp_
 Module: lib/sbc386.lib(uart_det.asm)
-0000:a360      uart_det_
+0000:a370      uart_det_
 Module: lib/sbc386.lib(/mnt/fileserver/Vintage/Projects/80386EX SBC/SBC386/BIOS/lib/strlen.c)
-0000:a3f8      strlen_
+0000:a408      strlen_
 Warning! W1014: stack segment not found
 Warning! W1023: no starting address found, using 0000:0000
 
@@ -325,6 +325,6 @@ lib/sbc386.lib
                         +-----------------------+
 
 Stack size:  1000 (4096.)
-Memory size:  eb80 (60288.)
+Memory size:  eba0 (60320.)
 Entry point address: 0000:0000
-Link time: 00:00.26
+Link time: 00:00.19

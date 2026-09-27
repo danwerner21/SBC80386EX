@@ -264,11 +264,12 @@ vga3_putc:
 vga3_cells:
 	pushm	ax,bx,cx,dx,si,di,es
 	mov	dh,bl			; DH attribute, DL type
-	mov	bl,al			; BL character
-	call	g_bda_cursor
+	push	ax			; the character -- g_cell returns in BX and
+	call	g_bda_cursor		;  so cannot be trusted to keep it
 	mov	si,ax			; SI = row:column
 	call	g_cell
 	mov	di,bx			; DI = byte offset
+	pop	bx			; BL = the character; BH is set per row below
 	mov	ax,V3_CELLS*2
 	sub	ax,di
 	shr	ax,1			; cells to the end of the screen

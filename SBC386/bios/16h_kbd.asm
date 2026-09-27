@@ -1043,13 +1043,15 @@ kbd_lookup:
 	test	cl,KF_CTRL
 	jnz	.kp_ctrl
 
-; Num Lock, an E0 (the cursor cluster), or Shift: each one flips it
+; An E0 means the dedicated cursor cluster, which is always a cursor key:
+; those keys are not on the keypad and Num Lock has nothing to say about
+; them.  Only the keypad proper is switched, by Num Lock and by Shift,
+; either of which flips it.
+	xor	dl,dl			; DL = 1 wants the digit
+	test	dh,KF3_E0
+	jnz	.kp2			; the cluster: a cursor key, always
 	test	cl,KF_NUM
 	setnz	dl
-	test	dh,KF3_E0
-	jz	.kp1
-	xor	dl,1
-.kp1:
 	test	cl,KF_LSHIFT+KF_RSHIFT
 	jz	.kp2
 	xor	dl,1

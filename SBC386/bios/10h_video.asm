@@ -317,6 +317,18 @@ v_fn00:
 	mov	word [vid_addr_chip],0x03D4
 	mov	byte [vid_palette],0
 
+; The cursor shape has to be stated, not left as whatever the BDA held at
+; power-up.  Function 03 reports this word, and a program that saves the
+; shape on entry and restores it on exit -- which every full-screen DOS
+; program does -- will faithfully put back what it was told.  Told zero,
+; it sets scan line 0 to 0: a cursor one line thick at the top of the
+; cell, which on a sixteen-line cell reads as the row above.  Turbo C did
+; exactly that, and it survived CLS because a shape is a CRTC register
+; and not something on the screen.
+;
+; 13 and 14 are the lines vga3.asm programs at reset, so the two agree.
+	mov	word [vid_cursor_mode],(13<<8)|14
+
 	pushm	bx,cx
 	xor	bx,bx
 	mov	cx,8

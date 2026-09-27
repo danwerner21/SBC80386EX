@@ -18,6 +18,9 @@
 
 unsigned total_mem;		/* Total physical memory in bytes.  */
 
+unsigned long	bios_mem_lo ();		/* k0.s: KB below 640K, from INT 12h */
+unsigned long	bios_mem_ext ();	/* k0.s: KB above 1 MB, from INT 15h */
+
 #define	SPLASH	3
 #define	NDATA	4	/* process data segments			*/
 #define	BLKSZ	2	/* log2 sizeof(BLOCKLIST)/sizeof(cseg_t)	*/
@@ -267,8 +270,20 @@ mchinit ()
 	 * not multiples of 4K.
 	 */
 
-	lo = ctob (read16_cmos (LOMEM) >> 2) - ctob (sysmem.lo);
-	hi = ctob (read16_cmos (EXTMEM) >> 2);
+	/*
+	 * SBC-386EX: take the sizes from the BIOS, saved by k0.s in real mode
+	 * (INT 12h and INT 15h AH=88h), and use the CMOS only if there was no
+	 * answer.  The SBC has no CMOS: each read is a 209 ms bus-monitor
+	 * timeout returning FFh, and FFFFh KB would be taken as 64 MB below
+	 * 640K.  Every PC BIOS answers both calls with the same figures.
+	 */
+	if (bios_mem_lo () >= 128 && bios_mem_lo () <= 640) {
+		lo = ctob (bios_mem_lo () >> 2) - ctob (sysmem.lo);
+		hi = ctob (bios_mem_ext () >> 2);
+	} else {
+		lo = ctob (read16_cmos (LOMEM) >> 2) - ctob (sysmem.lo);
+		hi = ctob (read16_cmos (EXTMEM) >> 2);
+	}
 
 
 	/*

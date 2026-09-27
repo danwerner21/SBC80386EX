@@ -28,3 +28,6 @@ SIZE=$(wc -c < "$XFER/push.tar")
   py ../tools/qmp.py hmp "change floppy0 fat:floppy:12:xfer vvfat read-only" )
 # Coherent's mkdir -p fails on a directory that already exists.
 py "$TOOLS/sercon.py" run "{ [ -d $DEST ] || mkdir -p $DEST; } && cd $DEST && dos x /dev/fha0 push.tar && tar xvf push.tar && rm push.tar; cd" 300
+# Leave the drive empty: a stock kernel booted later with QEMU's generated
+# FAT floppy still in A: was seen to hang in driver start-up.
+( cd "$TOOLS/../emu" && py ../tools/qmp.py hmp "eject -f floppy0" >/dev/null )

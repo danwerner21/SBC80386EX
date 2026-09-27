@@ -2,7 +2,9 @@
 # run.sh [floppy.img] [boot a|c] -- start Coherent in QEMU, headless, QMP on 4444.
 # The hard disk is cf.img with the SBC's CF geometry, 490/4/32, untranslated.
 FD=${1:-d2.img}; BOOT=${2:-c}
-exec "/c/Program Files/qemu/qemu-system-i386.exe" -M pc -cpu 486 -m 16 -nic none -rtc base=1999-09-27T12:00:00 \
+# The VM clock runs 27 years behind: Coherent reads a 2026 CMOS date as
+# 1970, and a fixed start date would send the clock backwards on restart.
+exec "/c/Program Files/qemu/qemu-system-i386.exe" -M pc -cpu 486 -m 16 -nic none -rtc base=$(date -d "-27 years" +%Y-%m-%dT%H:%M:%S) \
   -display none -qmp tcp:127.0.0.1:4444,server,nowait -name coherent \
   -drive file=$FD,if=floppy,format=raw,index=0 \
   -drive file=cf.img,if=none,id=hd0,format=raw \

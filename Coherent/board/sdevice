@@ -1,3 +1,7 @@
+# SBC-386EX: sys.r12/conf/sdevice with only the drivers the board can
+# use turned on.  Off, among others: fd and fdc (8237 DMA floppy -- the
+# SBC has no DMA), mm and vtkb/kb/nkb and console (PC video and the 8042
+# at 60h/64h), lp (no port 378h), streams.
 # Type field:
 #	0 -> The device does not require an interrupt line
 #	1 -> The device requires an interrupt line
@@ -44,8 +48,6 @@ echo	N	0	0	0	0	0x0	0x0	0x0	0x0
 # DDI/DKI character drivers
 ###
 
-trace	N	0	0	0	0	0x0	0x0	0x0	0x0
-
 ###
 # The following components are placeholders; they hold the declarations of
 # the internal names by which tunable parameters are accessed, or perform
@@ -75,6 +77,7 @@ fdc	N	0	5	1	6	0x0	0x0	0x0	0x0
 asy	Y	0	0	0	0	0x0	0x0	0x0	0x0
 al0	N	0	0	0	0	0x0	0x0	0x0	0x0
 al1	N	0	0	0	0	0x0	0x0	0x0	0x0
+tr	N	0	0	0	0	0x0	0x0	0x0	0x0
 hs	N	0	0	0	0	0x0	0x0	0x0	0x0
 rm	Y	0	0	0	0	0x0	0x0	0x0	0x0
 pty	Y	0	0	0	0	0x0	0x0	0x0	0x0

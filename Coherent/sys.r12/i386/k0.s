@@ -136,6 +136,22 @@ stext:					/ kernel code starts at stext+0x100
 	popw	%di
 	popw	%si
 
+	/ SBC-386EX: ask the BIOS how much memory there is, for mchinit(),
+	/ which otherwise reads CMOS 15h-18h.  The SBC has no CMOS: those
+	/ reads are 209 ms bus-monitor timeouts returning FFh, and the kernel
+	/ would size itself for 64 MB of conventional memory.  Kept in ESI and
+	/ EDI across INT 11h and stored below, next to val11.
+	int	$0x12			/ AX = KB below 640K
+	xorl	%esi,%esi
+	movw	%ax,%si
+	movb	$0x88,%ah
+	int	$0x15			/ AX = KB above 1 MB, carry if no answer
+	jnc	bmem1
+	xorw	%ax,%ax			/ no answer: report none
+bmem1:
+	xorl	%edi,%edi
+	movw	%ax,%di
+
 	/ equipment status word to AX
 	int	$0x11			/ Obtain int 11 value before printf().
 	xorl	%ecx,%ecx		/ clear high 16 bits of ecx
@@ -158,6 +174,13 @@ stext:					/ kernel code starts at stext+0x100
 	.byte	PX_ADDR			/ 32-bit address
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%cs:[[-SBASE]<<BPCSHIFT]+pit_count,%edx
+
+	.byte	PX_ADDR			/ 32-bit address
+	.byte	PX_OPND			/ 32-bit operand
+	movl	%esi,%cs:[[-SBASE]<<BPCSHIFT]+bios_lomem
+	.byte	PX_ADDR			/ 32-bit address
+	.byte	PX_OPND			/ 32-bit operand
+	movl	%edi,%cs:[[-SBASE]<<BPCSHIFT]+bios_extmem
 
    					/ last use of boot block's stack
 	.byte	PX_ADDR			/ 32-bit address
@@ -1066,6 +1089,18 @@ loc13:
 		outb	$KBCTRL			/ to the 8042 control port.
 		IODELAY
 
+		/ SBC-386EX: there is no 8042 to hear that, so also pulse the
+		/ fast reset bit, port 92h bit 0, which resets on a 0-to-1
+		/ edge.  A PC has reset already and never gets here.
+		inb	$0x92
+		IODELAY
+		andb	$0xFE,%al
+		outb	$0x92
+		IODELAY
+		orb	$0x01,%al
+		outb	$0x92
+		IODELAY
+
 		hlt				/ Halt until processor reset
 		jmp	loc13
 
@@ -1088,6 +1123,19 @@ val11:		.long	0		/ Value obtained from int11 [in code].
 / busyWait2() in misc.c use it too.  Change it with /conf/patch.
 		.globl	pit_count
 pit_count:	.long	11932
+
+/ SBC-386EX: memory sizes from INT 12h and INT 15h AH=88h, in KB, saved
+/ at startup in real mode.  Read with bios_mem_lo() and bios_mem_ext(),
+/ which work as int11() does; mchinit() uses them in place of the CMOS.
+bios_lomem:	.long	0
+bios_extmem:	.long	0
+
+		.globl	bios_mem_lo
+bios_mem_lo:	mov	%cs:bios_lomem,%eax
+		ret
+		.globl	bios_mem_ext
+bios_mem_ext:	mov	%cs:bios_extmem,%eax
+		ret
 
 aicode:
 		push	$envp - aicode		/ Empty environment

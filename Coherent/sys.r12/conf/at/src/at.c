@@ -96,7 +96,25 @@ static char rcsid[] = 	"#(@) $Id"
 #define	HCYL_REG	(HDBASE + 5)	/* high cylinder (r/w) */
 #define	HDRV_REG	(HDBASE + 6)	/* drive/head (r/w) (D <<4)+(1 << H) */
 #define	CSR_REG		(HDBASE + 7)	/* status (r), command (w) */
-#define	HF_REG		(HDBASE + 0x206)	/* Usually 0x3F6 */
+/*
+ * SBC-386EX: the device control / alternate status register is a tunable,
+ * AT_HFREG in Space.c.  A PC has it at HDBASE + 0x206 = 3F6; the SBC's IDE
+ * chip select decodes only 01F0-01FF and puts it at 01FE.  Writing 3F6 on
+ * the SBC costs a 209 ms bus-monitor timeout and reaches nothing.
+ */
+extern	unsigned	AT_HFREG;
+#define	HF_REG		AT_HFREG
+
+/*
+ * SBC-386EX: AT_8BIT nonzero means the data port is wired 8 bits wide.
+ * A 16-bit IN there returns D8-D15 as zero while the drive advances a
+ * whole word, so every other byte is lost.  The drive is told to
+ * transfer bytes (SET FEATURES 01h, re-sent after every reset, which
+ * clears it) and sectors move with byte string I/O.
+ */
+extern	unsigned	AT_8BIT;
+#define	SETFEAT_CMD	(0xEF)		/* SET FEATURES */
+#define	FEAT_8BIT	(0x01)		/* ... enable 8-bit data transfers */
 
 
 /*
@@ -446,6 +464,13 @@ atreset ()
 
 		ATBSYW (u);
 
+		if (AT_8BIT) {
+			outb (HDRV_REG, 0xA0 + (u << 4));
+			outb (AUX_REG, FEAT_8BIT);
+			outb (CSR_REG, SETFEAT_CMD);
+			ATBSYW (u);
+		}
+
 		/*
 		 * Set drive characteristics.
 		 */
@@ -772,7 +797,10 @@ paddr_t		addr;
 	}
 
 	addr = P2P (addr);
-	repoutsw (DATA_REG, (unsigned short *) __PTOV (addr), BSIZE / 2);
+	if (AT_8BIT)
+		repoutsb (DATA_REG, (unsigned char *) __PTOV (addr), BSIZE);
+	else
+		repoutsw (DATA_REG, (unsigned short *) __PTOV (addr), BSIZE / 2);
 }
 
 
@@ -785,7 +813,10 @@ paddr_t		addr;
 	}
 		
 	addr = P2P (addr);
-	repinsw (DATA_REG, (unsigned short *) __PTOV (addr), BSIZE / 2);
+	if (AT_8BIT)
+		repinsb (DATA_REG, (unsigned char *) __PTOV (addr), BSIZE);
+	else
+		repinsw (DATA_REG, (unsigned short *) __PTOV (addr), BSIZE / 2);
 }
 
 

@@ -167,6 +167,9 @@ AHA_SD_SPT_SPEC		1	0	255
 # 3f6=>normal polling; 1f7=>alternate polling.
 ATSECS_SPEC		1	6	300
 ATSREG_SPEC		0x1f7	0x3f6	0x3f6
+# SBC-386EX: device control register, and 8-bit IDE data transfers.
+AT_HFREG_SPEC		0x1f0	0x3f6	0x3ff
+AT_8BIT_SPEC		0	0	1
 
 # Host adapter settings, ss driver.
 # SS_HBATYPE is 

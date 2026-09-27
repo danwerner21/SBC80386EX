@@ -10,7 +10,8 @@
 # then patches what is not a tunable:
 #   condev	(5,128) = /dev/com1l, so kernel messages go to the serial port
 #   pit_count	9216, for the SBC's 921600 Hz timer 0
-#   early_con	0x3F8: progress markers and early printf straight to COM1
+# early_con is left at 0.  For bring-up, /conf/patch it to 0x3F8 and the
+# start-up markers and early printf go straight to COM1, polled.
 #
 # /coh.sbc is the board kernel.  /coh.sbcq is the same with AT_8BIT=0,
 # ATSREG and AT_HFREG at the PC's 3F6, and
@@ -25,7 +26,7 @@ K=/coh.sbc
 C=/u/sbc/kconf
 rm -f $C/drvbld.mak $C/conf.c $C/conf.h $C/obj/*.o $K /coh.sbcq
 /u/sbc/kconf/bin/idmkcoh -o $K || exit 1
-/conf/patch -v $K condev=0x0580 pit_count=9216 early_con=0x3F8 || exit 1
+/conf/patch -v $K condev=0x0580 pit_count=9216 || exit 1
 cp $K /coh.sbcq
 /conf/patch -v /coh.sbcq AT_8BIT=0 pit_count=11932 ATSREG=0x3F6 AT_HFREG=0x3F6 || exit 1
 # Relinking replaced the file, so point /autoboot at the new one.

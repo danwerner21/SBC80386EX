@@ -18,7 +18,7 @@ the board.
 ## Contents
 
 1. [What you need](#1-what-you-need)
-2. [Rebuilding the image](#2-rebuilding-the-image) — the usual case
+2. [Rebuilding the image](#2-rebuilding-the-image) — the usual case; or [an install set](#2a-or-an-sbc-386ex-install-set)
 3. [Making the development disk from scratch](#3-making-the-development-disk-from-scratch) — once
 4. [Writing the card and first boot](#4-writing-the-card-and-first-boot)
 5. [Settings: tunables and patching](#5-settings-tunables-and-patching)
@@ -53,6 +53,8 @@ paths. Anything that passes a COHERENT path to a tool needs
 | `emu/boot.sh KERNEL` | reset the VM and boot a named kernel from the `tboot` prompt |
 | `emu/pushsrc.sh` | copy `sys.r12/` and `board/` into the VM, under `/u/sbc` |
 | `emu/mkrelease.sh OUT.img` | make a tidy board image from the development disk |
+| `emu/mkdisks.sh` | make the SBC-386EX install set, `sbc-d1.img` … `sbc-d5.img` |
+| `tools/cohfsw.py` | write COHERENT filesystem images from the host: `mkfs`, `put`, `mkdir`, `rm` |
 | `tools/sercon.py` | run a shell command on the VM's serial port; `pull` copies a file out |
 | `tools/push.sh` | copy files into the VM (tar on a FAT floppy QEMU builds from `emu/xfer/`) |
 | `tools/cohfs.py` | read a COHERENT filesystem image from Windows |
@@ -128,6 +130,44 @@ development disk is left as it was.
 `mkkconf.sh` is safe to run again after any source change, and
 `mkboard.sh` always relinks from scratch. The build is reproducible: two
 builds of the same source differ only in the kernel's COFF timestamp.
+
+### 2a. Or: an SBC-386EX install set
+
+`mkrelease.sh` trims the development disk. The alternative is a set of
+install diskettes that make a board disk from nothing: the COHERENT
+4.2.10 kit plus a fifth diskette, installed in QEMU exactly as the
+original kit is (section 3.1). The installer finishes with a disk that
+boots the board — no pushing, building or trimming.
+
+```sh
+./mkdisks.sh          # after steps 1-3 above: it takes the kernels from cf.img
+```
+
+This writes `sbc-d1.img` … `sbc-d5.img`, on the host and in seconds —
+the diskettes are written with `tools/cohfsw.py`, not through COHERENT's
+floppy driver, which in QEMU now and then never finishes a write.
+
+| Disk | Contents |
+|---|---|
+| 1 | the original, with `/etc/brc.install` and `/etc/brc.update` asking for five diskettes, and `board/Coh_420.post.sbc` appended to `/conf/Coh_420.post` |
+| 2–4 | the originals |
+| 5 | new, the board supplement: `/Coh_420.5` (the marker the installer checks for) and `compressed/sbc.taz` — `/coh.sbc`, `/coh.sbc.sym`, `/coh.sbcq` and `/u/sbc/board` |
+
+Install them onto a blank image as in section 3.1, with `sbc-d1.img` in
+place of `d1.img` and so on (`IMG=inst.img GUI=1 ./run.sh sbc-d1.img a`
+for the first stage). The installer asks for disk 5 after disk 4 and
+unpacks it like the others. At the very end, after its own questions,
+`/conf/Coh_420.post` runs `board/setup.sh`:
+
+```
+SBC-386EX: setting up the board system.
+...
+SBC-386EX: done.  This disk now boots the board kernel, /coh.sbc;
+in QEMU, boot coh.sbcq at the tboot prompt instead.
+```
+
+The image is then ready for a card. It keeps the QEMU twin `/coh.sbcq`
+(`./boot.sh coh.sbcq`) so it can be tried in the emulator first.
 
 ---
 

@@ -3,3 +3,4 @@
 sys.r12/** -text
 board/** -text
 *.sh text eol=lf
+*.COM binary

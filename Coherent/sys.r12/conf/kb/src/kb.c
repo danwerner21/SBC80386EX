@@ -906,21 +906,28 @@ TTY * tp;
 
 
 /*
- * SBC-386EX: is there a keyboard (and screen) to drive?  CON_VGA 1 says
- * always (a PC), 0 never, and 2 asks the BIOS: the SBC BIOS sets
- * CON_VIDEO (2) in bda.console, 0040:0089, when the VGA3 answers at
- * POST, and k0.s kept that byte (bios_console_flags).  Without the
- * board, the ports read FFh, and a wait on a status bit would never end.
+ * SBC-386EX: is there a keyboard controller to drive?  CON_VGA 1 says
+ * always (a PC), 0 never, and 2 looks, once, the way the SBC BIOS's
+ * kbc_init does: a status port that reads FFh has nothing behind it.
+ * On the SBC the VGA3's 8242 sits in the CS0 ECB window, where an empty
+ * slot floats to FFh at once -- no bus-monitor timeout.  Without the
+ * board every status bit reads set, and a wait on one would never end.
+ *
+ * Not bda.console: the BIOS rewrites that from the SETUP console choice,
+ * so "serial only" clears CON_VIDEO though the board is there and its
+ * 8242 was initialised (kbc_init runs whatever SETUP says).
  */
 extern	unsigned	CON_VGA;
-unsigned long	bios_console_flags ();
+static int	kbprobed = -1;		/* -1: not yet looked */
 
 int
 kbpresent ()
 {
-	if (CON_VGA == 2)
-		return (bios_console_flags () & 2) != 0;
-	return CON_VGA != 0;
+	if (CON_VGA != 2)
+		return CON_VGA != 0;
+	if (kbprobed < 0)
+		kbprobed = (inb (KBSTAT) & 0xFF) != 0xFF;
+	return kbprobed;
 }
 
 /*

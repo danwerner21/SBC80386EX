@@ -141,10 +141,11 @@ stext:					/ kernel code starts at stext+0x100
 	/ reads are 209 ms bus-monitor timeouts returning FFh, and the kernel
 	/ would size itself for 64 MB of conventional memory.  Kept in ESI and
 	/ EDI across INT 11h and stored below, next to val11.
-	/ SBC-386EX: the SBC BIOS's bda.console, 0040:0089 -- CON_VIDEO (2) is
-	/ set when the ECB VGA3 answered at POST.  The console drivers use it
-	/ (CON_VGA 2) to leave a missing board alone.  Carried in BX, which
-	/ the INT 12h, 15h, 11h and 1Ah calls below all preserve.
+	/ SBC-386EX: the SBC BIOS's bda.console, 0040:0089 -- which consoles
+	/ INT 10h was driving.  Kept for reference only: it follows the SETUP
+	/ choice, not the hardware, so the keyboard driver probes the 8242
+	/ itself.  Carried in BX, which the INT 12h, 15h, 11h and 1Ah calls
+	/ below all preserve.
 	pushw	%ds
 	movw	$0x40,%ax
 	movw	%ax,%ds

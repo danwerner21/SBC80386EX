@@ -30,6 +30,14 @@ for f in /etc/rc /etc/brc; do
 	grep -n ATclock $f
 done
 
+# The board kernel sets its clock from the DS1302, through the BIOS, taking
+# what it holds as UTC.  Show it unchanged: GMT, no daylight-saving rule.
+# (The DS1302 is kept in local time, as DOS does.)
+cat >/etc/timezone <<'TZEND'
+export TIMEZONE="GMT:000"
+export TZ="GMT0"
+TZEND
+
 # Boot the board kernel by default.  tboot loads /autoboot.
 ln -f /coh.sbc /autoboot
 ls -li /autoboot /coh.sbc /coherent

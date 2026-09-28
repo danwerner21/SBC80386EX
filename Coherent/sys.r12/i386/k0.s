@@ -169,18 +169,46 @@ bmem1:
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%ecx,%cs:[[-SBASE]<<BPCSHIFT]+val11
 
-	/ SBC-386EX: fetch the timer 0 reload now, while the relocated
-	/ address still works; it rides in EDX to the PIT setup below.
-	.byte	PX_ADDR			/ 32-bit address
-	.byte	PX_OPND			/ 32-bit operand
-	movl	%cs:[[-SBASE]<<BPCSHIFT]+pit_count,%edx
-
 	.byte	PX_ADDR			/ 32-bit address
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%esi,%cs:[[-SBASE]<<BPCSHIFT]+bios_lomem
 	.byte	PX_ADDR			/ 32-bit address
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%edi,%cs:[[-SBASE]<<BPCSHIFT]+bios_extmem
+
+	/ SBC-386EX: the date and time from the BIOS, INT 1Ah AH=04h and
+	/ AH=02h, as BCD, for fsminit() -- the SBC's clock is a DS1302 that
+	/ only the BIOS can read.  Still real mode here, despite ".32": the
+	/ stores take only the address-size prefix, so they move CX and DX,
+	/ 16 bits each.  A clock that is stopped (carry) stores zeros, which
+	/ fsminit() rejects.  INT 1Ah changes only AX, CX and DX.
+	movb	$0x04,%ah
+	int	$0x1A			/ CH century, CL year, DH month, DL day
+	jnc	bdate1
+	xorl	%ecx,%ecx
+	xorl	%edx,%edx
+bdate1:
+	.byte	PX_ADDR
+	movl	%ecx,%cs:[[-SBASE]<<BPCSHIFT]+rtc_date
+	.byte	PX_ADDR
+	movl	%edx,%cs:[[-SBASE]<<BPCSHIFT]+rtc_date+2
+	movb	$0x02,%ah
+	int	$0x1A			/ CH hours, CL minutes, DH seconds
+	jnc	btime1
+	xorl	%ecx,%ecx
+	xorl	%edx,%edx
+btime1:
+	.byte	PX_ADDR
+	movl	%ecx,%cs:[[-SBASE]<<BPCSHIFT]+rtc_time
+	.byte	PX_ADDR
+	movl	%edx,%cs:[[-SBASE]<<BPCSHIFT]+rtc_time+2
+
+	/ SBC-386EX: fetch the timer 0 reload now, while the relocated
+	/ address still works, and after the INT 1Ah calls, which use DX;
+	/ it rides in EDX to the PIT setup below.
+	.byte	PX_ADDR			/ 32-bit address
+	.byte	PX_OPND			/ 32-bit operand
+	movl	%cs:[[-SBASE]<<BPCSHIFT]+pit_count,%edx
 
    					/ last use of boot block's stack
 	.byte	PX_ADDR			/ 32-bit address
@@ -1135,6 +1163,20 @@ bios_mem_lo:	mov	%cs:bios_lomem,%eax
 		ret
 		.globl	bios_mem_ext
 bios_mem_ext:	mov	%cs:bios_extmem,%eax
+		ret
+
+/ SBC-386EX: the BIOS clock at startup, packed as INT 1Ah left it, BCD:
+/   rtc_date: year, century, day, month  (CL, CH, DL, DH)
+/   rtc_time: minutes, hours, -, seconds (CL, CH, DL, DH)
+/ All zero if the clock did not answer.  Read by fsminit().
+rtc_date:	.long	0
+rtc_time:	.long	0
+
+		.globl	rtc_bcd_date
+rtc_bcd_date:	mov	%cs:rtc_date,%eax
+		ret
+		.globl	rtc_bcd_time
+rtc_bcd_time:	mov	%cs:rtc_time,%eax
 		ret
 
 / SBC-386EX: early_con, when nonzero, is the base port of a UART that

@@ -24,6 +24,15 @@ K=/coh.sbc
 # the generated files so this sdevice and stune are the ones used, and the
 # old kernel so that it is always relinked.
 C=/u/sbc/kconf
+
+# The asy driver's channel table is patched in after the link from
+# /etc/default/async.  The SBC has COM1 (3F8) and the 386EX's second UART
+# at 2F8, and nothing at 3E8 or 2E8: every probe of those is a 209 ms
+# bus-monitor timeout.  Comment them out.
+sed -e 's/^P[ 	]*3e8[ 	]/#&/' -e 's/^P[ 	]*2e8[ 	]/#&/' /etc/default/async >/tmp/async
+cp /tmp/async /etc/default/async
+rm /tmp/async
+
 rm -f $C/drvbld.mak $C/conf.c $C/conf.h $C/obj/*.o $K /coh.sbcq
 /u/sbc/kconf/bin/idmkcoh -o $K || exit 1
 /conf/patch -v $K condev=0x0580 pit_count=9216 || exit 1

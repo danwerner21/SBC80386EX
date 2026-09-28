@@ -77,6 +77,66 @@ struct inode  *	inode_table;
 struct inode  *	inode_table_end;
 
 
+
+/*
+ * SBC-386EX: the time from the BIOS clock, as seconds since 1970, or -1.
+ *
+ * k0.s asks INT 1Ah for the date and time in real mode and keeps the BCD
+ * (rtc_bcd_date, rtc_bcd_time).  The SBC's clock is a DS1302 that only the
+ * BIOS can read, and there is no CMOS for /etc/ATclock.  The clock is
+ * taken as UTC: with /etc/timezone at GMT0 the time shown is what the
+ * clock holds.  Anything out of range -- a stopped clock reads as zeros --
+ * leaves the superblock time in place, as before.
+ */
+
+unsigned long	rtc_bcd_date ();
+unsigned long	rtc_bcd_time ();
+
+static int
+bcd2 (v)
+unsigned long	v;
+{
+	v &= 0xFF;
+	if ((v & 15) > 9 || (v >> 4) > 9)
+		return -1;
+	return (int) ((v >> 4) * 10 + (v & 15));
+}
+
+static long
+bios_clock ()
+{
+	static short	mdays [12] = {
+		0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+	};
+	unsigned long	d = rtc_bcd_date ();
+	unsigned long	t = rtc_bcd_time ();
+	int		cc, yy, mon, day, hour, min, sec, year;
+	long		days;
+
+	cc = bcd2 (d >> 8);
+	yy = bcd2 (d);
+	day = bcd2 (d >> 16);
+	mon = bcd2 (d >> 24);
+	min = bcd2 (t);
+	hour = bcd2 (t >> 8);
+	sec = bcd2 (t >> 24);
+
+	if (cc < 0 || yy < 0 || day < 1 || day > 31 || mon < 1 || mon > 12 ||
+	    hour < 0 || hour > 23 || min < 0 || min > 59 ||
+	    sec < 0 || sec > 59)
+		return -1;
+	year = cc * 100 + yy;
+	if (year < 1970 || year > 2037)
+		return -1;
+
+	/* Leap years before this one since 1970; 2000 is one, and in range. */
+	days = (year - 1970) * 365L + (year - 1969) / 4 + mdays [mon - 1] +
+		day - 1;
+	if (mon > 2 && year % 4 == 0)
+		days ++;
+	return ((days * 24 + hour) * 60 + min) * 60 + sec;
+}
+
 /*
  * Initialise filesystem.
  */
@@ -111,6 +171,16 @@ fsminit()
 	 * Set system time from the super block.
 	 */
 	timer.t_time = mp->m_super.s_time;
+
+	/* SBC-386EX: better, from the BIOS clock if it gave a sane answer. */
+	{
+		long	bt;
+
+		if ((bt = bios_clock ()) > 0) {
+			timer.t_time = bt;
+			cmn_err (CE_CONT, "Time set from the BIOS clock.\n");
+		}
+	}
 
 	/*
 	 * Access the root directory.

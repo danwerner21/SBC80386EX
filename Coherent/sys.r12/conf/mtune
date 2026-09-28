@@ -170,6 +170,14 @@ ATSREG_SPEC		0x1f7	0x3f6	0x3f6
 # SBC-386EX: device control register, and 8-bit IDE data transfers.
 AT_HFREG_SPEC		0x1f0	0x3f6	0x3ff
 AT_8BIT_SPEC		0	0	1
+# SBC-386EX: console hardware -- see console/Space.c.  PC defaults.
+CON_VGA_SPEC		0	1	2
+CON_CRTC_SPEC		0	0	0xFFFF
+CON_CGA_SPEC		0	1	1
+KB_DATA_SPEC		0	0x60	0xFFFF
+KB_STAT_SPEC		0	0x64	0xFFFF
+KB_XT_SPEC		0	1	1
+KB_SPKR_SPEC		0	1	1
 
 # Host adapter settings, ss driver.
 # SS_HBATYPE is 

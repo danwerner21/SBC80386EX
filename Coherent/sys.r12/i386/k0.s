@@ -141,6 +141,17 @@ stext:					/ kernel code starts at stext+0x100
 	/ reads are 209 ms bus-monitor timeouts returning FFh, and the kernel
 	/ would size itself for 64 MB of conventional memory.  Kept in ESI and
 	/ EDI across INT 11h and stored below, next to val11.
+	/ SBC-386EX: the SBC BIOS's bda.console, 0040:0089 -- CON_VIDEO (2) is
+	/ set when the ECB VGA3 answered at POST.  The console drivers use it
+	/ (CON_VGA 2) to leave a missing board alone.  Carried in BX, which
+	/ the INT 12h, 15h, 11h and 1Ah calls below all preserve.
+	pushw	%ds
+	movw	$0x40,%ax
+	movw	%ax,%ds
+	movb	0x89,%bl
+	popw	%ds
+	xorb	%bh,%bh
+
 	int	$0x12			/ AX = KB below 640K
 	xorl	%esi,%esi
 	movw	%ax,%si
@@ -175,6 +186,8 @@ bmem1:
 	.byte	PX_ADDR			/ 32-bit address
 	.byte	PX_OPND			/ 32-bit operand
 	movl	%edi,%cs:[[-SBASE]<<BPCSHIFT]+bios_extmem
+	.byte	PX_ADDR			/ 32-bit address; BX, 16 bits
+	movl	%ebx,%cs:[[-SBASE]<<BPCSHIFT]+bios_console
 
 	/ SBC-386EX: the date and time from the BIOS, INT 1Ah AH=04h and
 	/ AH=02h, as BCD, for fsminit() -- the SBC's clock is a DS1302 that
@@ -1169,6 +1182,13 @@ bios_mem_ext:	mov	%cs:bios_extmem,%eax
 /   rtc_date: year, century, day, month  (CL, CH, DL, DH)
 /   rtc_time: minutes, hours, -, seconds (CL, CH, DL, DH)
 / All zero if the clock did not answer.  Read by fsminit().
+/ SBC-386EX: bda.console as the BIOS left it (low byte).  CON_VIDEO = 2.
+bios_console:	.long	0
+		.globl	bios_console_flags
+bios_console_flags:
+		mov	%cs:bios_console,%eax
+		ret
+
 rtc_date:	.long	0
 rtc_time:	.long	0
 

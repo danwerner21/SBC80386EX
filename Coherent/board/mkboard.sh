@@ -38,6 +38,8 @@ rm -f $C/drvbld.mak $C/conf.c $C/conf.h $C/obj/*.o $K /coh.sbcq
 /conf/patch -v $K condev=0x0580 pit_count=9216 || exit 1
 cp $K /coh.sbcq
 /conf/patch -v /coh.sbcq AT_8BIT=0 pit_count=11932 ATSREG=0x3F6 AT_HFREG=0x3F6 || exit 1
+# ... and QEMU's console is a PC's: CRTC from the BIOS, 8042 at 60h/64h.
+/conf/patch -v /coh.sbcq CON_VGA=1 CON_CRTC=0 CON_CGA=1 KB_DATA=0x60 KB_STAT=0x64 || exit 1
 # Relinking replaced the file, so point /autoboot at the new one.
 ln -f $K /autoboot
 ls -li $K /coh.sbcq /autoboot

@@ -16,11 +16,24 @@
 
 #define	SPC	0376			/* Special encoding */
 #define XXX	0377			/* Non-character */
-#define	KBDATA	0x60			/* Keyboard data */
-#define	KBCTRL	0x61			/* Keyboard control */
+/*
+ * SBC-386EX: the ports are tunables in console/Space.c.  A PC has its
+ * 8042 data port at 60h; the ECB VGA3 has its 8242 at 4E0h, status and
+ * command at 4E1h.  KBCTRL, the XT's PPI at 61h, is used only when KB_XT
+ * says so: the SBC does not decode 61h, and each access to it is a
+ * 209 ms bus-monitor timeout -- the stock driver made three per key.
+ */
+extern	unsigned	KB_DATA, KB_STAT, KB_XT, KB_SPKR;
+int	kbpresent ();			/* SBC-386EX: below, before kbintr */
+void	kbsend ();
+#define	KBDATA	KB_DATA			/* Keyboard data */
+#define	KBSTAT	KB_STAT			/* 8042/8242 status and command */
+#define	KBCTRL	0x61			/* XT keyboard control (PPI) */
 #define	KBFLAG	0x80			/* Keyboard reset flag */
 #define	LEDCMD	0xED			/* status indicator command */
 #define	KBACK	0xFA			/* status indicator acknowledge */
+#define	KBS_OBF	0x01			/* status: output buffer full */
+#define	KBS_IBF	0x02			/* status: input buffer full */
 #define	EXTENDED0 0xE0			/* extended key seq initiator */
 #define	EXTENDED1 0xE1			/* extended key seq initiator */
 
@@ -446,7 +459,7 @@ isload ()
 	/*
 	 * Reset keyboard if NOT an XT turbo.
 	 */
-	if ( ! isturbo ) {
+	if (KB_XT && ! isturbo) {
 		outb (KBCTRL, 0x0C);		/* Clock low */
 		for (i = 10582; --i >= 0; );	/* For 20ms */
 		outb (KBCTRL, 0xCC);		/* Clock high */
@@ -455,6 +468,10 @@ isload ()
 		i = inb (KBDATA);
 		outb (KBCTRL, 0xCC);			/* Clear keyboard */
 		outb (KBCTRL, 0x4D);			/* Enable keyboard */
+	} else if (! KB_XT && kbpresent ()) {
+		/* SBC-386EX: an AT-style controller; drop anything pending. */
+		for (i = 0; i < 16 && (inb (KBSTAT) & KBS_OBF) != 0; i ++)
+			(void) inb (KBDATA);
 	}
 
 	/*
@@ -491,8 +508,10 @@ updleds ()
 	int	s;
 
 	s = sphi ();
-	outb (KBDATA, LEDCMD);
-	ledcmd = 1;
+	if (kbpresent ()) {
+		kbsend (LEDCMD);
+		ledcmd = 1;
+	}
 	spl (s);
 }
 
@@ -590,6 +609,8 @@ void
 kbstate (action)
 int action;
 {
+	if (! KB_XT)
+		return;			/* SBC-386EX: XT clock games only */
 	if (action == 1) {
 		timeout (& tp, 20, kbstate, 2);
 		outb (KBCTRL, 0xCC);		/* Clock high */
@@ -682,19 +703,23 @@ struct sgttyb * vec;
 
 	case KIOCSOUND: {
 		if (vec) {
+			if (! KB_SPKR)		/* SBC-386EX: no PC speaker */
+				return;
 			outb (TIMER_CTL, 0xB6); 
 			outb (TIMER_CNT, (int)vec & 0xFF);
 			outb (TIMER_CNT, (int)vec >> 8);
 			/* Turn speaker on */
 			outb (SPEAKER_CTL, inb (SPEAKER_CTL) | 03);
-		} else 
+		} else if (KB_SPKR)
 			outb (SPEAKER_CTL, inb (SPEAKER_CTL) & ~ 03 );
 		return;
 	}
 
 	case KDSKBMODE: {
-		outb (KBCTRL, 0x0C);		/* Clock low */
-		timeout (& tp, 3, kbstate, 1);	/* wait about 20-30ms */
+		if (KB_XT) {		/* SBC-386EX */
+			outb (KBCTRL, 0x0C);		/* Clock low */
+			timeout (& tp, 3, kbstate, 1);	/* wait about 20-30ms */
+		}
 		xlate = (int)vec;
 		return;
 	}
@@ -881,6 +906,41 @@ TTY * tp;
 
 
 /*
+ * SBC-386EX: is there a keyboard (and screen) to drive?  CON_VGA 1 says
+ * always (a PC), 0 never, and 2 asks the BIOS: the SBC BIOS sets
+ * CON_VIDEO (2) in bda.console, 0040:0089, when the VGA3 answers at
+ * POST, and k0.s kept that byte (bios_console_flags).  Without the
+ * board, the ports read FFh, and a wait on a status bit would never end.
+ */
+extern	unsigned	CON_VGA;
+unsigned long	bios_console_flags ();
+
+int
+kbpresent ()
+{
+	if (CON_VGA == 2)
+		return (bios_console_flags () & 2) != 0;
+	return CON_VGA != 0;
+}
+
+/*
+ * SBC-386EX: send a byte to the keyboard once the controller can take
+ * it -- bounded, so that a silent controller cannot hang the system.
+ */
+void
+kbsend (c)
+int c;
+{
+	int	i;
+
+	if (! kbpresent ())
+		return;
+	for (i = 0; i < 20000 && (inb (KBSTAT) & KBS_IBF) != 0; i ++)
+		;
+	outb (KBDATA, c);
+}
+
+/*
  * Receive interrupt.
  */
 
@@ -908,16 +968,20 @@ kbintr ()
 	 * port to reset the data buffer.
 	 */
 
+	if (! kbpresent ())		/* SBC-386EX: stray, no board */
+		return;
 	r = inb (KBDATA) & 0xFF;
-	c = inb (KBCTRL);
-	outb (KBCTRL, c | KBFLAG);
-	outb (KBCTRL, c);
+	if (KB_XT) {
+		c = inb (KBCTRL);
+		outb (KBCTRL, c | KBFLAG);
+		outb (KBCTRL, c);
+	}
 	if (! xlate) {
 		if (ledcmd) {
        			ledcmd = 0;
 			if (r == KBACK) {
 				/* output to status LEDS */
-			    outb (KBDATA, X11led);
+			    kbsend (X11led);
 			    return;
 			}
 		}
@@ -936,7 +1000,7 @@ kbintr ()
 				c |= 2;
 			if (shift & CPLS)
 				c |= 4;
-			outb (KBDATA, c);
+			kbsend (c);
 		}
 		return;
 	}
@@ -1078,7 +1142,7 @@ kbintr ()
 		update_leds += isspecial (r);	 /* special chars */
 	if (update_leds) {
 		savests = sphi ();
-		outb (KBDATA, LEDCMD);
+		kbsend (LEDCMD);
 		ledcmd = 1;
 		spl (savests);
 	}

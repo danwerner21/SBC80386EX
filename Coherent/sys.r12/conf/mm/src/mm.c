@@ -29,6 +29,7 @@
 #define	PORTB	0x61			/* Port containing speaker enable */
 #define	FREQ	((int)(1193181L/440))	/* Counter for 440 Hz. tone */
 extern	int	con_beep;		/* Patchable: 1=beeps, 0=silent */
+extern	unsigned	KB_SPKR;	/* SBC-386EX: console/Space.c */
 
 int mmtime();
 extern char mmesc;	/* last unserviced escape character */
@@ -84,7 +85,12 @@ char *xp;
 	int s;
 
 	s = sphi();
-	if (con_beep) {
+	/*
+	 * SBC-386EX: KB_SPKR (console/Space.c) says there is a PC speaker,
+	 * timer 2 gated through port 61h.  The SBC has none, and does not
+	 * decode 61h: each access is a 209 ms bus-monitor timeout.
+	 */
+	if (con_beep && KB_SPKR) {
 		if (mmbeeps < 0) {
 			mmbeeps = 2;
 			outb (TIMCTL, 0xB6);	/* Timer 2, lsb, msb, binary */

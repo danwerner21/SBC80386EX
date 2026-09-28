@@ -104,6 +104,8 @@
 	.globl	mmesc
 	.globl	mmvcnt
 	.globl	mmcrtsav
+	.globl	CON_CRTC		/ SBC-386EX: console/Space.c
+	.globl	CON_CGA			/ SBC-386EX: console/Space.c
 
 / Globals defined in this module.
 	.globl	VIDSLOW			/ Patchable kernel variable
@@ -210,6 +212,14 @@ VIDSLOW:.long	0			/ SLOW
 	.long	DEFATTR			/ OATTR
 	.long	0			/ FONT
 mmesc:	.long	0			/ MM_ESC
+
+/ SBC-386EX: the CRTC port actually used.  MM_PORT keeps meaning the kind
+/ of adapter -- the colour checks compare it with COLOR -- while the I/O
+/ goes here: CON_CRTC if set (4E2h, the HD6445 on the ECB VGA3), else
+/ MM_PORT as before.  CON_CGA nonzero keeps the CGA/MDA registers at
+/ MM_PORT+4/+5 and 3DAh/3D8h; on the VGA3 those offsets are its RAM
+/ address and data ports, and writing them would scribble on the RAM.
+mm_io:	.long	0x03B4
 
 	.text
 	.align	4
@@ -356,12 +366,22 @@ mminit:
 	movl	$[SEG_VIDEOb|DPL_1],%fs:MM_BASE(%ebp)	/ set color base
 	movw	%fs:MM_BASE(%ebp),%es
 ?mminit1:
+	movl	%fs:MM_PORT(%ebp),%eax		/ SBC-386EX: choose the CRTC
+	cmpl	$0,%fs:CON_CRTC
+	je	?mminit2
+	movl	%fs:CON_CRTC,%eax
+?mminit2:
+	movl	%eax,%fs:mm_io
+
+	cmpl	$0,%fs:CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mminit3
 	movl	%fs:MM_PORT(%ebp),%edx		/ turn video off
 	addl	$4,%edx
 	movb	$0x21,%al
 	outb	(%dx)
+?mminit3:
 
-	movl	%fs:MM_PORT(%ebp),%edx		/ zero display offset
+	movl	%fs:mm_io,%edx			/ zero display offset
 	movb	$12,%al
 	outb	(%dx)
 	incl	%edx
@@ -374,6 +394,8 @@ mminit:
 	subb	%al,%al
 	outb	(%dx)
 
+	cmpl	$0,%fs:CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mminit4
 	movl	%fs:MM_PORT(%ebp),%edx		/ reset border to black
 	addl	$5,%edx
 	subb	%al,%al
@@ -381,6 +403,7 @@ mminit:
 
 	incl	%edx				/ reset TECMAR XMSR register
 	outb	(%dx)
+?mminit4:
 
 	movl	$0,%fs:MM_INVIS(%ebp)
 	movb	$DEFATTR,ATTR
@@ -427,6 +450,8 @@ mmgo:
 	movw	%ax,%ds
 ?mmgo1:
 	movl	$mmdata,%ebp
+	cmpl	$0,%fs:CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mmgo4
 	movl	%fs:MM_PORT(%ebp),%edx		/ turn video off if color board
 	cmpl	$MONO,%edx
 	je	?mmgo4
@@ -457,7 +482,7 @@ exit:	pop	%ebx
 	movb	COL,%fs:MM_COL(%ebp)
 	movl	POS,%fs:MM_POS(%ebp)		/ save position
 
-	movl	%fs:MM_PORT(%ebp),%edx		/ adjust cursor location
+	movl	%fs:mm_io,%edx			/ adjust cursor location
 	movl	POS,%ebx
 	orl	%fs:MM_INVIS(%ebp),%ebx
 	shrl	$1,%ebx
@@ -474,10 +499,13 @@ exit:	pop	%ebx
 	movb	%bl,%al
 	outb	(%dx)
 
+	cmpl	$0,%fs:CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mmexit1
 	movl	%fs:MM_PORT(%ebp),%edx		/ turn video on
 	addl	$4,%edx
 	movb	$0x29,%al
 	outb	(%dx)
+?mmexit1:
 	movl	$TIMEOUT,%fs:mmvcnt		/ TIMEOUT seconds before video disabled
 
 	movl	FRAME+0(%esp),%ebx		/ iop
@@ -516,9 +544,12 @@ mm_von:
 	movl	$TIMEOUT,mmvcnt			/ TIMEOUT seconds before video disabled
 	movb	$0x29,%al
 mm_von1:
+	cmpl	$0,CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mmvon2
 	movl	mmdata+MM_PORT,%edx		/ enable video display
 	addl	$4,%edx
 	outb	(%dx)
+?mmvon2:
 	ret
 
 ////////
@@ -1740,6 +1771,8 @@ mm_sgr:	movb	%fs:MM_N1(%ebp),%al
 	jg	?mm_sgrnext
 	movb	%al,%bl
 	movb	%cs:fcolor(%ebx),%al
+	cmpl	$0,%fs:CON_CGA			/ SBC-386EX: CGA registers?
+	je	?mm_sgrnext
 	push	%edx
 	movl	%fs:MM_PORT(%ebp),%edx
 	addl	$5,%edx

@@ -38,6 +38,18 @@ export TIMEZONE="GMT:000"
 export TZ="GMT0"
 TZEND
 
+# The ECB VGA3 and its keyboard: a second terminal, /dev/vga3, the PC
+# console device (2,0).  /dev/console stays the serial port.  Without the
+# board the drivers leave the hardware alone (CON_VGA 2), the device opens,
+# and its login simply never appears.
+rm -f /dev/vga3
+/etc/mknod /dev/vga3 c 2 0
+chmod 622 /dev/vga3
+grep '^[01]lPvga3$' /etc/ttys >/dev/null || echo '1lPvga3' >>/etc/ttys
+sed -e 's/^0lPvga3$/1lPvga3/' /etc/ttys >/tmp/ttys
+cp /tmp/ttys /etc/ttys
+rm /tmp/ttys
+
 # Boot the board kernel by default.  tboot loads /autoboot.
 ln -f /coh.sbc /autoboot
 ls -li /autoboot /coh.sbc /coherent

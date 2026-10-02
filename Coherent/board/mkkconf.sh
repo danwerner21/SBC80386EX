@@ -19,10 +19,15 @@ if [ ! -d $K ]; then
 	( cd $S/conf && tar cf /tmp/kconf.tar . ) || exit 1
 	mkdir $K
 	( cd $K && tar xf /tmp/kconf.tar && rm -f /tmp/kconf.tar && rm -rf */src ) || exit 1
-	for f in lib/k0.o lib/k386.a at/Driver.o kb/Driver.o mm/Driver.a; do
+	for f in lib/k0.o lib/k386.a at/Driver.o kb/Driver.o mm/Driver.a fdc/Driver.o; do
 		cp $K/$f $K/$f.mwc
 	done
 fi
+
+# A kconf made before a driver was added to the list above.
+for f in fdc/Driver.o; do
+	[ -f $K/$f.mwc ] || cp $K/$f $K/$f.mwc
+done
 
 # git on Windows does not keep execute bits.
 chmod a+x $K/bin/* $K/*/mkdev $K/*/after $K/install_conf/keeplist 2>/dev/null
@@ -37,11 +42,13 @@ cd $S/io.386 && cc -c putchar.c || exit 1
 cd $S && ar r $K/lib/k386.a i386/mchinit.o i386/die.o coh.386/misc.o \
 	coh.386/fs2.o coh.386/lib/ksynch.o io.386/putchar.o || exit 1
 
-# Drivers: at (IDE), kb (8242), mm (VGA3).  mmas.s through cc, as MWC did.
+# Drivers: at (IDE), kb (8242), mm (VGA3), fdc (the ECB FDC9266, our own
+# sbcfd.c in place of MWC's fdc+fl386).  mmas.s through cc, as MWC did.
 echo "mkkconf.sh: drivers"
 cd $S/conf/at/src && cc -o $K/at/Driver.o -c at.c || exit 1
 cd $S/conf/kb/src && cc -o $K/kb/Driver.o -c kb.c || exit 1
 cd $S/conf/mm/src && cc -c mm.c mmas.s && ar r $K/mm/Driver.a mm.o mmas.o || exit 1
+cd $S/conf/fdc/src && cc -o $K/fdc/Driver.o -c sbcfd.c || exit 1
 
 # Configuration files we changed.
 cp $S/conf/at/Space.c $K/at/Space.c

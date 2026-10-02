@@ -1,6 +1,8 @@
 # SBC-386EX: sys.r12/conf/sdevice with only the drivers the board can
-# use turned on.  Off, among others: fd and fdc (8237 DMA floppy -- the
-# SBC has no DMA), vtkb/nkb/vtnkb, lp (no port 378h), streams.  mm, kb
+# use turned on.  Off, among others: fd (MWC's fl386.c, which needs an
+# 8237 DMA channel the SBC lacks), vtkb/nkb/vtnkb, lp (no port 378h),
+# streams.  fdc, major 4, is our sbcfd.c for the ECB FDC9266 -- polled,
+# so no interrupt line.  mm, kb
 # and console drive the ECB VGA3 -- see the CON_ and KB_ lines in stune.
 # Type field:
 #	0 -> The device does not require an interrupt line
@@ -73,7 +75,7 @@ nkb	N	0	1	1	1	0x0	0x0	0x0	0x0
 vtkb	N	0	1	1	1	0x0	0x0	0x0	0x0
 vtnkb	N	0	1	1	1	0x0	0x0	0x0	0x0
 lp	N	0	0	0	0	0x0	0x0	0x0	0x0
-fdc	N	0	5	1	6	0x0	0x0	0x0	0x0
+fdc	Y	0	0	0	0	0x0	0x0	0x0	0x0
 asy	Y	0	0	0	0	0x0	0x0	0x0	0x0
 al0	N	0	0	0	0	0x0	0x0	0x0	0x0
 al1	N	0	0	0	0	0x0	0x0	0x0	0x0

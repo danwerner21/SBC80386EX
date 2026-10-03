@@ -5,6 +5,9 @@
     cohfsw.py IMAGE put HOSTFILE PATH [MODE]  create or replace a file
     cohfsw.py IMAGE mkdir PATH [MODE]     make a directory
     cohfsw.py IMAGE rm PATH               remove a file
+    cohfsw.py IMAGE zerofree [OFFSET]     zero the free blocks; OFFSET is the
+                                          sectors before the filesystem (32 on
+                                          the CF image)
 
 For building the SBC-386EX install diskettes without writing floppies
 through COHERENT's driver in QEMU, which now and then never finishes a
@@ -44,17 +47,20 @@ def putl3(b, o, v):
 
 
 class FSW(FS):
-    def __init__(self, path):
+    def __init__(self, path, offset=0):
         self.path = path
+        self.base = offset              # sectors before the filesystem
         with open(path, 'rb') as f:
             self.img = bytearray(f.read())
         self._load_super()
 
     # -- raw access ---------------------------------------------------------
     def block(self, n):
+        n += self.base
         return bytes(self.img[n * BSIZE:(n + 1) * BSIZE])
 
     def wblock(self, n, data):
+        n += self.base
         data = bytes(data).ljust(BSIZE, b'\0')
         self.img[n * BSIZE:(n + 1) * BSIZE] = data
 
@@ -120,7 +126,7 @@ class FSW(FS):
 
     # -- inodes -------------------------------------------------------------
     def _ioff(self, ino):
-        return 2 * BSIZE + (ino - 1) * INOSZ
+        return (self.base + 2) * BSIZE + (ino - 1) * INOSZ
 
     def iread(self, ino):
         o = self._ioff(ino)
@@ -303,6 +309,25 @@ class FSW(FS):
         self.iwrite(parent, pp)
         return ino
 
+    def zerofree(self):
+        """Zero every free block, keeping only the free-list links, so
+        that deleted files' contents do not survive in the image (and it
+        compresses).  Returns the number of blocks zeroed."""
+        n, nfree, free = 0, self.nfree, self.free
+        while nfree > 0:
+            for bno in free[1:nfree]:
+                self.wblock(bno, b'')
+                n += 1
+            link = free[0]
+            if not link:
+                break
+            b = self.block(link)
+            nfree = struct.unpack_from('<h', b, 0)[0]
+            free = [pdplong(b, 2 + 4 * i) for i in range(NICFREE)]
+            self.wblock(link, b[:2 + 4 * NICFREE])
+            n += 1
+        return n
+
     def mknod(self, path, mode, major, minor, uid=0, gid=0):
         """A device node; mode includes S_IFCHR or S_IFBLK.  An existing
         node is changed in place.  The device number is the first two
@@ -407,6 +432,12 @@ def main(argv):
     img, op, args = argv[1], argv[2], argv[3:]
     if op == 'mkfs':
         mkfs(img, int(args[0], 0))
+        return
+    if op == 'zerofree':
+        fs = FSW(img, int(args[0]) if args else 0)
+        print('%d free blocks zeroed' % fs.zerofree())
+        with open(img, 'wb') as f:      # the superblock is unchanged
+            f.write(fs.img)
         return
     fs = FSW(img)
     if op == 'put':

@@ -1,6 +1,7 @@
 #!/bin/sh
 # mkdisks.sh -- make the SBC-386EX install set, sbc-d1.img .. sbc-d5.img,
-# and sbc-b1.img, disk 1 for installing on the board itself.
+# and sbc-b1.img, disk 1 for installing on the board itself.  They are
+# written to Coherent/images, which is committed.
 #
 # Installing these in QEMU, exactly as the original COHERENT 4.2.10 kit
 # (README.md, section 3), gives a disk that boots the SBC-386EX directly.
@@ -25,7 +26,8 @@
 # floppies are written with tools/cohfsw.py, not through COHERENT's floppy
 # driver in QEMU, which now and then never finishes a transfer.
 set -e
-cd "$(dirname "$0")"
+mkdir -p "$(dirname "$0")/../images"
+cd "$(dirname "$0")/../images"
 K=../distrib/coherent/4_2_10
 
 for n in 1 2 3 4; do cp $K/d$n sbc-d$n.img; done
@@ -47,7 +49,7 @@ assert b'SBC-386EX' not in post
 d1.put('/conf/Coh_420.post', post + open('../board/Coh_420.post.sbc', 'rb').read())
 d1.save()
 
-dev = cohfs.FS('cf.img', 32)             # the partition starts at track 1
+dev = cohfs.FS('../emu/cf.img', 32)             # the partition starts at track 1
 
 # board disk 1
 shutil.copyfile('sbc-d1.img', 'sbc-b1.img')

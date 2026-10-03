@@ -8,19 +8,31 @@ node_modules/
 dist/
 
 # Coherent -- an allowlist.  Everything under Coherent/ stays out unless it
-# is re-included here: the archives (gtz/), the partition images (romana/)
-# and the distribution floppies (distrib/) are reference material that is
-# never edited, and far too large to belong in history.
+# is re-included here.  Out: the source archives (gtz/) and the partition
+# images (romana/), reference material far too large for history.  In:
+# everything needed to put COHERENT on an SBC-386EX or to rebuild it --
+# the original 4.2.10 install kit (distrib/), the kernel source with our
+# changes, the board files, the tools, and the finished images (images/).
 Coherent/*
 !Coherent/readme.txt
 !Coherent/*.md
 !Coherent/.gitattributes
 
+# The original COHERENT 4.2.10 install kit, four 1.44 MB floppies: what
+# emu/mkdisks.sh and the development-disk install start from.
+!Coherent/distrib/
+
+# Ready-to-use images: the CF card image (gzipped), the board and QEMU
+# install diskettes, and their checksums.  Rebuilt by emu/mkrelease.sh
+# and emu/mkdisks.sh.
+!Coherent/images/
+
 # Host-side tools: cohfs.py, qmp.py, sercon.py
 !Coherent/tools/
 
-# Emulator scripts only.  The disk images are rebuilt from distrib/ by the
-# install procedure, and the screenshots are scratch.
+# Emulator scripts only.  The working disk images (the development disk,
+# test builds) are rebuilt by the procedures in Coherent/README.md and the
+# screenshots are scratch; finished images go in Coherent/images.
 !Coherent/emu/
 Coherent/emu/*.img
 Coherent/emu/*.png

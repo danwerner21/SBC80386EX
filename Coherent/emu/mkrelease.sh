@@ -4,8 +4,10 @@
 # Copies cf.img (which must hold a current /coh.sbc and /coh.sbcq -- see
 # board/mkboard.sh and board/setup.sh), boots the copy in QEMU on the QEMU
 # twin /coh.sbcq, deletes what the board does not need -- the build trees
-# under /u/sbc, test kernels, the twin itself -- and syncs.  The result is
-# written raw to a CF card.  QEMU must not be running when this starts.
+# under /u/sbc, test kernels, the twin itself -- syncs, and zeroes the free
+# blocks.  The result is written raw to a CF card.  For the repository:
+#	./mkrelease.sh ../images/sbc-cf.img && gzip -9 -n -f ../images/sbc-cf.img
+# QEMU must not be running when this starts.
 set -e
 [ $# -eq 1 ] || { echo "usage: mkrelease.sh OUT.img" >&2; exit 2; }
 cd "$(dirname "$0")"
@@ -35,4 +37,7 @@ $S run "ls /; df; ls -li /autoboot /coh.sbc; sync; sync; sync" 60
 sleep 2
 $Q hmp quit >/dev/null
 sleep 3
+# The deleted build trees are still in the free blocks: zero them, so the
+# image holds nothing it does not use, and compresses to about 5 MB.
+py ../tools/cohfsw.py "$OUT" zerofree 32
 sha1sum "$OUT"

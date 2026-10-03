@@ -141,6 +141,18 @@ lock_clock()
 	register int i;
 
 	/*
+	 * SBC-386EX: no CMOS clock.  Nothing decodes 70h/71h, every access
+	 * is a 209 ms bus timeout reading FFh, and UIP never clears: the
+	 * wait below would last seven and a half hours.  FFh is no state
+	 * an MC146818's register A is ever in (divider bits 111 hold it in
+	 * reset), so take it as "no clock" and fail at once.  ATclock then
+	 * reports it cannot read /dev/clock, and the time stays as the
+	 * kernel set it from the DS1302.
+	 */
+	if (read_cmos (SRA) == 0xFF)
+		return 0;
+
+	/*
 	 * Wait for the clock to settle.  If it does not settle in
 	 * a reasonable amount of time, give up.
 	 */

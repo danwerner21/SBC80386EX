@@ -296,8 +296,18 @@ int	      *	rvalp;
 		 */
 		if (copyinEfault(vec, &pcon, sizeof(pcon)) ||
 		  !(pconintp = patchConLookup(pcon.patch_vname)) ||
-		  validMajor(pcon.patch_maj) ||
-		  matchMajor(pcon.patch_maj, NULL))
+		  validMajor(pcon.patch_maj))
+			result = -1;
+		/*
+		 * SBC-386EX: the install diskette's kernel is the board
+		 * kernel, with "at" attached from the start, and /etc/mkdev
+		 * attaches it again.  The same driver already at that
+		 * major is success, and is not loaded twice.
+		 */
+		else if (drvl[pcon.patch_maj].d_conp ==
+		  (CON *)(pconintp->patch_addr))
+			result = 0;
+		else if (matchMajor(pcon.patch_maj, NULL))
 			result = -1;
 		else {
 			drvl[pcon.patch_maj].d_conp =

@@ -4,6 +4,8 @@
 # streams.  fdc, major 4, is our sbcfd.c for the ECB FDC9266 -- polled,
 # so no interrupt line.  mm, kb
 # and console drive the ECB VGA3 -- see the CON_ and KB_ lines in stune.
+# patch, /dev/patch, is on for the install diskettes: /etc/mkdev runs
+# /conf/kpatch on the running kernel.
 # Type field:
 #	0 -> The device does not require an interrupt line
 #	1 -> The device requires an interrupt line
@@ -90,4 +92,4 @@ aha	N	0	0	0	0	0x0	0x0	0x0	0x0
 hai	N	0	0	0	0	0x0	0x0	0x0	0x0
 ss	N	0	0	0	0	0x0	0x0	0x0	0x0
 dummy	N	0	0	0	0	0x0	0x0	0x0	0x0
-patch	N	0	0	0	0	0x0	0x0	0x0	0x0
+patch	Y	0	0	0	0	0x0	0x0	0x0	0x0

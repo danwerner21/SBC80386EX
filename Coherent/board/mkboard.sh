@@ -42,4 +42,10 @@ cp $K /coh.sbcq
 /conf/patch -v /coh.sbcq CON_VGA=1 CON_CRTC=0 CON_CGA=1 KB_DATA=0x60 KB_STAT=0x64 || exit 1
 # Relinking replaced the file, so point /autoboot at the new one.
 ln -f $K /autoboot
+
+# The SBC-386EX install diskette's kernel (emu/mkdisks.sh puts it on
+# sbc-b1.img as /coherent): root on the 1.44M floppy, read-only, pipes on
+# the RAM disk.  /etc/build patches its copy on the hard disk back.
+cp $K /u/sbc/coh.fd
+/conf/patch -v /u/sbc/coh.fd "rootdev=makedev(4,15)" ronflag=1 || exit 1
 ls -li $K /coh.sbcq /autoboot

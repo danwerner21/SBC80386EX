@@ -303,6 +303,25 @@ class FSW(FS):
         self.iwrite(parent, pp)
         return ino
 
+    def mknod(self, path, mode, major, minor, uid=0, gid=0):
+        """A device node; mode includes S_IFCHR or S_IFBLK.  An existing
+        node is changed in place.  The device number is the first two
+        bytes of the address area: minor, then major."""
+        ino = self.lookup(path)
+        if ino is None:
+            parent, name = self._split(path)
+            ino = self.ialloc()
+            self._dirent(parent, name, ino)
+        elif not (stat.S_ISCHR(self.iread(ino)['mode']) or stat.S_ISBLK(self.iread(ino)['mode'])):
+            raise FileExistsError(path)
+        ip = {'mode': mode, 'nlink': 1, 'uid': uid, 'gid': gid,
+              'size': 0, 'addr': [0] * 13}
+        self.iwrite(ino, ip)
+        o = self._ioff(ino)
+        self.img[o + 12] = minor
+        self.img[o + 13] = major
+        return ino
+
     def rm(self, path):
         parent, name = self._split(path)
         ino = self._undirent(parent, name)

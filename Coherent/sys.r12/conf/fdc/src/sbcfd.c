@@ -39,6 +39,13 @@
    the card is jumpered to 30h-3Fh.  Patchable (/conf/patch FD_BASE=...). */
 int	FD_BASE = 0x430;
 
+/* Not used.  The installer's /etc/mkdev patches it ("Are you installing
+   on an IBM PS1 or ValuePoint?") into the kernel it boots and the one it
+   installs, as MWC's fl386.c had it; a patch of a missing symbol fails
+   the install.  Initialised, as MWC's was, so that it is in .data: a
+   .bss variable has no bytes in the kernel file for /conf/patch. */
+int	fl_dsk_ch_prob = 1;
+
 #define	FDC_MSR		(FD_BASE + 6)	/* main status, read		*/
 #define	FDC_DATA	(FD_BASE + 7)	/* command and result		*/
 #define	FDC_LATCH	(FD_BASE + 8)	/* 74LS273, WRITE ONLY		*/

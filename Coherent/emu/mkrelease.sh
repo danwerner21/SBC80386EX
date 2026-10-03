@@ -5,8 +5,9 @@
 # board/mkboard.sh and board/setup.sh), boots the copy in QEMU on the QEMU
 # twin /coh.sbcq, deletes what the board does not need -- the build trees
 # under /u/sbc, test kernels, the twin itself -- syncs, and zeroes the free
-# blocks.  The result is written raw to a CF card.  For the repository:
-#	./mkrelease.sh ../images/sbc-cf.img && gzip -9 -n -f ../images/sbc-cf.img
+# blocks.  The result is written raw to a CF card -- but only a card the
+# BIOS sees as 490/4/32 (or 492/4/32), the geometry cf.img was partitioned
+# for.  A development aid; the board is installed from the diskettes.
 # QEMU must not be running when this starts.
 set -e
 [ $# -eq 1 ] || { echo "usage: mkrelease.sh OUT.img" >&2; exit 2; }

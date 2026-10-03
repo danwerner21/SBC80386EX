@@ -6,63 +6,114 @@ if an ECB VGA3 is fitted, a second login on its screen and PS/2 keyboard.
 It runs from a CompactFlash card on the board's IDE port, and reads and
 writes diskettes on an ECB Disk I/O V3.
 
-There are two ways to put it on a board:
-
-- **[Write the ready-made CF image](#1-quick-start-the-cf-card-image)** to
-  a card. A few minutes; recommended.
-- **[Install from diskettes](#3-installing-from-diskettes-on-the-board)**
-  on the board itself, as the original kit was installed on a PC.
-  *Not yet verified on hardware.*
-
-Everything needed is in this folder. The rest of this file is
-[how the images are built](#5-building-from-source) and
-[what was changed](#9-what-was-changed-and-why), for anyone who wants to
+It is installed on the board itself, from five diskettes, as the original
+kit was installed on a PC: the installer partitions the CF card for
+whatever geometry the BIOS reports, makes the filesystem and copies the
+system on. Everything needed is in this folder. The rest of this file is
+[how the diskettes are built](#4-building-from-source) and
+[what was changed](#8-what-was-changed-and-why), for anyone who wants to
 change the kernel.
 
 ---
 
 ## Contents
 
-1. [Quick start: the CF card image](#1-quick-start-the-cf-card-image)
+1. [Installing](#1-installing)
 2. [Using the system](#2-using-the-system)
-3. [Installing from diskettes on the board](#3-installing-from-diskettes-on-the-board)
-4. [What is in this folder](#4-what-is-in-this-folder)
-5. [Building from source](#5-building-from-source)
-6. [Making the development disk from scratch](#6-making-the-development-disk-from-scratch)
-7. [Settings: tunables and patching](#7-settings-tunables-and-patching)
-8. [Debugging aids](#8-debugging-aids)
-9. [What was changed, and why](#9-what-was-changed-and-why)
-10. [Known limitations](#10-known-limitations)
-11. [Licence](#11-licence)
+3. [What is in this folder](#3-what-is-in-this-folder)
+4. [Building from source](#4-building-from-source)
+5. [Making the development disk from scratch](#5-making-the-development-disk-from-scratch)
+6. [Settings: tunables and patching](#6-settings-tunables-and-patching)
+7. [Debugging aids](#7-debugging-aids)
+8. [What was changed, and why](#8-what-was-changed-and-why)
+9. [Known limitations](#9-known-limitations)
+10. [Licence](#10-licence)
 
 ---
 
-## 1. Quick start: the CF card image
+## 1. Installing
 
 ### What you need
 
 | | |
 |---|---|
-| Board | an SBC-386EX running the BIOS in this repository (`SBC386/bios`). Tested with 64 MB; COHERENT uses up to 16 MB |
-| CF card | 32 MB or larger, on the board's IDE port. The image uses the first 30 MB (62,720 sectors); the rest is left alone |
-| Terminal | on the board's first serial port (SIO0, COM1), **9600 baud, 8N1** |
-| Optional | an ECB VGA3 with a PS/2 keyboard, for a second login |
-| Optional | an ECB Disk I/O V3 floppy controller, jumpered for I/O 30h–3Fh, for diskettes |
-| On the PC | a decompressor for `.gz` (7-Zip, or `gzip -d`), and a raw disk writer (Win32 Disk Imager, balenaEtcher, or `dd`) |
+| Board | an SBC-386EX running the BIOS in this repository (`SBC386/bios`), set to boot from A: when a diskette is in. Tested with 64 MB; COHERENT uses up to 16 MB |
+| CF card | on the board's IDE port. **The install erases it** |
+| Floppy | an ECB Disk I/O V3, jumpered for I/O 30h–3Fh, with a 1.44 MB drive as A: |
+| Terminal | on the board's first serial port (SIO0, COM1), **9600 baud, 8N1**. The whole install runs here |
+| Diskettes | five 1.44 MB diskettes, formatted, write-protect off |
+| Optional | an ECB VGA3 with a PS/2 keyboard, for a second login once installed |
 
-### Steps
+### The diskettes
 
-1. **Unpack the image.** `images/sbc-cf.img.gz` becomes `sbc-cf.img`,
-   32,112,640 bytes. (balenaEtcher can write the `.gz` directly.)
-2. **Write it raw to the card.** It is a whole-disk image: partition table,
-   master boot and filesystem. It replaces everything on the card.
-3. **Check the card's geometry in SETUP.** The BIOS must see the card with
-   **4 heads and 32 sectors per track**. The partition table was written
-   for 490/4/32, and the master boot finds the partition by CHS. 492/4/32
-   also works: the heads and sectors match, and the cylinder count only has
-   to be at least 490. If the card comes out otherwise, set 490/4/32 in
-   SETUP's fixed-disk geometry override.
-4. **Boot.** On the serial terminal:
+| Diskette | Image | |
+|---|---|---|
+| 1 | `images/sbc-b1.img` | boot diskette: the board kernel, console on the serial port |
+| 2, 3, 4 | `images/sbc-d2.img` … `sbc-d4.img` | the original COHERENT 4.2.10 kit |
+| 5 | `images/sbc-d5.img` | the board supplement: kernel and settings |
+
+Write each raw: RawWrite for Windows, or `dd if=sbc-b1.img of=/dev/fd0` on
+Linux. Use `sbc-b1.img`, not `sbc-d1.img`, which is disk 1 for an install
+in QEMU ([section 4.1](#41-the-diskettes-and-installing-in-qemu)).
+`images/SHA1SUMS` has the checksum of each image.
+
+### First stage: from diskette 1
+
+Boot the board with diskette 1 in A:. At the `?` prompt type `begin`, then
+answer:
+
+| Question | Answer |
+|---|---|
+| Serial number from the card | `146401000` (passes the installer's check) |
+| Type of disk controller | `1`, AT-compatible |
+| Use NORMAL polling | either; both give the board's port |
+| Number of non-SCSI hard drives | `1` |
+| IBM PS1 or ValuePoint | `n` |
+| Install the COHERENT master boot | `y` |
+| Are the values correct | `y`: the card's geometry as the BIOS reports it |
+| Exit instead of zeroing the partition table | `n` |
+| fdisk | `2` (change one), partition `0`, bases in cylinders `n`, sizes in tracks `y`, COHERENT partition `y`, base track Enter (1), size Enter (the rest of the card); then `1` (active) `y` partition `0`; then `0` (quit), write `y` |
+| Scan for bad blocks | `n` |
+| Create a new filesystem | `y` |
+
+If the installer says the partition is larger than COHERENT handles well,
+take its advice and make it smaller.
+
+When it says so, **take diskette 1 out** and let it reboot: the board now
+boots COHERENT from the CF card.
+
+### Second stage: diskettes 2 to 5
+
+It asks for diskettes 2, 3, 4 and 5 in turn, then:
+
+| Question | Answer |
+|---|---|
+| AT hard drive: change status / configuration | Enter, Enter |
+| Adaptec (twice), Seagate/Future Domain | Enter (not enabled) |
+| Enable serial port driver | Enter (`y`) |
+| Link `/dev/lp` / `/dev/modem` to a COM port | Enter / `n` |
+| Virtual consoles | `n` |
+| Keyboard | U.S. 101-key, not loadable (Enter) |
+| Floating point emulation | either; the board kernel sets its own |
+| Parallel printer | change status `y` (disable it) |
+| ptys, STREAMS | Enter throughout |
+| Daylight saving, date, timezone | anything; the board's own settings replace them |
+| Site name | e.g. `sbc386`; domain Enter |
+| Dictionary | `2` |
+| Skip spooler configuration | `y` |
+| Passwords, extra users | Enter throughout |
+
+At the end it sets the system up for the board:
+
+```
+SBC-386EX: setting up the board system.
+...
+SBC-386EX: done.  This disk now boots the board kernel, /coh.sbc;
+```
+
+and reboots into the finished system.
+
+### A normal boot
 
 ```
 Mark Williams
@@ -85,14 +136,9 @@ Going multiuser...
 Coherent 386 login:
 ```
 
-5. **Log in as `root`.** There is no password; set one with `passwd`.
-
-With a VGA3 fitted, the monitor shows a second `login:` for the PS/2
-keyboard, whatever SETUP's console choice. Without one, the serial side is
-unaffected.
-
-To check the download: `images/SHA1SUMS` has the SHA1 of every file in
-`images/`.
+Log in as `root`. There is no password; set one with `passwd`. With a VGA3
+fitted, the monitor shows a second `login:` for the PS/2 keyboard, whatever
+SETUP's console choice. Without one, the serial side is unaffected.
 
 ---
 
@@ -108,75 +154,15 @@ To check the download: `images/SHA1SUMS` has the SHA1 of every file in
 | COHERENT diskettes | `/etc/mkfs /dev/fva0 2880`, then `mount /dev/fva0 /mnt`. Diskettes must already be formatted (format them under DOS) |
 | Manual pages | `man` *topic* |
 
-The FPU is assumed fitted (an 80387; see [section 10](#10-known-limitations)).
+The FPU is assumed fitted (an 80387; see [section 9](#9-known-limitations)).
 
 ---
 
-## 3. Installing from diskettes on the board
-
-> **Not yet verified on hardware.** Every step has been checked in QEMU
-> except the parts only the board can run: booting from the floppy and
-> reading the diskettes with the SBC floppy driver. Use the
-> [CF image](#1-quick-start-the-cf-card-image) unless you want to try this.
-
-This is the original COHERENT 4.2.10 install, adapted to the board. It
-partitions the CF card, makes the filesystem and copies five diskettes
-onto it. The result is the same system as the CF image.
-
-**It erases the CF card.**
-
-You need everything in [section 1](#what-you-need), including the floppy
-controller and a 1.44 MB drive as drive A:, a BIOS that boots from A:,
-and five 1.44 MB diskettes, write-protect off.
-
-| Diskette | Image | |
-|---|---|---|
-| 1 | `images/sbc-b1.img` | boot diskette: the board kernel, console on the serial port |
-| 2, 3, 4 | `images/sbc-d2.img` … `sbc-d4.img` | the original COHERENT 4.2.10 kit |
-| 5 | `images/sbc-d5.img` | the board supplement: kernel and settings |
-
-Write each raw (RawWrite for Windows, or `dd if=sbc-b1.img of=/dev/fd0` on
-Linux). Use `sbc-b1.img`, not `sbc-d1.img`, which is disk 1 for a QEMU
-install ([section 5.1](#51-or-an-install-set-for-qemu)).
-
-1. Boot the board from diskette 1. Everything happens on the serial
-   terminal.
-2. At the `?` prompt type `begin`, then answer:
-
-| Question | Answer |
-|---|---|
-| Serial number from the card | `146401000` (passes the installer's check) |
-| Type of disk controller | `1`, AT-compatible |
-| Use NORMAL polling | either; both give the board's port |
-| Number of non-SCSI hard drives | `1` |
-| IBM PS1 or ValuePoint | `n` |
-| Install the COHERENT master boot | `y` |
-| Are the values correct (490 or 492 cyl, 4 heads, 32 sectors) | `y` |
-| Exit instead of zeroing the partition table | `n` |
-| fdisk | `2` (change one), partition `0`, bases in cylinders `n`, sizes in tracks `y`, COHERENT partition `y`, base track Enter (1), size Enter; then `1` (active) `y` partition `0`; then `0` (quit), write `y` |
-| Scan for bad blocks | `n` |
-| Create a new filesystem | `y` |
-
-3. It reboots when done. **Take diskette 1 out**, so the board boots the
-   CF card. It asks for diskettes 2 to 5, then the configuration questions
-   in [section 6.1](#61-install-coherent-4210-in-qemu) (the second table).
-4. At the end it sets the system up for the board, ending with:
-
-```
-SBC-386EX: setting up the board system.
-...
-SBC-386EX: done.  This disk now boots the board kernel, /coh.sbc;
-```
-
-and reboots into the finished system.
-
----
-
-## 4. What is in this folder
+## 3. What is in this folder
 
 | Path | What it is |
 |---|---|
-| `images/` | **the finished images**: `sbc-cf.img.gz` (the CF card), `sbc-b1.img` and `sbc-d2.img`–`sbc-d5.img` (the board install set), `sbc-d1.img` (disk 1 for installing in QEMU), `SHA1SUMS` |
+| `images/` | **the install diskettes**: `sbc-b1.img` and `sbc-d2.img`–`sbc-d5.img` for the board, `sbc-d1.img` (disk 1 for installing in QEMU), `SHA1SUMS` |
 | `distrib/coherent/4_2_10/` | the original COHERENT 4.2.10 install kit, four 1.44 MB diskettes (`d1`–`d4`), which the images are built from |
 | `sys.r12/` | MWC's COHERENT 4.2.12 kernel tree (from `gtz/src.gtz`), with our changes. Git history shows each change against the original |
 | `board/` | the board's driver list and settings, and the scripts that build the kernel and set the system up, run inside COHERENT |
@@ -189,9 +175,9 @@ and `emu/*.img`, the working disks.
 
 ---
 
-## 5. Building from source
+## 4. Building from source
 
-Only needed to change the kernel or the images. Everything is built on a
+Only needed to change the kernel or the diskettes. Everything is built on a
 Windows PC in QEMU: the kernel is linked inside COHERENT, from MWC's 4.2.12
 kernel sources and objects with our changes. Nothing is built on the board.
 
@@ -202,7 +188,7 @@ kernel sources and objects with our changes. Nothing is built on the board.
 | QEMU | `qemu-system-i386`, installed at `C:\Program Files\qemu` (`winget install SoftwareFreedomConservancy.QEMU`) |
 | Git Bash | the scripts are `sh`; run them from Git Bash |
 | Python 3 | the `py` launcher; the tools use only the standard library |
-| The development disk | `emu/cf.img`, an installed COHERENT that holds the build trees. Not in git: [section 6](#6-making-the-development-disk-from-scratch) makes it, once |
+| The development disk | `emu/cf.img`, an installed COHERENT that holds the build trees. Not in git: [section 5](#5-making-the-development-disk-from-scratch) makes it, once |
 
 Optional: `py -m pip install --user capstone keystone-engine` for
 `tools/kdis.py` (disassemble the kernel) and `tools/mkcom.py`.
@@ -219,7 +205,7 @@ paths. Anything that passes a COHERENT path to a tool needs
 | `emu/run.sh` | start QEMU with the CF card's geometry (490/4/32), serial port on TCP 4555, control on TCP 4444 |
 | `emu/boot.sh KERNEL` | reset the VM and boot a named kernel from the `tboot` prompt |
 | `emu/pushsrc.sh` | copy `sys.r12/` and `board/` into the VM, under `/u/sbc` |
-| `emu/mkrelease.sh OUT.img` | make a tidy board image from the development disk |
+| `emu/mkrelease.sh OUT.img` | a development aid: a trimmed copy of the development disk, for a test card with the same 490/4/32 geometry |
 | `emu/mkdisks.sh` | make the install diskettes in `images/` |
 | `tools/cohfsw.py` | write COHERENT filesystem images from the host: `mkfs`, `put`, `mkdir`, `rm`, `zerofree` |
 | `tools/sercon.py` | run a shell command on the VM's serial port; `pull` copies a file out |
@@ -277,40 +263,33 @@ on the board, and the QEMU screen shows the second login.
 ./boot.sh coh.sbcq
 ```
 
-**5. Stop QEMU and make the images.**
+**5. Stop QEMU and make the diskettes.**
 
 ```sh
 py ../tools/sercon.py login root
 py ../tools/sercon.py run "sync; sync; sync" 30
 py ../tools/qmp.py hmp quit
-./mkrelease.sh ../images/sbc-cf.img && gzip -9 -n -f ../images/sbc-cf.img
 ./mkdisks.sh
-(cd ../images && sha1sum *.img *.gz > SHA1SUMS)
+(cd ../images && sha1sum *.img > SHA1SUMS)
 ```
 
-`mkrelease.sh` copies `cf.img`, boots the copy, deletes the build trees
-and anything else the board does not need, and zeroes the free blocks,
-so the image holds nothing it does not use and compresses to about 5 MB.
-The development disk is left as it was. `mkdisks.sh` writes the
-diskettes on the host, in seconds, with `tools/cohfsw.py`, not through
+`mkdisks.sh` takes the kernels from `cf.img` and writes the diskettes into
+`images/` on the host, in seconds, with `tools/cohfsw.py`, not through
 COHERENT's floppy driver, which in QEMU now and then never finishes a write.
+
+`mkrelease.sh OUT.img` makes a CF image straight from the development
+disk: it copies `cf.img`, boots the copy, deletes the build trees and
+zeroes the free blocks. It suits only a card whose BIOS geometry is
+490/4/32 (or 492/4/32), the geometry the development disk was partitioned
+for, so it is for testing, not for distribution.
 
 `mkkconf.sh` is safe to run again after any source change, and
 `mkboard.sh` always relinks from scratch. The build is reproducible: two
 builds of the same source differ only in the kernel's COFF timestamp.
 
-### 5.1 Or: an install set for QEMU
+### 4.1 The diskettes, and installing in QEMU
 
-The other way to make a board disk is to install it in QEMU, exactly as
-the original kit is installed ([section 6.1](#61-install-coherent-4210-in-qemu)),
-with `images/sbc-d1.img` … `sbc-d5.img` in place of `d1`–`d4`. The
-installer finishes with a disk that boots the board: no pushing, building
-or trimming.
-
-```sh
-"/c/Program Files/qemu/qemu-img.exe" create -f raw inst.img 32112640
-IMG=inst.img GUI=1 ./run.sh ../images/sbc-d1.img a
-```
+What `mkdisks.sh` puts on each:
 
 | Disk | Contents |
 |---|---|
@@ -321,16 +300,28 @@ IMG=inst.img GUI=1 ./run.sh ../images/sbc-d1.img a
 
 The installer asks for disk 5 after disk 4 and unpacks it like the others.
 At the very end, after its own questions, `/conf/Coh_420.post` runs
-`board/setup.sh`. The disk keeps the QEMU twin `/coh.sbcq`
-(`./boot.sh coh.sbcq`) so it can be tried in the emulator first.
+`board/setup.sh`.
+
+To try a change to the install without the board, install in QEMU, as in
+[section 5.1](#51-install-coherent-4210-in-qemu), with `sbc-d1.img` …
+`sbc-d5.img` in place of `d1`–`d4`:
+
+```sh
+"/c/Program Files/qemu/qemu-img.exe" create -f raw inst.img 32112640
+IMG=inst.img GUI=1 ./run.sh ../images/sbc-d1.img a
+```
+
+The result boots the QEMU twin (`./boot.sh coh.sbcq`). It also boots a
+board, but only from a card the BIOS sees as 490/4/32, the geometry it
+was partitioned for: install on the board for anything else.
 
 ---
 
-## 6. Making the development disk from scratch
+## 5. Making the development disk from scratch
 
 Once, or to start again. About forty minutes, most of it the installer.
 
-### 6.1 Install COHERENT 4.2.10 in QEMU
+### 5.1 Install COHERENT 4.2.10 in QEMU
 
 ```sh
 cd Coherent/emu
@@ -389,7 +380,7 @@ Then the configuration questions:
 | Skip spooler configuration | `y` |
 | Passwords, extra users | Enter throughout |
 
-### 6.2 A login on the serial port
+### 5.2 A login on the serial port
 
 The tools talk to COHERENT over the serial port, so it needs a login
 there. In the QEMU window, log in as `root` and:
@@ -402,11 +393,11 @@ then halt (`sync; sync`) and close QEMU. From here on use `./run.sh`
 without `GUI=1` and the tools. Keep a copy of this disk as it stands
 (`cp cf.img cf-installed.img`); it is a clean start for next time.
 
-Now carry on with [section 5](#rebuilding).
+Now carry on with [section 4](#rebuilding).
 
 ---
 
-## 7. Settings: tunables and patching
+## 6. Settings: tunables and patching
 
 The board kernel is MWC's with a handful of settings. Most are
 **tunables**, set at link time from `board/stune`; `mkboard.sh` patches
@@ -428,7 +419,7 @@ the few that are not.
 | `FD_BASE` | `0x430` | | ECB floppy controller base port |
 | `pit_count` *(patched)* | 9216 | 11932 | timer 0 reload for 100 Hz: the SBC's timer runs at 921,600 Hz |
 | `condev` *(patched)* | `0x580` | `0x200` | kernel console: `/dev/com1l` |
-| `early_con` *(patched)* | 0 | 0 | see section 8 |
+| `early_con` *(patched)* | 0 | 0 | see section 7 |
 
 Any of these can be changed in a built kernel, on the board or in QEMU:
 
@@ -442,7 +433,7 @@ does not display the setting: it sets it to zero.
 
 ---
 
-## 8. Debugging aids
+## 7. Debugging aids
 
 **Early console.** `/conf/patch /coh.sbc early_con=0x3F8`, then reboot.
 Everything the kernel says before its drivers are up goes straight to
@@ -476,7 +467,7 @@ disassembles a kernel pulled out of an image with `tools/cohfs.py`.
 
 ---
 
-## 9. What was changed, and why
+## 8. What was changed, and why
 
 Each is a separate commit on the `coherent` branch with the reasoning
 and the evidence.
@@ -500,7 +491,7 @@ and the evidence.
 
 ---
 
-## 10. Known limitations
+## 9. Known limitations
 
 - **The clock is read, not written.** `date -s` sets COHERENT's time but
   not the DS1302; set the clock in the BIOS SETUP.
@@ -512,20 +503,20 @@ and the evidence.
   blanking as the SBC BIOS's are.
 - **16 MB.** The kernel uses 16 MB of the board's 64 (`HACK_LIMIT` in
   `mchinit.c`, MWC's own cap).
-- **30 MB.** The image's partition is 30 MB, whatever the card's size.
-  The rest of a larger card can be partitioned with `/etc/fdisk` and given
-  a filesystem with `/etc/mkfs`.
 - **Floppy: read and write only.** `sbcfd.c` reads and writes drives 0 and
   1 in the standard formats, polled, with interrupts held off for each
   sector's 512 bytes. It cannot format (`fdformat`); format diskettes
   under DOS. The autosensing "special" devices are not supported.
-- **The board install is unverified.** [Section 3](#3-installing-from-diskettes-on-the-board)
-  has not yet been run on a board.
 
 ---
 
-## 11. Licence
+## 10. Licence
 
-COHERENT was released as open source, under the three-clause BSD licence,
-by Mark Williams Company's founder Robert Swartz in 2015. That covers the
-4.2.10 install kit in `distrib/` and the kernel in `sys.r12/`.
+The SBC-386EX work here (the kernel changes, the board files, the
+scripts and the tools) is free software under the GNU General Public
+License, version 3 or (at your option) any later version, as the SBC-386EX
+BIOS is; the licence text is in `SBC386/bios/COPYING`.
+
+COHERENT itself, the 4.2.10 install kit in `distrib/` and MWC's kernel
+sources in `sys.r12/`, was released as open source under the three-clause
+BSD licence by Mark Williams Company's founder Robert Swartz in 2015.

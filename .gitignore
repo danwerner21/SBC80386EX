@@ -12,7 +12,7 @@ dist/
 # images (romana/), reference material far too large for history.  In:
 # everything needed to put COHERENT on an SBC-386EX or to rebuild it --
 # the original 4.2.10 install kit (distrib/), the kernel source with our
-# changes, the board files, the tools, and the finished images (images/).
+# changes, the board files, the tools, and the install diskettes (images/).
 Coherent/*
 !Coherent/readme.txt
 !Coherent/*.md
@@ -22,9 +22,8 @@ Coherent/*
 # emu/mkdisks.sh and the development-disk install start from.
 !Coherent/distrib/
 
-# Ready-to-use images: the CF card image (gzipped), the board and QEMU
-# install diskettes, and their checksums.  Rebuilt by emu/mkrelease.sh
-# and emu/mkdisks.sh.
+# The install diskettes, for the board and for QEMU, and their checksums.
+# Rebuilt by emu/mkdisks.sh.
 !Coherent/images/
 
 # Host-side tools: cohfs.py, qmp.py, sercon.py

@@ -60,7 +60,7 @@ in QEMU ([section 4.1](#41-the-diskettes-and-installing-in-qemu)).
 **Check every diskette before you start.** The install takes the better
 part of an hour, and a single unreadable sector loses a whole archive
 without stopping it. On Windows, with the diskette still in the drive
-that wrote it:
+that wrote it, from this folder:
 
 ```
 py tools\fdcheck.py images\sbc-d4.img A:
@@ -243,6 +243,7 @@ paths. Anything that passes a COHERENT path to a tool needs
 | `tools/sercon.py` | run a shell command on the VM's serial port; `pull` copies a file out |
 | `tools/push.sh` | copy files into the VM (tar on a FAT floppy QEMU builds from `emu/xfer/`) |
 | `tools/cohfs.py` | read a COHERENT filesystem image from Windows |
+| `tools/fdcheck.py` | read a written diskette back and compare it with its image |
 | `board/mkkconf.sh` | *(runs in COHERENT)* build the kernel configuration tree `/u/sbc/kconf` |
 | `board/mkboard.sh` | *(runs in COHERENT)* link the board kernel `/coh.sbc`, its QEMU twin `/coh.sbcq`, and the install diskette's kernel `/u/sbc/coh.fd` |
 | `board/setup.sh` | *(runs in COHERENT)* serial console, VGA3 terminal, clock, timezone, `/autoboot` |
@@ -491,8 +492,9 @@ R08i58.i58.i58.i58.i58.i58.i58.i58.
 
 **Floppy errors** print the controller's status: `fd0: block N: ST0 x
 ST1 y ST2 z`. ST1 `10` is an overrun (data not collected in time), ST1
-`02` is write-protect (reported as `fd0: write protected`), ST1 `01` or
-`04` is a missing or unreadable sector.
+`02` is write-protect (reported as `fd0: write protected`), ST1 `20` with
+ST2 `20` is a CRC error in the sector's data, and ST1 `01` or `04` is a
+missing or unreadable sector.
 
 **Symbols.** `/coh.sbc.sym` maps addresses to names; `tools/kdis.py`
 disassembles a kernel pulled out of an image with `tools/cohfs.py`.

@@ -48,7 +48,7 @@ echo "mkkconf.sh: drivers"
 cd $S/conf/at/src && cc -o $K/at/Driver.o -c at.c || exit 1
 cd $S/conf/kb/src && cc -o $K/kb/Driver.o -c kb.c || exit 1
 cd $S/conf/mm/src && cc -c mm.c mmas.s && ar r $K/mm/Driver.a mm.o mmas.o || exit 1
-cd $S/conf/fdc/src && cc -o $K/fdc/Driver.o -c sbcfd.c || exit 1
+cd $S/conf/fdc/src && cc -c sbcfd.c fdpio.s && ld -r -o $K/fdc/Driver.o sbcfd.o fdpio.o || exit 1
 
 # Configuration files we changed.
 cp $S/conf/at/Space.c $K/at/Space.c

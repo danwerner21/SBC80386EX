@@ -74,8 +74,8 @@ that holds the build trees. It is not in git — section 3 makes it.
 After a change to anything in `sys.r12/` or `board/`. From Git Bash, in
 `Coherent/emu`:
 
-**1. Start QEMU and boot the stock kernel.** It has the floppy driver the
-file transfer needs; the board kernel does not.
+**1. Start QEMU and boot the stock kernel.** It has the PC floppy driver
+the file transfer needs; the board kernel drives the ECB controller instead.
 
 ```sh
 ./run.sh d1.img c &
@@ -375,6 +375,7 @@ and the evidence.
 | `conf/kb`, `conf/mm`, `conf/console` | VGA3 console and 8242 keyboard | ports, no port 61h, CGA registers skipped, bounded waits, presence by probing |
 | `i386/die.c`, `io.386/putchar.c` | `early_con` | bring-up visibility |
 | `board/setup.sh` | serial `/dev/console`, `rtcok` | no CMOS clock: `/etc/ATclock` would wait for hours |
+| `conf/fdc/src/sbcfd.c`, `fdpio.s` | floppy driver for the ECB FDC9266 at 430h, polled, ported from the SBC BIOS | no DMA or interrupt on that board; MWC's driver needs both. The data phase is assembly: in C it overran (ST1 10) |
 | `board/mkboard.sh` | COM3/COM4 not configured | each probe of an absent port costs a 209 ms bus timeout |
 
 ---
@@ -391,5 +392,8 @@ and the evidence.
   blanking as the SBC BIOS's are.
 - **16 MB.** The kernel uses 16 MB of the board's 64 (`HACK_LIMIT` in
   `mchinit.c`, MWC's own cap).
-- **No floppy.** The board kernel has no floppy driver; the ECB floppy
-  controller has no DMA, and COHERENT's driver needs it.
+- **Floppy: read and write only.** `sbcfd.c` reads and writes drives 0 and
+  1 in the standard formats (`/dev/fva0` 1.44M, `fha0` 1.2M, `fqa0` 720K,
+  `f9a0` 360K), polled with interrupts held off for each sector's 512
+  bytes. It cannot format (`fdformat`); format diskettes under DOS. The
+  autosensing "special" devices are not supported.

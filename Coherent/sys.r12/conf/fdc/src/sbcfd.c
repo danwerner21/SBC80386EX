@@ -261,62 +261,15 @@ int drive, head, cyl;
 }
 
 /* ---------------------------------------------------------------------
- * The data phase, as fdcpio.asm: the first byte waited for with
- * interrupts as they are (it can be a revolution away), the burst with
- * them held off.  0 all moved, 1 the controller stopped asking early,
- * 2 it stopped answering.
+ * The data phase is assembly, fdpio.s, as the BIOS's fdcpio.asm: at
+ * 500 kbps a byte not taken within 16us is an overrun, and this in C --
+ * busyWait for the first byte, then sphi and inb through calls -- missed
+ * the first byte of every sector (ST1 10).  0 all moved, 1 the
+ * controller stopped asking early, 2 it stopped answering.
  */
-static int	fdphase;		/* E0 read data, A0 write data */
+int	fdpioa ();
 
-static int
-fddata_or_end ()
-{
-	int m = inb (FDC_MSR) & 0xE0;
-
-	return m == fdphase || m == 0xC0;
-}
-
-static int
-fdpio (write, buf, n)
-int write;
-unsigned char *buf;
-int n;
-{
-	int s, m, spin, rc;
-	int msr = FDC_MSR, data = FDC_DATA;
-
-	fdphase = write ? 0xA0 : 0xE0;
-	if (! busyWait (fddata_or_end, HZ))
-		return 2;
-	if ((inb (msr) & 0xE0) == 0xC0)
-		return 1;
-
-	rc = 0;
-	s = sphi ();
-	while (n > 0) {
-		if (write)
-			outb (data, * buf ++);
-		else
-			* buf ++ = inb (data);
-		if (-- n == 0)
-			break;
-		for (spin = 0; spin < 100000; spin ++) {
-			m = inb (msr) & 0xE0;
-			if (m == fdphase || m == 0xC0)
-				break;
-		}
-		if (m == 0xC0) {
-			rc = 1;
-			break;
-		}
-		if (m != fdphase) {
-			rc = 2;
-			break;
-		}
-	}
-	spl (s);
-	return rc;
-}
+#define fdpio(write, buf, n) 	fdpioa (FDC_MSR, (buf), (n), (write) ? 0xA0 : 0xE0)
 
 /* ---------------------------------------------------------------------
  * One sector.  0 or -1.
@@ -349,6 +302,7 @@ unsigned char *buf;
 	struct fkind *k = & fk [kind];
 	int cyl, head, sec, rc;
 
+	fdres [0] = fdres [1] = fdres [2] = 0;	/* no stale result */
 	cyl = bno / (k->nspt * k->nhds);
 	head = (bno / k->nspt) % k->nhds;
 	sec = bno % k->nspt + 1;
@@ -444,8 +398,17 @@ BUF *bp;
 			if (fdsector (bp->b_req == BWRITE, drive, kind, bno,
 				      (unsigned char *) __PTOV (P2P (addr))) == 0)
 				break;
+			if (fdres [1] & 0x02) {		/* NW: no retry cures it */
+				printf ("fd%d: write protected\n", drive);
+				try = FD_TRIES + 1;
+				break;
+			}
 			if (try == FD_TRIES / 2)
 				(void) fdreset ();
+		}
+		if (try > FD_TRIES) {
+			bp->b_flag |= BFERR;
+			break;
 		}
 		if (try == FD_TRIES) {
 			printf ("fd%d: block %ld: ST0 %x ST1 %x ST2 %x\n",

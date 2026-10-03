@@ -57,6 +57,21 @@ Linux. Use `sbc-b1.img`, not `sbc-d1.img`, which is disk 1 for an install
 in QEMU ([section 4.1](#41-the-diskettes-and-installing-in-qemu)).
 `images/SHA1SUMS` has the checksum of each image.
 
+**Check every diskette before you start.** The install takes the better
+part of an hour, and a single unreadable sector loses a whole archive
+without stopping it. On Windows, with the diskette still in the drive
+that wrote it:
+
+```
+py tools\fdcheck.py images\sbc-d4.img A:
+```
+
+It reads the diskette back and lists any block that differs or will not
+read. Disks 2 to 4 are nearly full, so they use the inner tracks, where a
+worn diskette or a marginal drive fails first. A diskette the PC reads
+perfectly can still fail in the board's drive; clean heads and good
+diskettes matter more here than usual.
+
 ### First stage: from diskette 1
 
 Boot the board with diskette 1 in A:. At the `?` prompt type `begin`, then
@@ -84,7 +99,14 @@ boots COHERENT from the CF card.
 
 ### Second stage: diskettes 2 to 5
 
-It asks for diskettes 2, 3, 4 and 5 in turn, then:
+It asks for diskettes 2, 3, 4 and 5 in turn, and lists each file as it
+unpacks it. **Watch for `fd0: block N: ST0 … ST1 … ST2 …` lines.** Each is
+a sector the board could not read, and the archive it was in is lost (the
+next lines say `gzip: stdin: I/O error`). The install carries on regardless
+but does not finish properly. Start again with a better copy of that
+diskette.
+
+Then it asks:
 
 | Question | Answer |
 |---|---|
@@ -103,6 +125,10 @@ It asks for diskettes 2, 3, 4 and 5 in turn, then:
 | Skip spooler configuration | `y` |
 | Passwords, extra users | Enter throughout |
 
+The screen that asks about virtual consoles and the keyboard is drawn for a
+PC screen, and on a serial terminal some of its text lands in the wrong
+place. It is cosmetic: answer as above.
+
 At the end it sets the system up for the board:
 
 ```
@@ -111,7 +137,13 @@ SBC-386EX: setting up the board system.
 SBC-386EX: done.  This disk now boots the board kernel, /coh.sbc;
 ```
 
-and reboots into the finished system.
+Take diskette 5 out, and it reboots into the finished system.
+
+**If it stops at the boot prompt instead,** with `If installing COHERENT,
+please type "begin".` and a `?`, the install did not finish: `/autoboot`,
+the kernel it boots by default, was never made. Almost always a diskette
+read failed. Type `coh.sbc` at the `?` to boot it by hand, and reinstall
+with good diskettes.
 
 ### A normal boot
 

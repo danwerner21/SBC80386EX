@@ -101,6 +101,7 @@ TRACEMAX	equ	16
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 start:
 	cld
+	call	crcinit
 
 	say	m_banner
 
@@ -587,6 +588,57 @@ start:
 	div	ecx
 	call	dec32
 	say	m_kbs
+
+; ---- 11. Write: sector 2, in the gap before the partition ------------------
+; Saved, written with a pattern, read back and compared, then written
+; back as it was and read back and compared again.
+	say	m_wr
+	mov	ebx,WSECT
+	call	rd_sector
+	jc	quit
+	mov	si,secbuf
+	mov	di,savebuf
+	mov	cx,256
+	rep	movsw
+	say	m_ok
+	say	m_wr1
+	call	fillpat
+	mov	ebx,WSECT
+	call	wr_sector
+	jc	quit
+	call	busysay
+	say	m_wr2
+	call	clrsec
+	mov	ebx,WSECT
+	call	rd_sector
+	jc	quit
+	call	cmppat
+	jne	.wbad
+	say	m_ok
+	say	m_wr3
+	mov	si,savebuf
+	mov	di,secbuf
+	mov	cx,256
+	rep	movsw
+	mov	ebx,WSECT
+	call	wr_sector
+	jc	quit
+	call	busysay
+	say	m_wr4
+	call	clrsec
+	mov	ebx,WSECT
+	call	rd_sector
+	jc	quit
+	mov	si,secbuf
+	mov	di,savebuf
+	mov	cx,256
+	repe	cmpsw
+	jne	.wbad
+	say	m_ok
+	jmp	.wok
+.wbad:	say	m_wrdiff
+	jmp	quit
+.wok:
 
 	say	m_done
 	call	ssio_off
@@ -1098,7 +1150,7 @@ sd_cmd:
 	cmp	byte [split],0
 	jne	.split
 	mov	cx,WINLEN/2
-	call	spi_xfer
+	call	spi_burst		; the tight loop: right at any speed
 	jmp	.sent
 .split:	mov	cx,(PRE+8)/2		; preamble and frame alone
 	call	spi_xfer
@@ -1203,41 +1255,39 @@ wait_token:
 
 ; ---- A data command, in one burst --------------------------------------
 ;
-; v6 read a data block in a burst of its own after the command's, and at
-; 385 kHz this card's token arrived inside the command's window: the burst
-; that went looking for it found the tail of the CID instead.  So now the
-; command, R1, the wait, the token, the data and its CRC16 all go in one
-; burst, and one offset serves the lot.  To keep the buffer bounded:
+; The command, R1, the wait, the token, the data and its CRC16 all go in
+; one burst, so one offset serves the lot: the offset can differ from one
+; burst to the next, and a fast card's token can arrive inside the
+; command's own window (v6).
 ;
-;   words 0-11	the frame and its window, always kept
-;   then	FFFF words are dropped while waiting -- unless the window
-;		already held more than R1, i.e. the token came early
-;   then	from the first word that is not FFFF, XDATA words more are
-;		kept: the token, the data, the CRC and slack
+;   words 0 to WINLEN/2-1	the preamble, the frame and its window: the
+;			transmitter refilled from cmdbuf, every word kept in
+;			xbuf
+;   then		the transmitter left alone -- it repeats its last word,
+;			FFFF, an underflow, and exactly what the card wants --
+;			and every word read into a ring of RINGW words, until
+;			XDATA words after the first that is not FFFF
 ;
-; Dropping whole FFFF words takes 16 bits at a time out of a run of FFs
-; and leaves the alignment alone.  The one thing it could break is a token
-; that began in the window without the window showing three words that
-; are not FFFF: then FFFF data might be dropped.  The parse catches that
-; (a token in the window, and words dropped) and the read is tried again.
+; The ring keeps the last RINGW words in order, so a token that came in
+; the window followed by data starting with FFFF loses nothing (v11's
+; "ea" at 1 MHz); a long wait for the token only overwrites FFs, whole
+; words at a time, which leaves the alignment alone.  rd_xact unrolls the
+; ring after the window, oldest first.
 
 XDATA		equ	262		; > 1 + 257 words: token, 512+2 bytes
+RINGW		equ	560		; > XDATA + 257: room for all-FF data
 
-; xact_burst -- send cmdbuf's frame and FFs, keep what comes back in xbuf
-; as above.  [xlen] = bytes kept, [xskip] = words dropped.  CF if the SSIO
-; stopped, or nothing but FF came for CAPMAX words.  Interrupts off.
+; xact_burst -- send cmdbuf, then FFs; keep the window in xbuf and the
+; rest in the ring, as above.  [rtot] = words into the ring, [rwp] = where
+; the next would have gone.  CF if the SSIO stopped, or nothing but FFFF
+; came for CAPMAX words.  Interrupts off.
 CAPMAX		equ	30000		; 0.5s at 1 MHz, 0.2s at 2.5
 xact_burst:
 	push	bp
 	pushf
 	cli
-	mov	word [xskip],0
-	mov	byte [xnff],0
 	mov	si,cmdbuf
 	mov	di,xbuf
-	xor	bp,bp			; BP = the index of the word received
-	xor	bx,bx			; BX = the index to stop at, once known
-	mov	cx,CAPMAX
 	lodsw				; word 0 waits in the buffer ...
 	xchg	al,ah
 	mov	dx,SSIOTBUF
@@ -1247,92 +1297,153 @@ xact_burst:
 	xchg	al,ah
 	mov	dx,SSIOTBUF
 	out	dx,ax
+	mov	bp,WINLEN/2
 	; Each word that comes in means the shifter has just taken the word
-	; waiting in the buffer, so the buffer is free: the next word goes in
-	; at once, and the word in is read while the following one shifts --
-	; a whole word time for both, and no call in the way.
-.loop:	mov	dx,SSIOCON1
-	xor	ah,ah			; 256 polls: more than a word at 385 kHz
-.w:	in	al,dx
+	; waiting in the buffer: the next goes in at once, and the word in is
+	; read while the following one shifts.
+.w:	mov	dx,SSIOCON1
+	xor	bx,bx			; 65536 polls: a word at any speed
+.w1:	in	al,dx
 	test	al,RHBF
-	jnz	.in
-	dec	ah
-	jnz	.w
+	jnz	.w2
+	dec	bx
+	jnz	.w1
 	jmp	.fail
-.in:	mov	ax,0FFFFh		; the next word out
+.w2:	mov	ax,0FFFFh
 	cmp	si,cmdbuf+WINLEN
-	jae	.t1
+	jae	.w3
 	lodsw
 	xchg	al,ah
-.t1:	mov	dx,SSIOTBUF
+.w3:	mov	dx,SSIOTBUF
 	out	dx,ax
-	mov	dx,SSIORBUF		; the word in
+	mov	dx,SSIORBUF
 	in	ax,dx
 	xchg	al,ah			; first byte first
-	cmp	bp,WINLEN/2
-	jae	.post
-	stosw				; the window: always
-	cmp	bp,PRE/2+3		; an answer can start in frame word 3
-	jb	.next
+	stosw
+	dec	bp
+	jnz	.w
+	; The rest: read only.
+	mov	di,xring
+	xor	bp,bp			; BP = words into the ring
+	xor	bx,bx			; BX = BP to stop at, once known
+	mov	cx,CAPMAX
+.r:	mov	dx,SSIOCON1
+	xor	si,si			; 65536 polls (SI is free once the frame
+.r1:	in	al,dx			;  is out)
+	test	al,RHBF
+	jnz	.r2
+	dec	si
+	jnz	.r1
+	jmp	.fail
+.r2:	mov	dx,SSIORBUF
+	in	ax,dx
+	xchg	al,ah
+	stosw
+	cmp	di,xring+RINGW*2
+	jb	.r3
+	mov	di,xring
+.r3:	inc	bp
+	or	bx,bx
+	jnz	.r4
 	cmp	ax,0FFFFh
-	je	.next
-	inc	byte [xnff]
-	jmp	.next
-.post:	or	bx,bx
-	jnz	.keep
-	cmp	ax,0FFFFh
-	jne	.start
-	cmp	byte [xnff],3		; R1 takes one word or two: three is more
-	jae	.start
-	inc	word [xskip]		; still waiting: drop it
-	dec	cx
-	jnz	.next
-	call	.stop			; nothing came
-	popf
-	stc
-	pop	bp
-	ret
-.start:	mov	bx,bp
+	je	.r5
+	mov	bx,bp			; the first that is not FFFF
 	add	bx,XDATA
-.keep:	stosw
-	cmp	bp,bx
-	je	.done
-.next:	inc	bp
-	jmp	.loop
-.done:	call	.stop
-	mov	ax,di
-	sub	ax,xbuf
-	mov	[xlen],ax
+.r4:	cmp	bp,bx
+	jb	.r
+	call	ssio_stop
+	mov	[rtot],bp
+	mov	[rwp],di
 	popf
 	clc
 	pop	bp
 	ret
-.fail:	mov	dx,SSIOCON1
-	in	al,dx
-	and	al,TUE|ROE
-	or	[ssio_err],al
-	xor	al,al
-	out	dx,al
+.r5:	dec	cx
+	jnz	.r
+	call	ssio_stop		; nothing came
+	popf
+	stc
+	pop	bp
+	ret
+.fail:	call	ssio_stop
 	popf
 	stc
 	pop	bp
 	ret
 
-.stop:					; one word shifting, one in the buffer:
-	mov	dx,SSIOCON1		;  disable, the shifting one finishes,
-	in	al,dx			;  the buffered one is never sent
-	and	al,TUE|ROE
+; ssio_stop -- end a burst: the word shifting finishes, any word waiting
+; in the buffer is never sent; that last word read and dropped.  The
+; overflow flag is added to [ssio_err] first -- not the underflow flag,
+; which a burst ending on a repeated FFFF sets on purpose.
+ssio_stop:
+	mov	dx,SSIOCON1
+	in	al,dx
+	and	al,ROE
 	or	[ssio_err],al
 	xor	al,al
 	out	dx,al
-	xor	ah,ah
+	push	cx
+	xor	cx,cx
 .s1:	in	al,dx
 	test	al,RHBF
 	jnz	.s2
-	dec	ah
-	jnz	.s1
-.s2:	mov	dx,SSIORBUF
+	loop	.s1
+.s2:	pop	cx
+	mov	dx,SSIORBUF
 	in	ax,dx
+	ret
+
+; spi_burst -- send CX words (at least 2) from SI, keeping the CX words
+; received at DI; the last word goes out once more as the burst ends, so
+; it should be FFFF.  CF if the SSIO stopped.  Interrupts off.
+spi_burst:
+	push	bp
+	pushf
+	cli
+	mov	bp,cx			; BP = words still to receive
+	lodsw
+	xchg	al,ah
+	mov	dx,SSIOTBUF
+	out	dx,ax
+	call	genstart
+	lodsw
+	xchg	al,ah
+	mov	dx,SSIOTBUF
+	out	dx,ax
+	sub	cx,2			; CX = words still to send
+.l:	mov	dx,SSIOCON1
+	xor	bx,bx			; 65536 polls: a word at any speed.  (256
+.l1:	in	al,dx			;  was too few at 385 kHz: on-chip I/O
+	test	al,RHBF			;  is quick, and v12 lost every command)
+	jnz	.l2
+	dec	bx
+	jnz	.l1
+	call	ssio_stop
+	popf
+	stc
+	pop	bp
+	ret
+.l2:	jcxz	.l3
+	lodsw
+	xchg	al,ah
+	mov	dx,SSIOTBUF
+	out	dx,ax
+	dec	cx
+	jnz	.l3
+	mov	dx,SSIOCON1		; the last word is in: an underflow
+	in	al,dx			;  before now was a real one
+	and	al,TUE|ROE
+	or	[ssio_err],al
+.l3:	mov	dx,SSIORBUF
+	in	ax,dx
+	xchg	al,ah
+	stosw
+	dec	bp
+	jnz	.l
+	call	ssio_stop
+	popf
+	clc
+	pop	bp
 	ret
 
 ; xbits -- AL = the 8 bits of xbuf starting at bit BX.  All else kept.
@@ -1353,8 +1464,7 @@ xbits:
 
 ; rd_xact -- data command AL, argument EBX: CX bytes of data, then its two
 ; CRC16 bytes, to DI.  AL = R1 (FFh if none).  CF on failure, [why] saying
-; which.  Tried again, up to three times, when the token came too early,
-; or too late in the burst, to be kept whole.
+; which.  Tried again, up to three times, if the block was not kept whole.
 rd_xact:
 	mov	[xcmd],al
 	mov	[xarg],ebx
@@ -1371,20 +1481,9 @@ rd_xact:
 	call	cs_high
 	popf
 	jc	.timeout
-	mov	bx,(PRE+6)*8		; R1: the first 0 bit from frame byte 6
-.r:	call	xbits
-	test	al,80h
-	jz	.r1
-	inc	bx
-	cmp	bx,(WINLEN-6)*8
-	jb	.r
-	mov	al,0FFh
-	mov	byte [why],WHY_R1
-	stc
-	ret
-.r1:	mov	ah,bl
-	and	ah,7
-	mov	[sbits],ah
+	call	unroll
+	call	find_r1			; BX = its first bit, AL = R1
+	jc	.nor1
 	or	al,al			; R1 must be 00
 	jz	.tok
 	mov	byte [why],WHY_R1
@@ -1402,11 +1501,7 @@ rd_xact:
 	mov	[tokb],al
 	cmp	al,0FEh
 	jne	.badtok
-	cmp	bx,WINLEN/2*16		; in the window, with words dropped?
-	jae	.tok2
-	cmp	word [xskip],0
-	jne	.retry
-.tok2:	add	bx,8			; the data's first bit
+	add	bx,8			; the data's first bit
 	mov	ax,[xn]
 	add	ax,2			; and its CRC: all of it kept?
 	shl	ax,3
@@ -1419,18 +1514,15 @@ rd_xact:
 	mov	cx,[xn]
 	add	cx,2
 	mov	di,[xdst]
-.copy:	call	xbits
-	stosb
-	add	bx,8
-	loop	.copy
+	call	xcopy
 	xor	al,al			; R1
-	cmp	byte [ssio_err],0
-	jne	.ssio
+	test	byte [ssio_err],ROE	; a word lost.  (TUE is expected: the
+	jnz	.ssio			;  transmitter repeats FFFF on purpose)
 	clc
 	ret
 .retry:	dec	byte [xtries]
 	jnz	.again
-	mov	byte [why],WHY_EARLY
+	mov	byte [why],WHY_SHORT
 	xor	al,al
 	stc
 	ret
@@ -1443,14 +1535,211 @@ rd_xact:
 	xor	al,al
 	stc
 	ret
+.nor1:	mov	al,0FFh
+	mov	byte [why],WHY_R1
+	stc
+	ret
 .timeout:
 	mov	byte [why],WHY_TOK
 	mov	byte [tokb],0FFh
-	cmp	byte [ssio_err],0
-	je	.to1
+	test	byte [ssio_err],ROE
+	jz	.to1
 	mov	byte [why],WHY_SSIO
 .to1:	mov	al,0FFh
 	stc
+	ret
+
+; unroll -- the ring after the window in xbuf, oldest word first; [xlen]
+; = the bytes now in xbuf.
+unroll:
+	mov	di,xbuf+WINLEN
+	mov	cx,[rtot]
+	cmp	cx,RINGW
+	jbe	.lin
+	mov	si,[rwp]		; wrapped: rwp to the end, then the start
+	mov	cx,xring+RINGW*2
+	sub	cx,si
+	shr	cx,1
+	rep	movsw
+	mov	si,xring
+	mov	cx,[rwp]
+	sub	cx,xring
+	shr	cx,1
+	rep	movsw
+	mov	ax,RINGW
+	jmp	.len
+.lin:	mov	si,xring
+	mov	ax,cx
+	rep	movsw
+.len:	shl	ax,1
+	add	ax,WINLEN
+	mov	[xlen],ax
+	ret
+
+; find_r1 -- in xbuf: BX = the first 0 bit from frame byte 6 on, AL = the
+; 8 bits from there (R1), [sbits] = BX mod 8.  CF if there is none.
+find_r1:
+	mov	bx,(PRE+6)*8
+.r:	call	xbits
+	test	al,80h
+	jz	.r1
+	inc	bx
+	cmp	bx,(WINLEN-6)*8
+	jb	.r
+	stc
+	ret
+.r1:	mov	ah,bl
+	and	ah,7
+	mov	[sbits],ah
+	clc
+	ret
+
+; xcopy -- CX bytes of xbuf from bit BX to DI: a plain copy when BX is on a
+; byte, else each byte put together from two.  DI advances.
+xcopy:
+	mov	si,bx
+	shr	si,3
+	add	si,xbuf
+	mov	ax,bx
+	and	al,7
+	jnz	.shift
+	rep	movsb
+	ret
+.shift:	mov	dx,cx
+	mov	cl,al
+.s1:	mov	ah,[si]
+	mov	al,[si+1]
+	shl	ax,cl
+	mov	[di],ah
+	inc	si
+	inc	di
+	dec	dx
+	jnz	.s1
+	ret
+
+; wr_sector -- secbuf to sector EBX.  CF on failure, [why] saying which and,
+; unless [quiet], a message.
+;
+; One burst: the preamble, the CMD24 frame and its window (R1 arrives in
+; it), FF FE -- the token, a byte at least after R1 -- the 512 bytes, their
+; CRC16, and WRESP bytes of FF in which the card's data response comes.
+; R1 locates the offset; the response is the first byte after the CRC, at
+; it, that is not FF, and must say "accepted" (xxx0 0101).  Then the card
+; holds DO low while it programs, polled in bursts of its own (busy is all
+; 0s: the offset does not matter) until a word of FFFF.  Then CMD13, the
+; card's status, must be 00 00.
+WRESP		equ	8
+WTXW		equ	(WINLEN+2+512+2+WRESP)/2
+wr_sector:
+	mov	byte [why],WHY_OK
+	cmp	byte [ccs],0
+	jne	.blk
+	shl	ebx,9			; byte addressed
+.blk:	mov	al,24
+	mov	ah,01h
+	call	mkframe
+	mov	si,cmdbuf		; build the burst
+	mov	di,wtx
+	mov	cx,WINLEN/2
+	rep	movsw
+	mov	ax,0FEFFh		; FF, then the token FE
+	stosw
+	mov	si,secbuf
+	mov	cx,256
+	rep	movsw
+	push	di
+	mov	si,secbuf
+	mov	cx,512
+	call	crc16
+	pop	di
+	xchg	al,ah			; big end first
+	stosw
+	mov	ax,0FFFFh
+	mov	cx,WRESP/2
+	rep	stosw
+	call	cs_low
+	mov	si,wtx
+	mov	di,xbuf
+	mov	cx,WTXW
+	call	spi_burst
+	jc	.ssio
+	test	byte [ssio_err],TUE|ROE	; every word out in time (spi_burst looks
+	jnz	.ssio			;  until the last is in), none lost
+	mov	word [xlen],WTXW*2
+	call	find_r1
+	jc	.nor1
+	or	al,al
+	jnz	.badr1
+	; the card byte sent while the host sent byte t starts at bit 8t of
+	; xbuf, less 8 when the offset is not 0 (it comes a bit early)
+	mov	bx,(WINLEN+2+512+2)*8
+	movzx	ax,byte [sbits]
+	or	ax,ax
+	jz	.r0
+	sub	bx,8
+	add	bx,ax
+.r0:	mov	cx,WRESP-2		; (xbits reads a byte ahead)
+.dr:	call	xbits
+	cmp	al,0FFh
+	jne	.resp
+	add	bx,8
+	loop	.dr
+.resp:	mov	[wresp],al
+	and	al,1Fh
+	cmp	al,05h			; accepted
+	jne	.badresp
+	call	ticks			; busy
+	mov	[t0],ax
+.busy:	xor	si,si
+	xor	di,di
+	mov	cx,1
+	call	spi_xfer
+	cmp	ax,0FFFFh
+	je	.done
+	call	ticks
+	sub	ax,[t0]
+	cmp	ax,10			; half a second
+	jb	.busy
+	call	cs_high
+	mov	byte [why],WHY_BUSY
+	jmp	.say
+.done:	call	ticks
+	sub	ax,[t0]
+	mov	[wbusy],ax
+	call	cs_high
+	call	cs_low			; CMD13: status, R2
+	mov	al,13
+	xor	ebx,ebx
+	mov	ah,01h
+	call	sd_cmd
+	mov	[wstat],al
+	call	rd_abyte
+	mov	[wstat+1],al
+	call	cs_high
+	cmp	word [wstat],0
+	jne	.badstat
+	clc
+	ret
+.ssio:	call	cs_high
+	mov	byte [why],WHY_SSIO
+	jmp	.say
+.nor1:	mov	al,0FFh
+.badr1:	call	cs_high
+	mov	[r1v],al
+	mov	byte [why],WHY_R1
+	jmp	.say
+.badresp:
+	call	cs_high
+	mov	byte [why],WHY_WRESP
+	jmp	.say
+.badstat:
+	mov	byte [why],WHY_STAT
+.say:	cmp	byte [quiet],0
+	jne	.q
+	say	m_wrbad
+	mov	al,[r1v]
+	call	why_say
+.q:	stc
 	ret
 
 ; why_say -- print what [why] says, with the R1 (AL), token or SSIO flags
@@ -1477,7 +1766,19 @@ why_say:
 	say	m_terr
 	mov	al,[ssio_err]
 	call	hex8
-.w3:	call	showofs
+.w3:	cmp	byte [why],WHY_WRESP
+	jne	.w4
+	say	m_tokis
+	mov	al,[wresp]
+	call	hex8
+.w4:	cmp	byte [why],WHY_STAT
+	jne	.w5
+	say	m_tokis
+	mov	ax,[wstat]
+	call	hex8
+	mov	al,ah
+	call	hex8
+.w5:	call	showofs
 	call	crlf
 	pop	ax
 	ret
@@ -1567,6 +1868,54 @@ rd_sector:
 .q:	stc
 	ret
 
+; The write test's pattern: byte i of the sector is (i xor A5h) xor 3Ch*(i
+; div 256), so the two halves differ and no byte is the same as its
+; neighbour's.
+patbyte:				; AL = pattern byte BX
+	mov	al,bl
+	xor	al,0A5h
+	test	bh,1
+	jz	.p1
+	xor	al,3Ch
+.p1:	ret
+
+fillpat:
+	mov	di,secbuf
+	xor	bx,bx
+.f:	call	patbyte
+	stosb
+	inc	bx
+	cmp	bx,512
+	jb	.f
+	ret
+
+cmppat:					; ZF set if secbuf holds the pattern
+	mov	si,secbuf
+	xor	bx,bx
+.c:	call	patbyte
+	cmp	al,[si]
+	jne	.x
+	inc	si
+	inc	bx
+	cmp	bx,512
+	jb	.c
+	cmp	al,al
+.x:	ret
+
+clrsec:					; secbuf to zeros, so a read must fill it
+	mov	di,secbuf
+	mov	cx,256
+	xor	ax,ax
+	rep	stosw
+	ret
+
+busysay:				; "  ok, busy N ticks"
+	say	m_wrok
+	movzx	eax,word [wbusy]
+	call	dec32
+	say	m_wrticks
+	ret
+
 ; capacity -- EAX = the card's size in 512-byte sectors, from the CSD.
 capacity:
 	mov	al,[csd]
@@ -1640,26 +1989,44 @@ crc7:
 	pop	cx
 	ret
 
+; crcinit -- crctab[b] = the CRC16 of b followed by eight 0 bits.
+crcinit:
+	mov	di,crctab
+	xor	bx,bx
+.n:	mov	ah,bl
+	xor	al,al
+	mov	cx,8
+.b:	shl	ax,1
+	jnc	.s
+	xor	ax,1021h
+.s:	loop	.b
+	stosw
+	inc	bx
+	cmp	bx,256
+	jb	.n
+	ret
+
 ; crc16 -- CX bytes at SI: AX = their CRC16-CCITT, x^16 + x^12 + x^5 + 1,
-; starting from 0, as an SD data block carries it.
+; starting from 0, as an SD data block carries it.  A byte a table entry.
 crc16:
+	push	bx
 	push	cx
 	push	dx
 	push	si
 	xor	dx,dx
 .byte:	lodsb
-	xor	dh,al
-	mov	ah,8
-.bit:	shl	dx,1
-	jnc	.nx
-	xor	dx,1021h
-.nx:	dec	ah
-	jnz	.bit
+	xor	al,dh
+	movzx	bx,al
+	shl	bx,1
+	mov	dh,dl
+	xor	dl,dl
+	xor	dx,[crctab+bx]
 	loop	.byte
 	mov	ax,dx
 	pop	si
 	pop	dx
 	pop	cx
+	pop	bx
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1789,12 +2156,21 @@ dec32:	push	eax			; EAX, unsigned decimal
 ; Messages.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-m_banner db	"SDTEST 11 -- SBC-386EX microSD bring-up",13,10,13,10,"$"
+m_banner db	"SDTEST 13 -- SBC-386EX microSD bring-up",13,10,13,10,"$"
 m_ok	db	"  ok",13,10,"$"
 m_bad	db	"  FAILED",13,10,"$"
 m_crlf	db	13,10,"$"
 m_stop	db	13,10,"Stopped.",13,10,"$"
 m_done	db	13,10,"All steps passed.",13,10,"$"
+m_wr	db	"11. Write test on sector 2 (before the partition): saving it        $"
+m_wr1	db	"    writing a pattern                                $"
+m_wr2	db	"    reading it back (want the pattern)                $"
+m_wr3	db	"    writing the saved sector back                     $"
+m_wr4	db	"    reading it back (want what was saved)             $"
+m_wrok	db	"  ok, busy $"
+m_wrticks db	" ticks",13,10,"$"
+m_wrdiff db	"  FAILED: it reads back different",13,10,"$"
+m_wrbad	db	13,10,"   write FAILED: $"
 m_at	db	"  @ bit $"
 
 m_p3dir	db	"1. P3DIR   (want bit 6 set, CS# open drain)     $"
@@ -1866,7 +2242,10 @@ m_w1	db	"R1$"
 m_w2	db	"tok$"
 m_w3	db	"CRC$"
 m_w4	db	"SS$"
-m_w5	db	"ea$"
+m_w5	db	"short$"
+m_w6	db	"wresp$"
+m_w7	db	"busy$"
+m_w8	db	"status$"
 m_noswp	db	"  FAILED: no speed read sector 0 three times",13,10,"$"
 m_terr	db	"  SSIO TUE/ROE $"
 m_sec0	db	"   at the fastest; signature (want AA55)       $"
@@ -1908,8 +2287,11 @@ WHY_R1	equ	1
 WHY_TOK	equ	2
 WHY_CRC	equ	3
 WHY_SSIO equ	4
-WHY_EARLY equ	5
-whyname	dw	m_w0, m_w1, m_w2, m_w3, m_w4, m_w5
+WHY_SHORT equ	5
+WHY_WRESP equ	6
+WHY_BUSY equ	7
+WHY_STAT equ	8
+whyname	dw	m_w0, m_w1, m_w2, m_w3, m_w4, m_w5, m_w6, m_w7, m_w8
 NBV	equ	4
 bvtab	db	4, 3, 2, 1		; slowest first
 bvname	dw	m_f4, m_f3, m_f2, m_f1
@@ -1947,6 +2329,16 @@ ocr	times 4 db 0
 cid	times 16 db 0
 csd	times 16 db 0
 secbuf	times 520 db 0
+WSECT		equ	2		; the write test's sector: before the partition
+savebuf	times 512 db 0
+wtx	times WTXW*2 db 0FFh
+crctab	times 256 dw 0
+rtot	dw	0
+rwp	dw	0
+wresp	db	0
+wstat	dw	0
+wbusy	dw	0
+xring	times RINGW*2 db 0FFh
 rawbuf	times 540 db 0
 regbuf	times 20 db 0
 xtries	db	0
@@ -1957,4 +2349,4 @@ xcmd	db	0
 xarg	dd	0
 xn	dw	0
 xdst	dw	0
-xbuf	times WINLEN+2*XDATA+8 db 0FFh
+xbuf	times WINLEN+2*RINGW+8 db 0FFh

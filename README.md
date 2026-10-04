@@ -166,7 +166,7 @@ building it are in [`Coherent/README.md`](Coherent/README.md).**
   tools it is built with, and brought the board up in 2018. See the
   [RetroBrew Computers wiki](https://www.retrobrewcomputers.org/doku.php?id=boards:sbc:sbc-386ex).
 - **Dan Werner** took the BIOS to MS-DOS in 2026, and ported COHERENT
-  with the board's drivers, including the SD card's.
+  with the board's drivers, including the SD cards.
 - **Mark Williams Company** wrote COHERENT, released as open source in
   2015.
 - The [RetroBrew Computers](https://www.retrobrewcomputers.org/) community,

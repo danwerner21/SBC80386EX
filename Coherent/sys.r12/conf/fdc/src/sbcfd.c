@@ -8,7 +8,8 @@
  * device interface is the same, so /dev/fva0 and the rest mean what they
  * did:  minor xxuuhkkk -- uu the drive, kkk the format (fdata below), h set
  * on the ordinary devices.  The "special" devices, h clear, which autosense
- * and skip cylinder 0, are not supported.
+ * and skip cylinder 0, are not supported.  Formatting is the FDFORMAT ioctl,
+ * a track at a time, as /etc/fdformat drives it.
  *
  * The hardware layer is the SBC BIOS's, from SBC386/bios/diskfdc.c and
  * fdcpio.asm, which read, write and format on this board under DOS.  The
@@ -34,6 +35,7 @@
 #include <sys/buf.h>
 #include <sys/con.h>
 #include <sys/devices.h>
+#include <sys/fdioctl.h>
 
 /* Where the controller is.  Z80 I/O port N is 0x400+N on the 386EX, and
    the card is jumpered to 30h-3Fh.  Patchable (/conf/patch FD_BASE=...). */
@@ -57,7 +59,7 @@ int	fl_dsk_ch_prob = 1;
 
 #define	FD_NDRV		2
 #define	FD_SECSIZE		512
-#define	FD_TRIES		4		/* attempts per sector		*/
+#define	FD_TRIES		8		/* attempts per sector		*/
 #define	FD_MOTOR_SECS	3		/* idle seconds before motor off */
 
 #define	funit(d)	((minor (d) >> 4) & 3)
@@ -446,13 +448,112 @@ IO *iop;
 	ioreq (NULL, iop, dev, BWRITE, BFRAW | BFBLK | BFIOC);
 }
 
+/* ---------------------------------------------------------------------
+ * Formatting, one track per FDFORMAT ioctl, as fl386.c took it: the
+ * argument is the track's identifier table, four bytes a sector -- C H R
+ * N -- and its first two bytes say which track.  /etc/fdformat builds it.
+ *
+ * FORMAT TRACK takes no sector data, only those identifiers: the
+ * controller writes the gaps and address marks itself and fills every
+ * data field with the filler byte.  It asks for four bytes, writes a
+ * sector's worth of track, then asks for the next four.  The table goes in
+ * one burst, as diskfdc.c sends it, with interrupts held off for the
+ * revolution.  The gap between groups is a sector time, 10ms at 500
+ * kbps, well inside fdpioa's wait for the next byte.
+ *
+ * Not a burst per group, with interrupts on in between: that was tried,
+ * and an interrupt handler still running when the controller asked for
+ * the next group -- the IDE driver's, moving a CF sector a byte at a
+ * time for the 30-second sync -- made it miss the byte (ST1 10, about
+ * cylinder 30 on every diskette).  The cost of the burst is the clock:
+ * ticks held off are lost, about 0.2s a track, half a minute for a
+ * 1.44M diskette, until the next boot sets the time from the DS1302.
+ *
+ * Before the format, a head-settle wait after the seek, which a write
+ * needs and a read does not; DOS's table asks for 15ms.
+ *
+ * The format gaps are the standard ones, as the BIOS's INT 1Eh table
+ * gives for 1.44M; the filler is F6h, as DOS uses.
+ */
+static unsigned char	fmtgap [8] = {
+	0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x54, 0x6C
+};
+
+static int
+fdfmttrack (drive, kind, cyl, head, chrn)
+int drive, kind, cyl, head;
+unsigned char *chrn;
+{
+	struct fkind *k = & fk [kind];
+	int rc;
+
+	fdres [0] = fdres [1] = fdres [2] = 0;
+	fdmotor (kind);
+	if (fdseek (drive, head, cyl) || fdspecify ())
+		return -1;
+	busyWait (NULL, 2);			/* head settle: 10-20ms */
+
+	if (fdout (0x4D)			/* MFM format a track */
+	 || fdout ((head << 2) | drive)
+	 || fdout (2)				/* N: 512 bytes */
+	 || fdout (k->nspt)			/* SC: sectors a track */
+	 || fdout (fmtgap [kind])		/* GPL: the format gap */
+	 || fdout (0xF6))			/* D: the filler */
+		return -1;
+
+	rc = fdpio (1, chrn, 4 * k->nspt);
+
+	fdlatch (latch | L_TC);			/* TC ends the command */
+	fdlatch (latch & ~ L_TC);
+
+	if (fdresult () || rc != 0) {
+		needrecal [drive] = 1;
+		return -1;
+	}
+	return 0;
+}
+
 static void
 fdioctl (dev, cmd, vec)
 dev_t dev;
 int cmd;
 char *vec;
 {
-	set_user_error (EINVAL);		/* no formatting yet */
+	unsigned char chrn [4 * 18];
+	int drive = funit (dev), kind = fkind (dev);
+	struct fkind *k = & fk [kind];
+	int n = 4 * k->nspt, cyl, head, try;
+
+	if (cmd != FDFORMAT || ! fdpresent || drive >= FD_NDRV
+	 || ! fnormal (dev)) {
+		set_user_error (EINVAL);
+		return;
+	}
+	if (ukcopy (vec, chrn, n) != n) {
+		set_user_error (EFAULT);
+		return;
+	}
+	cyl = chrn [0];
+	head = chrn [1];
+	if (cyl >= k->ncyl || head >= k->nhds) {
+		set_user_error (EINVAL);
+		return;
+	}
+
+	for (try = 0; try < 3; try ++) {
+		if (fdfmttrack (drive, kind, cyl, head, chrn) == 0)
+			return;
+		if (fdres [1] & 0x02) {		/* NW: no retry cures it */
+			printf ("fd%d: write protected\n", drive);
+			set_user_error (EIO);
+			return;
+		}
+		if (try == 1)
+			(void) fdreset ();
+	}
+	printf ("fd%d: format cyl %d head %d: ST0 %x ST1 %x ST2 %x\n",
+		drive, cyl, head, fdres [0], fdres [1], fdres [2]);
+	set_user_error (EIO);
 }
 
 /* Called each second while d_time is set: the motor goes off when idle. */

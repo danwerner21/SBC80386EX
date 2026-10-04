@@ -1,0 +1,13 @@
+
+# SBC-386EX: appended to the end of /conf/Coh_420.post on disk 1 of the
+# SBC-386EX install set.  If the fifth diskette, the board supplement, put
+# its files in place, make this a board system: board/setup.sh gives it
+# the serial console, the VGA3 terminal, the timezone, and /coh.sbc as
+# /autoboot.  It runs last, after everything above that talks to the
+# installer's console, because it moves /dev/console to the serial port.
+if [ -f /u/sbc/board/setup.sh ]; then
+	echo "SBC-386EX: setting up the board system."
+	( cd /u/sbc/board && sh setup.sh )
+	echo "SBC-386EX: done.  This disk now boots the board kernel, /coh.sbc;"
+	echo "in QEMU, boot coh.sbcq at the tboot prompt instead."
+fi

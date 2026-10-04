@@ -1,0 +1,2817 @@
+     1                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     2                                  ; sdtest.asm -- bring up the SBC-386EX's on-board microSD socket, one rung
+     3                                  ;		at a time, under DOS.
+     4                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     5                                  ;
+     6                                  ; This program is free software: you can redistribute it and/or modify
+     7                                  ; it under the terms of the GNU General Public License as published by
+     8                                  ; the Free Software Foundation, either version 3 of the License, or
+     9                                  ; (at your option) any later version.  See SBC386/bios/COPYING.
+    10                                  ;
+    11                                  ;	nasm -O9 -f bin -o SDTEST.COM sdtest.asm	(-O9 sizes the jumps)
+    12                                  ;
+    13                                  ; THE WIRING (Hardware/SBC-386EX-2.0-kicad, SDcard sheet)
+    14                                  ;
+    15                                  ;   card CLK  <- pins 98 STXCLK and 77 SRXCLK, tied; 2.7K/4.7K divider
+    16                                  ;   card DI   <- pin 79 SSIOTX; 2.7K/4.7K divider
+    17                                  ;   card DO   -> pin 78 SSIORX; 10K pull-up to the card's 3.3V
+    18                                  ;   card CS#  <- pin 86 P3.6, OPEN DRAIN; 10K pull-up to 3.3V, LED D8
+    19                                  ;   card CD#  -> pin 75 P3.1, low when a card is in; 10K pull-up to 5V
+    20                                  ;
+    21                                  ; CS# goes straight from a 5V pin to the card.  P3DIR bit 6 must stay set
+    22                                  ; -- open drain, pulled up to 3.3V -- or the card sees 5V; this program
+    23                                  ; refuses to run if it is clear and never changes it.
+    24                                  ;
+    25                                  ; THE SSIO (Intel386 EX User's Manual, 272485, chapter 12)
+    26                                  ;
+    27                                  ; Words of 16 bits, most significant bit first; no 8-bit mode.  One of
+    28                                  ; the transmitter and receiver is master and drives the clock -- STXCLK
+    29                                  ; and SRXCLK are tied, and are the card's clock -- and the other is slave,
+    30                                  ; clocked from its pin.  NEVER BOTH MASTER: two outputs on one wire.
+    31                                  ;
+    32                                  ;   TXM	transmitter master, receiver slave (Intel's figure 12-2)
+    33                                  ;   RXM	receiver master, transmitter slave (figure 12-3)
+    34                                  ;
+    35                                  ; THE FIRST RUN (v1, TXM) found the card answering CMD0 -- it took the
+    36                                  ; command, so clock, DI and CS work -- but read FE 03 for FF 01: every
+    37                                  ; bit one early.  Either the slave receiver samples just after the card
+    38                                  ; changes DO, or the clock gains an edge as it floats low at the end of
+    39                                  ; each burst (R8 pulls it down).  So this version does not assume an
+    40                                  ; alignment, it finds it:
+    41                                  ;
+    42                                  ;   - a command goes out in one burst with sixteen bytes of response
+    43                                  ;     window after it; R1 always has bit 7 clear, so the first 0 bit in
+    44                                  ;     the window is where the card's bytes start, and its position mod 8
+    45                                  ;     is the receive offset for the rest of the transaction;
+    46                                  ;   - every byte after that is reassembled at that offset;
+    47                                  ;   - CID, CSD and sectors are checked against their CRC7 and CRC16, so
+    48                                  ;     an alignment that changes between bursts shows up as a CRC error
+    49                                  ;     rather than as plausible data;
+    50                                  ;   - step 3 runs CMD0 in both arrangements and prints what each saw.
+    51                                  ;
+    52                                  ; Clock: SERCLK (SIOCFG bit 2, set by the BIOS) is CLK2/4, 10 MHz with a
+    53                                  ; 20 MHz part, and the generator gives SERCLK / (2*BV + 2):
+    54                                  BV_SLOW		equ	12		; 385 kHz: initialisation wants < 400
+    55                                  ; and afterwards the fastest of BV 4..1 (1 to 2.5 MHz) that step 9 finds
+    56                                  ; reading reliably: see bvtab.
+    57                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    58                                  
+    59                                  	cpu	386
+    60                                  	bits	16
+    61                                  	org	100h
+    62                                  
+    63                                  SSIOTBUF	equ	0F480h		; write only
+    64                                  SSIORBUF	equ	0F482h		; read only
+    65                                  SSIOBAUD	equ	0F484h		; write only
+    66                                  SSIOCON1	equ	0F486h
+    67                                  SSIOCON2	equ	0F488h
+    68                                  SSIOCTR		equ	0F48Ah		; read only
+    69                                  PINCFG		equ	0F826h
+    70                                  SIOCFG		equ	0F836h
+    71                                  P3PIN		equ	0F870h
+    72                                  P3LTC		equ	0F872h
+    73                                  P3DIR		equ	0F874h
+    74                                  
+    75                                  ; SSIOCON1
+    76                                  TUE		equ	80h		; transmit underflow
+    77                                  THBE		equ	40h		; transmit holding buffer empty
+    78                                  TEN		equ	10h		; transmitter enable
+    79                                  ROE		equ	08h		; receive overflow
+    80                                  RHBF		equ	04h		; receive holding buffer full
+    81                                  REN		equ	01h		; receiver enable
+    82                                  ; SSIOCON2 -- exactly one of these
+    83                                  TXM		equ	02h		; TXMM: transmitter master
+    84                                  RXM		equ	01h		; RXMM: receiver master
+    85                                  ; SSIOBAUD
+    86                                  BEN		equ	80h		; generator enable
+    87                                  ; port 3
+    88                                  SDnCS		equ	40h		; P3.6
+    89                                  SDnCD		equ	02h		; P3.1
+    90                                  
+    91                                  TICKS		equ	6Ch		; BDA timer count, 18.2 a second
+    92                                  PRE		equ	20		; command burst: FFs before the frame (below)
+    93                                  WINLEN		equ	PRE+24		;  then 8 bytes of frame, 16 of window
+    94                                  TRACEMAX	equ	16
+    95                                  
+    96                                  %macro	say	1
+    97                                  	mov	dx,%1
+    98                                  	call	puts
+    99                                  %endmacro
+   100                                  
+   101                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   102                                  start:
+   103 00000000 FC                      	cld
+   104 00000001 E88F10                  	call	crcinit
+   105                                  
+   106                                  	say	m_banner
+    97 00000004 BA[BB11]            <1>  mov dx,%1
+    98 00000007 E82411              <1>  call puts
+   107                                  
+   108                                  ; ---- 1. The pins, as the BIOS left them ----------------------------------
+   109                                  	say	m_p3dir
+    97 0000000A BA[9513]            <1>  mov dx,%1
+    98 0000000D E81E11              <1>  call puts
+   110 00000010 BA74F8                  	mov	dx,P3DIR
+   111 00000013 EC                      	in	al,dx
+   112 00000014 E83211                  	call	hex8
+   113 00000017 A840                    	test	al,SDnCS
+   114 00000019 7509                    	jnz	.p3ok
+   115                                  	say	m_p3bad
+    97 0000001B BA[C613]            <1>  mov dx,%1
+    98 0000001E E80D11              <1>  call puts
+   116 00000021 E98406                  	jmp	quit
+   117                                  .p3ok:	say	m_ok
+   117                              <1> .p3ok: 
+    97 00000024 BA[E711]            <1>  mov dx,%1
+    98 00000027 E80411              <1>  call puts
+   118                                  
+   119                                  	say	m_pincfg
+    97 0000002A BA[0514]            <1>  mov dx,%1
+    98 0000002D E8FE10              <1>  call puts
+   120 00000030 BA26F8                  	mov	dx,PINCFG
+   121 00000033 EC                      	in	al,dx
+   122 00000034 E81211                  	call	hex8
+   123 00000037 A803                    	test	al,3			; PM1:0 clear: SRXCLK and SSIOTX
+   124 00000039 7409                    	jz	.pinok
+   125                                  	say	m_pinbad
+    97 0000003B BA[3614]            <1>  mov dx,%1
+    98 0000003E E8ED10              <1>  call puts
+   126 00000041 E96406                  	jmp	quit
+   127                                  .pinok:	say	m_ok
+   127                              <1> .pinok: 
+    97 00000044 BA[E711]            <1>  mov dx,%1
+    98 00000047 E8E410              <1>  call puts
+   128                                  
+   129                                  	say	m_siocfg
+    97 0000004A BA[7214]            <1>  mov dx,%1
+    98 0000004D E8DE10              <1>  call puts
+   130 00000050 BA36F8                  	mov	dx,SIOCFG
+   131 00000053 EC                      	in	al,dx
+   132 00000054 E8F210                  	call	hex8
+   133 00000057 A804                    	test	al,4			; SSBSRC: SERCLK
+   134 00000059 7508                    	jnz	.siook
+   135                                  	say	m_siowarn		; PSCLK: clocks are not as printed
+    97 0000005B BA[A314]            <1>  mov dx,%1
+    98 0000005E E8CD10              <1>  call puts
+   136 00000061 EB06                    	jmp	.card
+   137                                  .siook:	say	m_ok
+   137                              <1> .siook: 
+    97 00000063 BA[E711]            <1>  mov dx,%1
+    98 00000066 E8C510              <1>  call puts
+   138                                  
+   139                                  .card:	say	m_cd
+   139                              <1> .card: 
+    97 00000069 BA[D914]            <1>  mov dx,%1
+    98 0000006C E8BF10              <1>  call puts
+   140 0000006F BA70F8                  	mov	dx,P3PIN
+   141 00000072 EC                      	in	al,dx
+   142 00000073 E8D310                  	call	hex8
+   143 00000076 A802                    	test	al,SDnCD
+   144 00000078 7409                    	jz	.cdok
+   145                                  	say	m_nocard
+    97 0000007A BA[0A15]            <1>  mov dx,%1
+    98 0000007D E8AE10              <1>  call puts
+   146 00000080 E92506                  	jmp	quit
+   147                                  .cdok:	say	m_ok
+   147                              <1> .cdok: 
+    97 00000083 BA[E711]            <1>  mov dx,%1
+    98 00000086 E8A510              <1>  call puts
+   148                                  
+   149                                  ; ---- 2. The SSIO: wake-up clocks with CS high ----------------------------
+   150                                  	say	m_ssio
+    97 00000089 BA[2A15]            <1>  mov dx,%1
+    98 0000008C E89F10              <1>  call puts
+   151 0000008F C606[211C]02            	mov	byte [cfg],TXM
+   152 00000094 E81B07                  	call	ssio_init
+   153 00000097 BA8AF4                  	mov	dx,SSIOCTR
+   154 0000009A EC                      	in	al,dx
+   155 0000009B E8AB10                  	call	hex8
+   156 0000009E A880                    	test	al,80h			; BSTAT: generator running
+   157 000000A0 7509                    	jnz	.genok
+   158                                  	say	m_genbad
+    97 000000A2 BA[5B15]            <1>  mov dx,%1
+    98 000000A5 E88610              <1>  call puts
+   159 000000A8 E9FD05                  	jmp	quit
+   160                                  .genok:	say	m_ok
+   160                              <1> .genok: 
+    97 000000AB BA[E711]            <1>  mov dx,%1
+    98 000000AE E87D10              <1>  call puts
+   161 000000B1 E83B07                  	call	wake
+   162 000000B4 7309                    	jnc	.wakeok
+   163                                  	say	m_noword
+    97 000000B6 BA[AC15]            <1>  mov dx,%1
+    98 000000B9 E87210              <1>  call puts
+   164 000000BC E9E905                  	jmp	quit
+   165                                  .wakeok:
+   166                                  	say	m_wake
+    97 000000BF BA[8D15]            <1>  mov dx,%1
+    98 000000C2 E86910              <1>  call puts
+   167 000000C5 BE[9829]                	mov	si,rawbuf
+   168 000000C8 B91400                  	mov	cx,20
+   169 000000CB E89E10                  	call	hexbytes
+   170                                  	say	m_wakeexp
+    97 000000CE BA[EC15]            <1>  mov dx,%1
+    98 000000D1 E85A10              <1>  call puts
+   171                                  
+   172                                  ; ---- 3. CMD0 at each start delay: which phase does the card hear? -------
+   173                                  ; Twice at each of NPHD delays (see genstart).  The first delay that
+   174                                  ; answers 01 both times is used for the steps that follow, at 385 kHz.
+   175                                  	say	m_align
+    97 000000D4 BA[1716]            <1>  mov dx,%1
+    98 000000D7 E85410              <1>  call puts
+   176 000000DA C606[211C]02            	mov	byte [cfg],TXM
+   177 000000DF C606[221C]00            	mov	byte [split],0
+   178 000000E4 E8CB06                  	call	ssio_init
+   179 000000E7 E80507                  	call	wake
+   180 000000EA C606[451C]FF            	mov	byte [bestd],0FFh
+   181 000000EF C606[471C]00            	mov	byte [dcount],0
+   182 000000F4 A0[471C]                .ph:	mov	al,[dcount]
+   183 000000F7 A2[441C]                	mov	[phd],al
+   184                                  	say	m_phd
+    97 000000FA BA[5216]            <1>  mov dx,%1
+    98 000000FD E82E10              <1>  call puts
+   185 00000100 A0[471C]                	mov	al,[dcount]
+   186 00000103 0430                    	add	al,'0'
+   187 00000105 E82D10                  	call	putc
+   188 00000108 B03A                    	mov	al,':'
+   189 0000010A E82810                  	call	putc
+   190 0000010D C606[4C1C]01            	mov	byte [swok],1
+   191 00000112 BD0200                  	mov	bp,2
+   192 00000115 E86808                  .ph1:	call	cs_low
+   193 00000118 B000                    	mov	al,0
+   194 0000011A 6631DB                  	xor	ebx,ebx
+   195 0000011D B495                    	mov	ah,95h
+   196 0000011F E89408                  	call	sd_cmd
+   197 00000122 A2[481C]                	mov	[r1v],al
+   198 00000125 E86A08                  	call	cs_high
+   199 00000128 B020                    	mov	al,' '
+   200 0000012A E80810                  	call	putc
+   201 0000012D A0[481C]                	mov	al,[r1v]
+   202 00000130 E81610                  	call	hex8
+   203 00000133 B02F                    	mov	al,'/'
+   204 00000135 E8FD0F                  	call	putc
+   205 00000138 A0[531C]                	mov	al,[sbits]
+   206 0000013B 0430                    	add	al,'0'
+   207 0000013D E8F50F                  	call	putc
+   208 00000140 803E[481C]01            	cmp	byte [r1v],01h
+   209 00000145 7405                    	je	.ph2
+   210 00000147 C606[4C1C]00            	mov	byte [swok],0
+   211 0000014C 4D                      .ph2:	dec	bp
+   212 0000014D 75C6                    	jnz	.ph1
+   213 0000014F E8EE0F                  	call	crlf
+   214 00000152 803E[4C1C]00            	cmp	byte [swok],0
+   215 00000157 740D                    	je	.ph3
+   216 00000159 803E[451C]FF            	cmp	byte [bestd],0FFh
+   217 0000015E 7506                    	jne	.ph3
+   218 00000160 A0[471C]                	mov	al,[dcount]
+   219 00000163 A2[451C]                	mov	[bestd],al
+   220 00000166 FE06[471C]              .ph3:	inc	byte [dcount]
+   221 0000016A 803E[471C]08            	cmp	byte [dcount],NPHD
+   222 0000016F 7283                    	jb	.ph
+   223 00000171 803E[451C]FF            	cmp	byte [bestd],0FFh
+   224 00000176 7509                    	jne	.svok
+   225                                  	say	m_noalign
+    97 00000178 BA[C416]            <1>  mov dx,%1
+    98 0000017B E8B00F              <1>  call puts
+   226 0000017E E92705                  	jmp	quit
+   227 00000181 A0[451C]                .svok:	mov	al,[bestd]
+   228 00000184 A2[441C]                	mov	[phd],al
+   229                                  	say	m_phuse
+    97 00000187 BA[5816]            <1>  mov dx,%1
+    98 0000018A E8A10F              <1>  call puts
+   230 0000018D A0[441C]                	mov	al,[phd]
+   231 00000190 0430                    	add	al,'0'
+   232 00000192 E8A00F                  	call	putc
+   233 00000195 E8A80F                  	call	crlf
+   234 00000198 E85406                  	call	wake
+   235                                  
+   236                                  ; ---- 4. CMD0: idle ------------------------------------------------------
+   237                                  	say	m_cmd0
+    97 0000019B BA[3117]            <1>  mov dx,%1
+    98 0000019E E88D0F              <1>  call puts
+   238 000001A1 BD0500                  	mov	bp,5
+   239 000001A4 E8D907                  .c0:	call	cs_low
+   240 000001A7 B000                    	mov	al,0
+   241 000001A9 6631DB                  	xor	ebx,ebx
+   242 000001AC B495                    	mov	ah,95h			; the CRC CMD0 needs
+   243 000001AE E80508                  	call	sd_cmd
+   244 000001B1 50                      	push	ax
+   245 000001B2 E8DD07                  	call	cs_high
+   246 000001B5 58                      	pop	ax
+   247 000001B6 3C01                    	cmp	al,01h
+   248 000001B8 7412                    	je	.c0ok
+   249 000001BA 4D                      	dec	bp
+   250 000001BB 75E7                    	jnz	.c0
+   251 000001BD E8890F                  	call	hex8
+   252                                  	say	m_bad
+    97 000001C0 BA[EE11]            <1>  mov dx,%1
+    98 000001C3 E8680F              <1>  call puts
+   253 000001C6 E8140F                  	call	trace
+   254 000001C9 E9DC04                  	jmp	quit
+   255 000001CC E87A0F                  .c0ok:	call	hex8
+   256 000001CF E8CE05                  	call	showofs
+   257                                  	say	m_ok
+    97 000001D2 BA[E711]            <1>  mov dx,%1
+    98 000001D5 E8560F              <1>  call puts
+   258                                  
+   259                                  ; ---- 5. CMD8: interface condition -- an SD v2 card echoes 1AA ------------
+   260                                  	say	m_cmd8
+    97 000001D8 BA[6217]            <1>  mov dx,%1
+    98 000001DB E8500F              <1>  call puts
+   261 000001DE C606[551C]00            	mov	byte [hcs],0
+   262 000001E3 BD0300                  	mov	bp,3
+   263 000001E6 E89707                  .c8try:	call	cs_low
+   264 000001E9 B008                    	mov	al,8
+   265 000001EB 66BBAA010000            	mov	ebx,1AAh
+   266 000001F1 B487                    	mov	ah,87h
+   267 000001F3 E8C007                  	call	sd_cmd
+   268 000001F6 3CFF                    	cmp	al,0FFh			; no answer at all: show it, try again
+   269 000001F8 751D                    	jne	.c8ans
+   270 000001FA 50                      	push	ax
+   271 000001FB E89407                  	call	cs_high
+   272 000001FE 58                      	pop	ax
+   273 000001FF E8470F                  	call	hex8
+   274                                  	say	m_noans
+    97 00000202 BA[CC17]            <1>  mov dx,%1
+    98 00000205 E8260F              <1>  call puts
+   275 00000208 E8D20E                  	call	trace
+   276 0000020B 4D                      	dec	bp
+   277 0000020C 75D8                    	jnz	.c8try
+   278                                  	say	m_bad
+    97 0000020E BA[EE11]            <1>  mov dx,%1
+    98 00000211 E81A0F              <1>  call puts
+   279 00000214 E99104                  	jmp	quit
+   280 00000217 E82F0F                  .c8ans:	call	hex8
+   281 0000021A 3C01                    	cmp	al,01h
+   282 0000021C 753B                    	jne	.c8v1
+   283 0000021E BF[C71C]                	mov	di,r7
+   284 00000221 B90400                  	mov	cx,4
+   285 00000224 E82507                  	call	rd_ablock
+   286 00000227 E86807                  	call	cs_high
+   287 0000022A B020                    	mov	al,' '
+   288 0000022C E8060F                  	call	putc
+   289 0000022F BE[C71C]                	mov	si,r7
+   290 00000232 B90400                  	mov	cx,4
+   291 00000235 E8340F                  	call	hexbytes
+   292 00000238 813E[C91C]01AA          	cmp	word [r7+2],0AA01h	; bytes 01 AA
+   293 0000023E 740C                    	je	.c8ok
+   294                                  	say	m_bad
+    97 00000240 BA[EE11]            <1>  mov dx,%1
+    98 00000243 E8E80E              <1>  call puts
+   295 00000246 E8940E                  	call	trace
+   296 00000249 E95C04                  	jmp	quit
+   297 0000024C C606[551C]01            .c8ok:	mov	byte [hcs],1
+   298                                  	say	m_v2
+    97 00000251 BA[9317]            <1>  mov dx,%1
+    98 00000254 E8D70E              <1>  call puts
+   299 00000257 EB1B                    	jmp	.acmd41
+   300 00000259 50                      .c8v1:	push	ax
+   301 0000025A E83507                  	call	cs_high
+   302 0000025D 58                      	pop	ax
+   303 0000025E A804                    	test	al,04h			; illegal command: an SD v1 card
+   304 00000260 750C                    	jnz	.c8old
+   305                                  	say	m_bad
+    97 00000262 BA[EE11]            <1>  mov dx,%1
+    98 00000265 E8C60E              <1>  call puts
+   306 00000268 E8720E                  	call	trace
+   307 0000026B E93A04                  	jmp	quit
+   308                                  .c8old:	say	m_v1
+   308                              <1> .c8old: 
+    97 0000026E BA[A917]            <1>  mov dx,%1
+    98 00000271 E8BA0E              <1>  call puts
+   309                                  
+   310                                  ; ---- 6. ACMD41: start initialisation, wait until it finishes -------------
+   311                                  .acmd41:
+   312                                  	say	m_acmd41
+    97 00000274 BA[D817]            <1>  mov dx,%1
+    98 00000277 E8B40E              <1>  call puts
+   313 0000027A E8530E                  	call	ticks
+   314 0000027D A3[591C]                	mov	[t0],ax
+   315 00000280 E8FD06                  .a41:	call	cs_low
+   316 00000283 B037                    	mov	al,55
+   317 00000285 6631DB                  	xor	ebx,ebx
+   318 00000288 B401                    	mov	ah,01h
+   319 0000028A E82907                  	call	sd_cmd
+   320 0000028D 3C01                    	cmp	al,01h			; idle, or ready
+   321 0000028F 7614                    	jbe	.a41b
+   322 00000291 50                      	push	ax
+   323 00000292 E8FD06                  	call	cs_high
+   324 00000295 58                      	pop	ax
+   325 00000296 E8B00E                  	call	hex8
+   326                                  	say	m_c55bad
+    97 00000299 BA[0918]            <1>  mov dx,%1
+    98 0000029C E88F0E              <1>  call puts
+   327 0000029F E83B0E                  	call	trace
+   328 000002A2 E90304                  	jmp	quit
+   329 000002A5 50                      .a41b:	push	ax
+   330 000002A6 E8E906                  	call	cs_high
+   331 000002A9 58                      	pop	ax
+   332 000002AA E8D306                  	call	cs_low
+   333 000002AD B029                    	mov	al,41
+   334 000002AF 6631DB                  	xor	ebx,ebx
+   335 000002B2 803E[551C]00            	cmp	byte [hcs],0
+   336 000002B7 7406                    	je	.a41c
+   337 000002B9 66BB00000040            	mov	ebx,40000000h		; HCS: we take high capacity
+   338 000002BF B401                    .a41c:	mov	ah,01h
+   339 000002C1 E8F206                  	call	sd_cmd
+   340 000002C4 50                      	push	ax
+   341 000002C5 E8CA06                  	call	cs_high
+   342 000002C8 58                      	pop	ax
+   343 000002C9 3C00                    	cmp	al,00h
+   344 000002CB 741F                    	je	.a41ok
+   345 000002CD 3C01                    	cmp	al,01h
+   346 000002CF 750C                    	jne	.a41bad
+   347 000002D1 E8FC0D                  	call	ticks
+   348 000002D4 2B06[591C]              	sub	ax,[t0]
+   349 000002D8 83F825                  	cmp	ax,37			; two seconds
+   350 000002DB 72A3                    	jb	.a41
+   351                                  .a41bad:
+   352 000002DD E8690E                  	call	hex8
+   353                                  	say	m_a41bad
+    97 000002E0 BA[2318]            <1>  mov dx,%1
+    98 000002E3 E8480E              <1>  call puts
+   354 000002E6 E8F40D                  	call	trace
+   355 000002E9 E9BC03                  	jmp	quit
+   356 000002EC E8E10D                  .a41ok:	call	ticks
+   357 000002EF 2B06[591C]              	sub	ax,[t0]
+   358 000002F3 660FB7C0                	movzx	eax,ax
+   359 000002F7 E8930E                  	call	dec32
+   360                                  	say	m_a41ok
+    97 000002FA BA[3F18]            <1>  mov dx,%1
+    98 000002FD E82E0E              <1>  call puts
+   361                                  
+   362                                  ; ---- 7. CMD58: OCR -- CCS says block or byte addressing -----------------
+   363                                  	say	m_cmd58
+    97 00000300 BA[4C18]            <1>  mov dx,%1
+    98 00000303 E8280E              <1>  call puts
+   364 00000306 E87706                  	call	cs_low
+   365 00000309 B03A                    	mov	al,58
+   366 0000030B 6631DB                  	xor	ebx,ebx
+   367 0000030E B401                    	mov	ah,01h
+   368 00000310 E8A306                  	call	sd_cmd
+   369 00000313 E8330E                  	call	hex8
+   370 00000316 3C00                    	cmp	al,00h
+   371 00000318 740F                    	je	.c58a
+   372 0000031A E87506                  	call	cs_high
+   373                                  	say	m_bad
+    97 0000031D BA[EE11]            <1>  mov dx,%1
+    98 00000320 E80B0E              <1>  call puts
+   374 00000323 E8B70D                  	call	trace
+   375 00000326 E97F03                  	jmp	quit
+   376 00000329 BF[CB1C]                .c58a:	mov	di,ocr
+   377 0000032C B90400                  	mov	cx,4
+   378 0000032F E81A06                  	call	rd_ablock
+   379 00000332 E85D06                  	call	cs_high
+   380 00000335 B020                    	mov	al,' '
+   381 00000337 E8FB0D                  	call	putc
+   382 0000033A BE[CB1C]                	mov	si,ocr
+   383 0000033D B90400                  	mov	cx,4
+   384 00000340 E8290E                  	call	hexbytes
+   385 00000343 C606[561C]00            	mov	byte [ccs],0
+   386 00000348 F606[CB1C]40            	test	byte [ocr],40h
+   387 0000034D 740D                    	jz	.sdsc
+   388 0000034F C606[561C]01            	mov	byte [ccs],1
+   389                                  	say	m_sdhc
+    97 00000354 BA[7D18]            <1>  mov dx,%1
+    98 00000357 E8D40D              <1>  call puts
+   390 0000035A EB2E                    	jmp	.cid
+   391                                  .sdsc:	say	m_sdsc
+   391                              <1> .sdsc: 
+    97 0000035C BA[A418]            <1>  mov dx,%1
+    98 0000035F E8CC0D              <1>  call puts
+   392 00000362 E81B06                  	call	cs_low			; byte addressed: 512-byte blocks
+   393 00000365 B010                    	mov	al,16
+   394 00000367 66BB00020000            	mov	ebx,512
+   395 0000036D B401                    	mov	ah,01h
+   396 0000036F E84406                  	call	sd_cmd
+   397 00000372 50                      	push	ax
+   398 00000373 E81C06                  	call	cs_high
+   399 00000376 58                      	pop	ax
+   400 00000377 3C00                    	cmp	al,00h
+   401 00000379 740F                    	je	.cid
+   402                                  	say	m_c16bad
+    97 0000037B BA[CE18]            <1>  mov dx,%1
+    98 0000037E E8AD0D              <1>  call puts
+   403 00000381 E8C50D                  	call	hex8
+   404 00000384 E8B90D                  	call	crlf
+   405 00000387 E91E03                  	jmp	quit
+   406                                  
+   407                                  ; ---- 8. CMD10, CMD9: who made it, how big -- the first data blocks -------
+   408                                  .cid:	say	m_cid
+   408                              <1> .cid: 
+    97 0000038A BA[F218]            <1>  mov dx,%1
+    98 0000038D E89E0D              <1>  call puts
+   409 00000390 B00A                    	mov	al,10
+   410 00000392 BF[CF1C]                	mov	di,cid
+   411 00000395 E8420B                  	call	rd_reg
+   412 00000398 0F820C03                	jc	quit
+   413                                  	say	m_maker
+    97 0000039C BA[FE18]            <1>  mov dx,%1
+    98 0000039F E88C0D              <1>  call puts
+   414 000003A2 A0[CF1C]                	mov	al,[cid]
+   415 000003A5 E8A10D                  	call	hex8
+   416                                  	say	m_oem
+    97 000003A8 BA[0819]            <1>  mov dx,%1
+    98 000003AB E8800D              <1>  call puts
+   417 000003AE BE[D01C]                	mov	si,cid+1
+   418 000003B1 B90200                  	mov	cx,2
+   419 000003B4 E8C50D                  	call	ascii
+   420                                  	say	m_name
+    97 000003B7 BA[0F19]            <1>  mov dx,%1
+    98 000003BA E8710D              <1>  call puts
+   421 000003BD BE[D21C]                	mov	si,cid+3
+   422 000003C0 B90500                  	mov	cx,5
+   423 000003C3 E8B60D                  	call	ascii
+   424 000003C6 E8770D                  	call	crlf
+   425                                  
+   426                                  	say	m_csd
+    97 000003C9 BA[1A19]            <1>  mov dx,%1
+    98 000003CC E85F0D              <1>  call puts
+   427 000003CF B009                    	mov	al,9
+   428 000003D1 BF[DF1C]                	mov	di,csd
+   429 000003D4 E8030B                  	call	rd_reg
+   430 000003D7 0F82CD02                	jc	quit
+   431 000003DB E81A0C                  	call	capacity
+   432 000003DE 66A3[5B1C]              	mov	[nsect],eax
+   433                                  	say	m_size
+    97 000003E2 BA[4819]            <1>  mov dx,%1
+    98 000003E5 E8460D              <1>  call puts
+   434 000003E8 66A1[5B1C]              	mov	eax,[nsect]
+   435 000003EC E89E0D                  	call	dec32
+   436                                  	say	m_sectors
+    97 000003EF BA[5119]            <1>  mov dx,%1
+    98 000003F2 E8390D              <1>  call puts
+   437 000003F5 66A1[5B1C]              	mov	eax,[nsect]
+   438 000003F9 66C1E80B                	shr	eax,11			; 2048 sectors a MB
+   439 000003FD E88D0D                  	call	dec32
+   440                                  	say	m_mb
+    97 00000400 BA[5C19]            <1>  mov dx,%1
+    98 00000403 E8280D              <1>  call puts
+   441                                  
+   442                                  ; ---- 9. Each speed, each start delay: sector 0 once ------------------------
+   443                                  ; The phase that works depends on the clock, so at each speed every delay
+   444                                  ; is tried.  Each entry: result, SSIO flags if they were set, /offset.
+   445                                  ; The fastest speed with a delay that read sector 0 is used for step 10,
+   446                                  ; at its first such delay; step 10's 256 reads say whether it holds.
+   447                                  	say	m_sweep
+    97 00000406 BA[6219]            <1>  mov dx,%1
+    98 00000409 E8220D              <1>  call puts
+   448 0000040C C606[231C]01            	mov	byte [quiet],1
+   449 00000411 C606[4B1C]FF            	mov	byte [bestbv],0FFh
+   450 00000416 31DB                    	xor	bx,bx
+   451 00000418 53                      .sw:	push	bx
+   452 00000419 8A87[371C]              	mov	al,[bvtab+bx]
+   453 0000041D A2[431C]                	mov	[curbv],al
+   454 00000420 0C80                    	or	al,BEN
+   455 00000422 A2[491C]                	mov	[baud],al
+   456                                  	say	m_swhead
+    97 00000425 BA[B419]            <1>  mov dx,%1
+    98 00000428 E8030D              <1>  call puts
+   457 0000042B 89DE                    	mov	si,bx
+   458 0000042D D1E6                    	shl	si,1
+   459 0000042F 8B94[3B1C]              	mov	dx,[bvname+si]
+   460 00000433 E8F80C                  	call	puts
+   461 00000436 C606[461C]FF            	mov	byte [curd],0FFh
+   462 0000043B C606[471C]00            	mov	byte [dcount],0
+   463 00000440 A0[471C]                .sd:	mov	al,[dcount]
+   464 00000443 A2[441C]                	mov	[phd],al
+   465 00000446 6631DB                  	xor	ebx,ebx
+   466 00000449 E8E60A                  	call	rd_sector
+   467 0000044C 0FB636[241C]            	movzx	si,byte [why]
+   468 00000451 D1E6                    	shl	si,1
+   469 00000453 8B94[251C]              	mov	dx,[whyname+si]
+   470 00000457 E8D40C                  	call	puts
+   471 0000045A 803E[571C]00            	cmp	byte [ssio_err],0
+   472 0000045F 7406                    	je	.sd1
+   473 00000461 A0[571C]                	mov	al,[ssio_err]
+   474 00000464 E8E20C                  	call	hex8
+   475 00000467 B02F                    .sd1:	mov	al,'/'
+   476 00000469 E8C90C                  	call	putc
+   477 0000046C A0[531C]                	mov	al,[sbits]
+   478 0000046F 0430                    	add	al,'0'
+   479 00000471 E8C10C                  	call	putc
+   480 00000474 B020                    	mov	al,' '
+   481 00000476 E8BC0C                  	call	putc
+   482 00000479 803E[241C]00            	cmp	byte [why],0
+   483 0000047E 750D                    	jne	.sd2
+   484 00000480 803E[461C]FF            	cmp	byte [curd],0FFh
+   485 00000485 7506                    	jne	.sd2
+   486 00000487 A0[471C]                	mov	al,[dcount]
+   487 0000048A A2[461C]                	mov	[curd],al
+   488 0000048D FE06[471C]              .sd2:	inc	byte [dcount]
+   489 00000491 803E[471C]08            	cmp	byte [dcount],NPHD
+   490 00000496 72A8                    	jb	.sd
+   491 00000498 E8A50C                  	call	crlf
+   492 0000049B 5B                      	pop	bx
+   493 0000049C 803E[461C]FF            	cmp	byte [curd],0FFh
+   494 000004A1 740D                    	je	.sw3
+   495 000004A3 8A87[371C]              	mov	al,[bvtab+bx]		; slowest first: the last good is fastest
+   496 000004A7 A2[4B1C]                	mov	[bestbv],al
+   497 000004AA A0[461C]                	mov	al,[curd]
+   498 000004AD A2[451C]                	mov	[bestd],al
+   499 000004B0 43                      .sw3:	inc	bx
+   500 000004B1 83FB04                  	cmp	bx,NBV
+   501 000004B4 0F8260FF                	jb	.sw
+   502 000004B8 C606[231C]00            	mov	byte [quiet],0
+   503 000004BD 803E[4B1C]FF            	cmp	byte [bestbv],0FFh
+   504 000004C2 7509                    	jne	.swok
+   505                                  	say	m_noswp
+    97 000004C4 BA[0D1A]            <1>  mov dx,%1
+    98 000004C7 E8640C              <1>  call puts
+   506 000004CA E9DB01                  	jmp	quit
+   507 000004CD A0[4B1C]                .swok:	mov	al,[bestbv]
+   508 000004D0 0C80                    	or	al,BEN
+   509 000004D2 A2[491C]                	mov	[baud],al
+   510 000004D5 A0[451C]                	mov	al,[bestd]
+   511 000004D8 A2[441C]                	mov	[phd],al
+   512                                  	say	m_swuse
+    97 000004DB BA[A319]            <1>  mov dx,%1
+    98 000004DE E84D0C              <1>  call puts
+   513 000004E1 A0[4B1C]                	mov	al,[bestbv]
+   514 000004E4 0430                    	add	al,'0'
+   515 000004E6 E84C0C                  	call	putc
+   516                                  	say	m_swuse2
+    97 000004E9 BA[B019]            <1>  mov dx,%1
+    98 000004EC E83F0C              <1>  call puts
+   517 000004EF A0[441C]                	mov	al,[phd]
+   518 000004F2 0430                    	add	al,'0'
+   519 000004F4 E83E0C                  	call	putc
+   520 000004F7 E8460C                  	call	crlf
+   521                                  
+   522                                  	say	m_sec0
+    97 000004FA BA[4C1A]            <1>  mov dx,%1
+    98 000004FD E82E0C              <1>  call puts
+   523 00000500 6631DB                  	xor	ebx,ebx
+   524 00000503 E82C0A                  	call	rd_sector
+   525 00000506 0F829E01                	jc	quit
+   526 0000050A A1[ED1E]                	mov	ax,[secbuf+1FEh]
+   527 0000050D E8530C                  	call	hex16
+   528 00000510 E88D02                  	call	showofs
+   529 00000513 3D55AA                  	cmp	ax,0AA55h
+   530 00000516 7408                    	je	.sigok
+   531                                  	say	m_nosig
+    97 00000518 BA[7C1A]            <1>  mov dx,%1
+    98 0000051B E8100C              <1>  call puts
+   532 0000051E EB70                    	jmp	.speed
+   533                                  .sigok:	say	m_ok
+   533                              <1> .sigok: 
+    97 00000520 BA[E711]            <1>  mov dx,%1
+    98 00000523 E8080C              <1>  call puts
+   534 00000526 BE[AD1E]                	mov	si,secbuf+1BEh
+   535 00000529 BD0100                  	mov	bp,1
+   536 0000052C 807C0400                .part:	cmp	byte [si+4],0		; type 0: unused
+   537 00000530 7455                    	je	.pnext
+   538                                  	say	m_pent
+    97 00000532 BA[9D1A]            <1>  mov dx,%1
+    98 00000535 E8F60B              <1>  call puts
+   539 00000538 89E8                    	mov	ax,bp
+   540 0000053A 0430                    	add	al,'0'
+   541 0000053C E8F60B                  	call	putc
+   542                                  	say	m_pboot
+    97 0000053F BA[AB1A]            <1>  mov dx,%1
+    98 00000542 E8E90B              <1>  call puts
+   543 00000545 8A04                    	mov	al,[si]
+   544 00000547 E8FF0B                  	call	hex8
+   545                                  	say	m_ptype
+    97 0000054A BA[B31A]            <1>  mov dx,%1
+    98 0000054D E8DE0B              <1>  call puts
+   546 00000550 8A4404                  	mov	al,[si+4]
+   547 00000553 E8F30B                  	call	hex8
+   548                                  	say	m_pstart
+    97 00000556 BA[BA1A]            <1>  mov dx,%1
+    98 00000559 E8D20B              <1>  call puts
+   549 0000055C 668B4408                	mov	eax,[si+8]
+   550 00000560 E82A0C                  	call	dec32
+   551                                  	say	m_plen
+    97 00000563 BA[C21A]            <1>  mov dx,%1
+    98 00000566 E8C50B              <1>  call puts
+   552 00000569 668B440C                	mov	eax,[si+12]
+   553 0000056D E81D0C                  	call	dec32
+   554                                  	say	m_pmb
+    97 00000570 BA[CC1A]            <1>  mov dx,%1
+    98 00000573 E8B80B              <1>  call puts
+   555 00000576 668B440C                	mov	eax,[si+12]
+   556 0000057A 66C1E80B                	shr	eax,11
+   557 0000057E E80C0C                  	call	dec32
+   558                                  	say	m_mb
+    97 00000581 BA[5C19]            <1>  mov dx,%1
+    98 00000584 E8A70B              <1>  call puts
+   559 00000587 83C610                  .pnext:	add	si,16
+   560 0000058A 45                      	inc	bp
+   561 0000058B 83FD04                  	cmp	bp,4
+   562 0000058E 769C                    	jbe	.part
+   563                                  
+   564                                  ; ---- 10. How fast: 256 single-sector reads, each CRC checked --------------
+   565                                  .speed:	say	m_speed
+   565                              <1> .speed: 
+    97 00000590 BA[D01A]            <1>  mov dx,%1
+    98 00000593 E8980B              <1>  call puts
+   566 00000596 E8370B                  	call	ticks
+   567 00000599 A3[591C]                	mov	[t0],ax
+   568 0000059C 6631DB                  	xor	ebx,ebx
+   569 0000059F 6653                    .sp:	push	ebx
+   570 000005A1 E88E09                  	call	rd_sector
+   571 000005A4 665B                    	pop	ebx
+   572 000005A6 0F82FE00                	jc	quit
+   573 000005AA 6643                    	inc	ebx
+   574 000005AC 6681FB00010000          	cmp	ebx,256
+   575 000005B3 72EA                    	jb	.sp
+   576 000005B5 E8180B                  	call	ticks
+   577 000005B8 2B06[591C]              	sub	ax,[t0]
+   578 000005BC 7501                    	jnz	.spt
+   579 000005BE 40                      	inc	ax
+   580 000005BF A3[591C]                .spt:	mov	[t0],ax
+   581 000005C2 660FB7C0                	movzx	eax,ax
+   582 000005C6 E8C40B                  	call	dec32
+   583                                  	say	m_ticks
+    97 000005C9 BA[FD1A]            <1>  mov dx,%1
+    98 000005CC E85F0B              <1>  call puts
+   584 000005CF 66B8005B0000            	mov	eax,128*182		; 128 KB, 18.2 ticks a second
+   585 000005D5 6631D2                  	xor	edx,edx
+   586 000005D8 660FB70E[591C]          	movzx	ecx,word [t0]
+   587 000005DE 666BC90A                	imul	ecx,ecx,10
+   588 000005E2 66F7F1                  	div	ecx
+   589 000005E5 E8A50B                  	call	dec32
+   590                                  	say	m_kbs
+    97 000005E8 BA[061B]            <1>  mov dx,%1
+    98 000005EB E8400B              <1>  call puts
+   591                                  
+   592                                  ; ---- 11. Write: sector 2, in the gap before the partition ------------------
+   593                                  ; Saved, written with a pattern, read back and compared, then written
+   594                                  ; back as it was and read back and compared again.
+   595                                  	say	m_wr
+    97 000005EE BA[1F12]            <1>  mov dx,%1
+    98 000005F1 E83A0B              <1>  call puts
+   596 000005F4 66BB02000000            	mov	ebx,WSECT
+   597 000005FA E83509                  	call	rd_sector
+   598 000005FD 0F82A700                	jc	quit
+   599 00000601 BE[EF1C]                	mov	si,secbuf
+   600 00000604 BF[F71E]                	mov	di,savebuf
+   601 00000607 B90001                  	mov	cx,256
+   602 0000060A F3A5                    	rep	movsw
+   603                                  	say	m_ok
+    97 0000060C BA[E711]            <1>  mov dx,%1
+    98 0000060F E81C0B              <1>  call puts
+   604                                  	say	m_wr1
+    97 00000612 BA[6412]            <1>  mov dx,%1
+    98 00000615 E8160B              <1>  call puts
+   605 00000618 E89409                  	call	fillpat
+   606 0000061B 66BB02000000            	mov	ebx,WSECT
+   607 00000621 E80907                  	call	wr_sector
+   608 00000624 0F828000                	jc	quit
+   609 00000628 E8B709                  	call	busysay
+   610                                  	say	m_wr2
+    97 0000062B BA[9A12]            <1>  mov dx,%1
+    98 0000062E E8FD0A              <1>  call puts
+   611 00000631 E8A309                  	call	clrsec
+   612 00000634 66BB02000000            	mov	ebx,WSECT
+   613 0000063A E8F508                  	call	rd_sector
+   614 0000063D 7269                    	jc	quit
+   615 0000063F E87E09                  	call	cmppat
+   616 00000642 754E                    	jne	.wbad
+   617                                  	say	m_ok
+    97 00000644 BA[E711]            <1>  mov dx,%1
+    98 00000647 E8E40A              <1>  call puts
+   618                                  	say	m_wr3
+    97 0000064A BA[D112]            <1>  mov dx,%1
+    98 0000064D E8DE0A              <1>  call puts
+   619 00000650 BE[F71E]                	mov	si,savebuf
+   620 00000653 BF[EF1C]                	mov	di,secbuf
+   621 00000656 B90001                  	mov	cx,256
+   622 00000659 F3A5                    	rep	movsw
+   623 0000065B 66BB02000000            	mov	ebx,WSECT
+   624 00000661 E8C906                  	call	wr_sector
+   625 00000664 7242                    	jc	quit
+   626 00000666 E87909                  	call	busysay
+   627                                  	say	m_wr4
+    97 00000669 BA[0813]            <1>  mov dx,%1
+    98 0000066C E8BF0A              <1>  call puts
+   628 0000066F E86509                  	call	clrsec
+   629 00000672 66BB02000000            	mov	ebx,WSECT
+   630 00000678 E8B708                  	call	rd_sector
+   631 0000067B 722B                    	jc	quit
+   632 0000067D BE[EF1C]                	mov	si,secbuf
+   633 00000680 BF[F71E]                	mov	di,savebuf
+   634 00000683 B90001                  	mov	cx,256
+   635 00000686 F3A7                    	repe	cmpsw
+   636 00000688 7508                    	jne	.wbad
+   637                                  	say	m_ok
+    97 0000068A BA[E711]            <1>  mov dx,%1
+    98 0000068D E89E0A              <1>  call puts
+   638 00000690 EB08                    	jmp	.wok
+   639                                  .wbad:	say	m_wrdiff
+   639                              <1> .wbad: 
+    97 00000692 BA[5413]            <1>  mov dx,%1
+    98 00000695 E8960A              <1>  call puts
+   640 00000698 EB0E                    	jmp	quit
+   641                                  .wok:
+   642                                  
+   643                                  	say	m_done
+    97 0000069A BA[0912]            <1>  mov dx,%1
+    98 0000069D E88E0A              <1>  call puts
+   644 000006A0 E83601                  	call	ssio_off
+   645 000006A3 B8004C                  	mov	ax,4C00h
+   646 000006A6 CD21                    	int	21h
+   647                                  
+   648                                  quit:	say	m_stop
+   648                              <1> quit: 
+    97 000006A8 BA[FC11]            <1>  mov dx,%1
+    98 000006AB E8800A              <1>  call puts
+   649 000006AE E82801                  	call	ssio_off
+   650 000006B1 B8014C                  	mov	ax,4C01h
+   651 000006B4 CD21                    	int	21h
+   652                                  
+   653                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   654                                  ; Step 3.
+   655                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   656                                  
+   657                                  ; survey -- CMD0 three times in arrangement [cfg], each line showing the
+   658                                  ; raw window and where the answer started.  AL = 2 if all three gave R1
+   659                                  ; 01 at offset 0, 1 if all gave 01 at one offset, 0 otherwise.
+   660                                  survey:
+   661 000006B6 E8F900                  	call	ssio_init
+   662 000006B9 E83301                  	call	wake
+   663 000006BC C606[4D1C]01            	mov	byte [sv_ok],1
+   664 000006C1 C606[4E1C]01            	mov	byte [sv_zero],1
+   665 000006C6 C606[4F1C]FF            	mov	byte [sv_ofs],0FFh
+   666 000006CB BD0300                  	mov	bp,3
+   667                                  .try:	say	m_svhead
+   667                              <1> .try: 
+    97 000006CE BA[6416]            <1>  mov dx,%1
+    98 000006D1 E85A0A              <1>  call puts
+   668 000006D4 E8A600                  	call	showcombo
+   669 000006D7 E8A602                  	call	cs_low
+   670 000006DA B000                    	mov	al,0
+   671 000006DC 6631DB                  	xor	ebx,ebx
+   672 000006DF B495                    	mov	ah,95h
+   673 000006E1 E8D202                  	call	sd_cmd
+   674 000006E4 50                      	push	ax
+   675 000006E5 E8AA02                  	call	cs_high
+   676 000006E8 58                      	pop	ax
+   677 000006E9 50                      	push	ax
+   678                                  	say	m_svr1
+    97 000006EA BA[A616]            <1>  mov dx,%1
+    98 000006ED E83E0A              <1>  call puts
+   679 000006F0 58                      	pop	ax
+   680 000006F1 E8550A                  	call	hex8
+   681 000006F4 3C01                    	cmp	al,01h
+   682 000006F6 7405                    	je	.t2
+   683 000006F8 C606[4D1C]00            	mov	byte [sv_ok],0
+   684 000006FD E8A000                  .t2:	call	showofs
+   685 00000700 A0[531C]                	mov	al,[sbits]
+   686 00000703 3C00                    	cmp	al,0
+   687 00000705 7405                    	je	.t3
+   688 00000707 C606[4E1C]00            	mov	byte [sv_zero],0
+   689 0000070C 803E[4F1C]FF            .t3:	cmp	byte [sv_ofs],0FFh
+   690 00000711 740B                    	je	.t4
+   691 00000713 3A06[4F1C]              	cmp	al,[sv_ofs]
+   692 00000717 7408                    	je	.t5
+   693 00000719 C606[4D1C]00            	mov	byte [sv_ok],0		; the offset moved
+   694 0000071E A2[4F1C]                .t4:	mov	[sv_ofs],al
+   695                                  .t5:	say	m_svwin
+   695                              <1> .t5: 
+    97 00000721 BA[AC16]            <1>  mov dx,%1
+    98 00000724 E8070A              <1>  call puts
+   696 00000727 BE[9F1C]                	mov	si,win+PRE		; from the frame on
+   697 0000072A B91800                  	mov	cx,WINLEN-PRE
+   698 0000072D E83C0A                  	call	hexbytes
+   699 00000730 E80D0A                  	call	crlf
+   700 00000733 4D                      	dec	bp
+   701 00000734 7598                    	jnz	.try
+   702 00000736 30C0                    	xor	al,al
+   703 00000738 803E[4D1C]00            	cmp	byte [sv_ok],0
+   704 0000073D 740B                    	je	.out
+   705 0000073F FEC0                    	inc	al
+   706 00000741 803E[4E1C]00            	cmp	byte [sv_zero],0
+   707 00000746 7402                    	je	.out
+   708 00000748 FEC0                    	inc	al
+   709 0000074A C3                      .out:	ret
+   710                                  
+   711                                  ; recover -- bring back a card that an earlier run left mid-transfer: a
+   712                                  ; card part way through sending a block ignores CMD0 until the block is
+   713                                  ; out.  So, selected, clock out more than a block and its CRC; send CMD12,
+   714                                  ; which ends a multiple-block read; then deselect.  v3, v5 and v7 each
+   715                                  ; began after a run that had stopped part way, and each saw no answer to
+   716                                  ; CMD0 until the card was taken out and put back.
+   717                                  recover:
+   718 0000074B E86400                  	call	ssio_init
+   719 0000074E E89E00                  	call	wake
+   720 00000751 E82C02                  	call	cs_low
+   721 00000754 BD3C00                  	mov	bp,60			; 60 x 10 words: 1200 bytes
+   722 00000757 31F6                    .r1:	xor	si,si
+   723 00000759 31FF                    	xor	di,di
+   724 0000075B B90A00                  	mov	cx,10
+   725 0000075E E8BB00                  	call	spi_xfer
+   726 00000761 4D                      	dec	bp
+   727 00000762 75F3                    	jnz	.r1
+   728 00000764 B00C                    	mov	al,12			; CMD12: stop transmission
+   729 00000766 6631DB                  	xor	ebx,ebx
+   730 00000769 B401                    	mov	ah,01h
+   731 0000076B E84802                  	call	sd_cmd
+   732 0000076E 31F6                    	xor	si,si			; its busy, if any, and some more
+   733 00000770 31FF                    	xor	di,di
+   734 00000772 B92000                  	mov	cx,32
+   735 00000775 E8A400                  	call	spi_xfer
+   736 00000778 E81702                  	call	cs_high
+   737 0000077B EB72                    	jmp	wake
+   738                                  
+   739                                  ; showcombo -- which arrangement and burst shape [cfg] and [split] are.
+   740                                  showcombo:
+   741 0000077D 52                      	push	dx
+   742 0000077E BA[6816]                	mov	dx,m_txm
+   743 00000781 803E[211C]02            	cmp	byte [cfg],TXM
+   744 00000786 7403                    	je	.s1
+   745 00000788 BA[7B16]                	mov	dx,m_rxm
+   746 0000078B E8A009                  .s1:	call	puts
+   747 0000078E BA[8E16]                	mov	dx,m_long
+   748 00000791 803E[221C]00            	cmp	byte [split],0
+   749 00000796 7403                    	je	.s2
+   750 00000798 BA[9A16]                	mov	dx,m_split
+   751 0000079B E89009                  .s2:	call	puts
+   752 0000079E 5A                      	pop	dx
+   753 0000079F C3                      	ret
+   754                                  
+   755                                  ; showofs -- "  @ bit N" for the receive offset just found.
+   756                                  showofs:
+   757 000007A0 50                      	push	ax
+   758                                  	say	m_at
+    97 000007A1 BA[8C13]            <1>  mov dx,%1
+    98 000007A4 E88709              <1>  call puts
+   759 000007A7 660FB606[531C]          	movzx	eax,byte [sbits]
+   760 000007AD E8DD09                  	call	dec32
+   761 000007B0 58                      	pop	ax
+   762 000007B1 C3                      	ret
+   763                                  
+   764                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   765                                  ; The SSIO.
+   766                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   767                                  
+   768                                  ; ssio_init -- stopped, then arrangement [cfg] (TXM or RXM, never both),
+   769                                  ; the generator running slow, the receive buffer emptied.
+   770                                  ssio_init:
+   771 000007B2 BA86F4                  	mov	dx,SSIOCON1
+   772 000007B5 30C0                    	xor	al,al			; both off; TUE and ROE cleared
+   773 000007B7 EE                      	out	dx,al
+   774 000007B8 BA84F4                  	mov	dx,SSIOBAUD
+   775 000007BB EE                      	out	dx,al
+   776 000007BC BA88F4                  	mov	dx,SSIOCON2
+   777 000007BF A0[211C]                	mov	al,[cfg]
+   778 000007C2 2403                    	and	al,TXM|RXM
+   779 000007C4 3C03                    	cmp	al,TXM|RXM		; both: refuse, use TXM
+   780 000007C6 7502                    	jne	.one
+   781 000007C8 B002                    	mov	al,TXM
+   782 000007CA EE                      .one:	out	dx,al
+   783 000007CB BA84F4                  	mov	dx,SSIOBAUD
+   784 000007CE B08C                    	mov	al,BEN|BV_SLOW
+   785 000007D0 A2[491C]                	mov	[baud],al
+   786 000007D3 EE                      	out	dx,al
+   787 000007D4 BA82F4                  	mov	dx,SSIORBUF
+   788 000007D7 ED                      	in	ax,dx			; clears RHBF
+   789 000007D8 C3                      	ret
+   790                                  
+   791                                  ; ssio_off -- card deselected, SSIO stopped and back in its reset state.
+   792                                  ssio_off:
+   793 000007D9 BA72F8                  	mov	dx,P3LTC
+   794 000007DC EC                      	in	al,dx
+   795 000007DD 0C40                    	or	al,SDnCS
+   796 000007DF EE                      	out	dx,al
+   797 000007E0 BA86F4                  	mov	dx,SSIOCON1
+   798 000007E3 30C0                    	xor	al,al
+   799 000007E5 EE                      	out	dx,al
+   800 000007E6 BA84F4                  	mov	dx,SSIOBAUD
+   801 000007E9 EE                      	out	dx,al
+   802 000007EA BA88F4                  	mov	dx,SSIOCON2
+   803 000007ED EE                      	out	dx,al
+   804 000007EE C3                      	ret
+   805                                  
+   806                                  ; wake -- CS high, 160 clocks (a card wants 74) into rawbuf.  CF if the
+   807                                  ; SSIO never finished a word.
+   808                                  wake:
+   809 000007EF E8A001                  	call	cs_high
+   810 000007F2 31F6                    	xor	si,si
+   811 000007F4 BF[9829]                	mov	di,rawbuf
+   812 000007F7 B90A00                  	mov	cx,10
+   813 000007FA EB20                    	jmp	spi_xfer
+   814                                  
+   815                                  ; genstart -- start a burst at a known phase of the clock: the generator
+   816                                  ; from reset, [phd] reads of SSIOCTR as a delay, then the transmitter and
+   817                                  ; receiver.  The first word must already be in SSIOTBUF.
+   818                                  ;
+   819                                  ; Why.  The transmitter starts in step with the baud-rate generator, and
+   820                                  ; how a burst begins depends on the generator's phase at that instant
+   821                                  ; (Intel's figures 12-7 and 12-8).  Free running, that phase is set by
+   822                                  ; the time since the last burst: about the same throughout a run, since
+   823                                  ; the code repeats, but different from run to run.  v10 shows it: CMD0
+   824                                  ; answered in some runs, not at all in others, and a different code path
+   825                                  ; (the recovery) turned a good run bad.  Restarting the generator each
+   826                                  ; burst makes the phase repeatable; v5 did that with no delay and got a
+   827                                  ; bad phase every time.  So step 3 tries delays until CMD0 answers, and
+   828                                  ; step 9 does the same at each speed.  All with interrupts off: the delay
+   829                                  ; is counted in instructions and must not be stretched.
+   830                                  NPHD		equ	8		; delays tried: 0 to 7 reads
+   831                                  genstart:
+   832 000007FC 51                      	push	cx
+   833 000007FD BA84F4                  	mov	dx,SSIOBAUD
+   834 00000800 30C0                    	xor	al,al			; stopped: count cleared
+   835 00000802 EE                      	out	dx,al
+   836 00000803 A0[491C]                	mov	al,[baud]
+   837 00000806 EE                      	out	dx,al			; and from the top
+   838 00000807 0FB60E[441C]            	movzx	cx,byte [phd]
+   839 0000080C E306                    	jcxz	.go
+   840 0000080E BA8AF4                  	mov	dx,SSIOCTR
+   841 00000811 EC                      .d:	in	al,dx
+   842 00000812 E2FD                    	loop	.d
+   843 00000814 BA86F4                  .go:	mov	dx,SSIOCON1
+   844 00000817 B011                    	mov	al,TEN|REN
+   845 00000819 EE                      	out	dx,al
+   846 0000081A 59                      	pop	cx
+   847 0000081B C3                      	ret
+   848                                  
+   849                                  ; spi_xfer -- move CX words (at least one) through the SSIO, full duplex.
+   850                                  ;   SI	the bytes to send, two a word, first byte first; 0 sends FFh
+   851                                  ;   DI	where to put the bytes received, the same way; 0 discards them
+   852                                  ; Returns AX = the last word received, first byte in AL; CF set if the
+   853                                  ; SSIO stopped answering.  Advances SI and DI when they are not 0.
+   854                                  ; Clobbers BX, CX, DX.
+   855                                  ;
+   856                                  ; The transmitter is double buffered: the next word goes into the holding
+   857                                  ; buffer while the last one shifts, and the receiver hands over each word
+   858                                  ; as it completes.  If the buffer were not refilled in time the
+   859                                  ; transmitter would send the old word again and the receiver would lose
+   860                                  ; one, so the burst runs with interrupts held off.  The last word is
+   861                                  ; followed by a disable, which lets it finish and then stops the clock.
+   862                                  ;
+   863                                  ; The baud-rate generator runs whether or not the transmitter does, and
+   864                                  ; the transmitter starts in step with it, so how a burst begins depends
+   865                                  ; on the generator's phase at that moment (Intel's figures 12-7, 12-8).
+   866                                  ; One way the card counts an edge the slave receiver does not, and every
+   867                                  ; byte comes in a bit early.  Free running, a command burst always gets
+   868                                  ; through and its R1 locates the offset (v3, v4); but the offset can
+   869                                  ; differ from one burst to the next above 385 kHz (v4), so a data command
+   870                                  ; goes in one burst with its data (xact_burst).  Restarting the
+   871                                  ; generator for every burst to fix the phase stopped the card hearing
+   872                                  ; commands at all (v5), so it runs free.
+   873                                  spi_xfer:
+   874 0000081C 9C                      	pushf
+   875 0000081D FA                      	cli
+   876 0000081E E84B00                  	call	.txword
+   877 00000821 BA80F4                  	mov	dx,SSIOTBUF
+   878 00000824 EF                      	out	dx,ax
+   879 00000825 E8D4FF                  	call	genstart
+   880 00000828 49                      .loop:	dec	cx
+   881 00000829 741A                    	jz	.last
+   882 0000082B B440                    	mov	ah,THBE			; the last word is in the shifter
+   883 0000082D E85300                  	call	.wait
+   884 00000830 7231                    	jc	.fail
+   885 00000832 E83700                  	call	.txword
+   886 00000835 BA80F4                  	mov	dx,SSIOTBUF
+   887 00000838 EF                      	out	dx,ax
+   888 00000839 B404                    	mov	ah,RHBF			; the last word has come in
+   889 0000083B E84500                  	call	.wait
+   890 0000083E 7223                    	jc	.fail
+   891 00000840 E83400                  	call	.rxword
+   892 00000843 EBE3                    	jmp	.loop
+   893 00000845 B440                    .last:	mov	ah,THBE
+   894 00000847 E83900                  	call	.wait
+   895 0000084A 7217                    	jc	.fail
+   896 0000084C EC                      	in	al,dx			; DX = SSIOCON1
+   897 0000084D 2488                    	and	al,TUE|ROE
+   898 0000084F 0806[571C]              	or	[ssio_err],al		; should never happen; reported if it does
+   899 00000853 30C0                    	xor	al,al			; disable: the word in the shifter finishes
+   900 00000855 EE                      	out	dx,al
+   901 00000856 B404                    	mov	ah,RHBF
+   902 00000858 E82800                  	call	.wait
+   903 0000085B 7206                    	jc	.fail
+   904 0000085D E81700                  	call	.rxword
+   905 00000860 9D                      	popf
+   906 00000861 F8                      	clc
+   907 00000862 C3                      	ret
+   908 00000863 BA86F4                  .fail:	mov	dx,SSIOCON1
+   909 00000866 30C0                    	xor	al,al
+   910 00000868 EE                      	out	dx,al
+   911 00000869 9D                      	popf
+   912 0000086A F9                      	stc
+   913 0000086B C3                      	ret
+   914                                  
+   915                                  .txword:				; AX = the next word to send
+   916 0000086C B8FFFF                  	mov	ax,0FFFFh
+   917 0000086F 09F6                    	or	si,si
+   918 00000871 7403                    	jz	.tx1
+   919 00000873 AD                      	lodsw
+   920 00000874 86C4                    	xchg	al,ah			; first byte goes out first: MSB
+   921 00000876 C3                      .tx1:	ret
+   922                                  
+   923                                  .rxword:				; AX = the word received, stored
+   924 00000877 BA82F4                  	mov	dx,SSIORBUF
+   925 0000087A ED                      	in	ax,dx
+   926 0000087B 86C4                    	xchg	al,ah
+   927 0000087D 09FF                    	or	di,di
+   928 0000087F 7401                    	jz	.rx1
+   929 00000881 AB                      	stosw
+   930 00000882 C3                      .rx1:	ret
+   931                                  
+   932                                  .wait:					; until SSIOCON1 has bit AH; CF if never
+   933 00000883 BA86F4                  	mov	dx,SSIOCON1
+   934 00000886 31DB                    	xor	bx,bx			; 65536 reads: milliseconds
+   935 00000888 EC                      .w1:	in	al,dx
+   936 00000889 84E0                    	test	al,ah
+   937 0000088B 7505                    	jnz	.w2
+   938 0000088D 4B                      	dec	bx
+   939 0000088E 75F8                    	jnz	.w1
+   940 00000890 F9                      	stc
+   941 00000891 C3                      	ret
+   942 00000892 F8                      .w2:	clc
+   943 00000893 C3                      	ret
+   944                                  
+   945                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   946                                  ; Raw bytes, on top of words.
+   947                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   948                                  
+   949                                  ; rd_byte -- AL = the next raw byte from the SSIO.  A word brings two; the
+   950                                  ; second is kept for the next call.  All else preserved.
+   951                                  rd_byte:
+   952 00000894 803E[501C]00            	cmp	byte [held],0
+   953 00000899 7409                    	je	.fresh
+   954 0000089B C606[501C]00            	mov	byte [held],0
+   955 000008A0 A0[511C]                	mov	al,[heldb]
+   956 000008A3 C3                      	ret
+   957 000008A4 53                      .fresh:	push	bx
+   958 000008A5 51                      	push	cx
+   959 000008A6 52                      	push	dx
+   960 000008A7 56                      	push	si
+   961 000008A8 57                      	push	di
+   962 000008A9 31F6                    	xor	si,si
+   963 000008AB 31FF                    	xor	di,di
+   964 000008AD B90100                  	mov	cx,1
+   965 000008B0 E869FF                  	call	spi_xfer
+   966 000008B3 5F                      	pop	di
+   967 000008B4 5E                      	pop	si
+   968 000008B5 5A                      	pop	dx
+   969 000008B6 59                      	pop	cx
+   970 000008B7 5B                      	pop	bx
+   971 000008B8 7303                    	jnc	.ok
+   972 000008BA B8FFFF                  	mov	ax,0FFFFh		; a dead SSIO reads as no answer
+   973 000008BD 8826[511C]              .ok:	mov	[heldb],ah
+   974 000008C1 C606[501C]01            	mov	byte [held],1
+   975 000008C6 C3                      	ret
+   976                                  
+   977                                  ; rd_block -- CX raw bytes to DI: a held byte first, then whole words in
+   978                                  ; one burst, then a last single byte if CX was odd.  DI advances.
+   979                                  rd_block:
+   980 000008C7 E327                    	jcxz	.done
+   981 000008C9 803E[501C]00            	cmp	byte [held],0
+   982 000008CE 740A                    	je	.even
+   983 000008D0 A0[511C]                	mov	al,[heldb]
+   984 000008D3 C606[501C]00            	mov	byte [held],0
+   985 000008D8 AA                      	stosb
+   986 000008D9 49                      	dec	cx
+   987 000008DA 51                      .even:	push	cx
+   988 000008DB D1E9                    	shr	cx,1
+   989 000008DD 7407                    	jz	.odd
+   990 000008DF 56                      	push	si
+   991 000008E0 31F6                    	xor	si,si
+   992 000008E2 E837FF                  	call	spi_xfer
+   993 000008E5 5E                      	pop	si
+   994 000008E6 59                      .odd:	pop	cx
+   995 000008E7 F6C101                  	test	cl,1
+   996 000008EA 7404                    	jz	.done
+   997 000008EC E8A5FF                  	call	rd_byte
+   998 000008EF AA                      	stosb
+   999 000008F0 C3                      .done:	ret
+  1000                                  
+  1001                                  ; rd_raw -- AL = the next raw byte of the transaction: what is left of
+  1002                                  ; the command burst's window first, then the SSIO.  All else preserved.
+  1003                                  rd_raw:
+  1004 000008F1 53                      	push	bx
+  1005 000008F2 0FB61E[521C]            	movzx	bx,byte [aidx]
+  1006 000008F7 80FB2C                  	cmp	bl,WINLEN
+  1007 000008FA 730A                    	jae	.ssio
+  1008 000008FC 8A87[8B1C]              	mov	al,[win+bx]
+  1009 00000900 FE06[521C]              	inc	byte [aidx]
+  1010 00000904 5B                      	pop	bx
+  1011 00000905 C3                      	ret
+  1012 00000906 5B                      .ssio:	pop	bx
+  1013 00000907 EB8B                    	jmp	rd_byte
+  1014                                  
+  1015                                  ; rd_rawblock -- CX raw bytes of the transaction to DI.  DI advances.
+  1016                                  rd_rawblock:
+  1017 00000909 E310                    .w:	jcxz	.done
+  1018 0000090B 803E[521C]2C            	cmp	byte [aidx],WINLEN
+  1019 00000910 7307                    	jae	.rest
+  1020 00000912 E8DCFF                  	call	rd_raw
+  1021 00000915 AA                      	stosb
+  1022 00000916 49                      	dec	cx
+  1023 00000917 EBF0                    	jmp	.w
+  1024 00000919 EBAC                    .rest:	jmp	rd_block
+  1025 0000091B C3                      .done:	ret
+  1026                                  
+  1027                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1028                                  ; The card's bytes: raw bytes reassembled at the offset sd_cmd found.
+  1029                                  ;
+  1030                                  ; With offset s, the card's byte j is the low 8-s bits of raw byte j and
+  1031                                  ; the high s bits of raw byte j+1.  [la] holds raw byte j.
+  1032                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1033                                  
+  1034                                  ; rd_abyte -- AL = the card's next byte.  All else preserved.
+  1035                                  rd_abyte:
+  1036 0000091C 51                      	push	cx
+  1037 0000091D E8D1FF                  	call	rd_raw			; AL = raw byte j+1
+  1038 00000920 8A26[541C]              	mov	ah,[la]
+  1039 00000924 A2[541C]                	mov	[la],al
+  1040 00000927 8A0E[531C]              	mov	cl,[sbits]
+  1041 0000092B D2E4                    	shl	ah,cl
+  1042 0000092D F6D9                    	neg	cl
+  1043 0000092F 80C108                  	add	cl,8			; 8 - s; a shift of 8 empties AL
+  1044 00000932 D2E8                    	shr	al,cl
+  1045 00000934 08E0                    	or	al,ah
+  1046 00000936 59                      	pop	cx
+  1047 00000937 53                      	push	bx			; keep the first few for trace
+  1048 00000938 0FB61E[581C]            	movzx	bx,byte [ntrace]
+  1049 0000093D 80FB10                  	cmp	bl,TRACEMAX
+  1050 00000940 7308                    	jae	.n1
+  1051 00000942 8887[B71C]              	mov	[tracebuf+bx],al
+  1052 00000946 FE06[581C]              	inc	byte [ntrace]
+  1053 0000094A 5B                      .n1:	pop	bx
+  1054 0000094B C3                      	ret
+  1055                                  
+  1056                                  ; rd_ablock -- CX of the card's bytes to DI: the raw bytes in one burst
+  1057                                  ; where they can be, then reassembled.  DI advances.
+  1058                                  rd_ablock:
+  1059 0000094C E331                    	jcxz	.done
+  1060 0000094E 56                      	push	si
+  1061 0000094F 57                      	push	di
+  1062 00000950 51                      	push	cx
+  1063 00000951 BF[9829]                	mov	di,rawbuf
+  1064 00000954 E8B2FF                  	call	rd_rawblock
+  1065 00000957 5B                      	pop	bx			; BX = count
+  1066 00000958 5F                      	pop	di
+  1067 00000959 53                      	push	bx
+  1068 0000095A BE[9829]                	mov	si,rawbuf
+  1069 0000095D 8A0E[531C]              	mov	cl,[sbits]
+  1070 00000961 B508                    	mov	ch,8
+  1071 00000963 28CD                    	sub	ch,cl
+  1072 00000965 AC                      .b:	lodsb				; raw byte j+1
+  1073 00000966 88C2                    	mov	dl,al
+  1074 00000968 A0[541C]                	mov	al,[la]
+  1075 0000096B 8816[541C]              	mov	[la],dl
+  1076 0000096F D2E0                    	shl	al,cl
+  1077 00000971 86CD                    	xchg	cl,ch
+  1078 00000973 D2EA                    	shr	dl,cl
+  1079 00000975 86CD                    	xchg	cl,ch
+  1080 00000977 08D0                    	or	al,dl
+  1081 00000979 AA                      	stosb
+  1082 0000097A 4B                      	dec	bx
+  1083 0000097B 75E8                    	jnz	.b
+  1084 0000097D 59                      	pop	cx
+  1085 0000097E 5E                      	pop	si
+  1086 0000097F C3                      .done:	ret
+  1087                                  
+  1088                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1089                                  ; Selection.
+  1090                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1091                                  
+  1092                                  ; cs_low, cs_high -- select and deselect the card.  Open drain: the latch
+  1093                                  ; bit pulls the line low or lets the pull-up have it; P3DIR is not
+  1094                                  ; touched.  After deselecting, a word of clocks lets the card let go of
+  1095                                  ; DO.  The transaction's bytes go with the selection.
+  1096                                  cs_low:
+  1097 00000980 C606[501C]00            	mov	byte [held],0
+  1098 00000985 C606[521C]2C            	mov	byte [aidx],WINLEN
+  1099 0000098A BA72F8                  	mov	dx,P3LTC
+  1100 0000098D EC                      	in	al,dx
+  1101 0000098E 24BF                    	and	al,~SDnCS
+  1102 00000990 EE                      	out	dx,al
+  1103 00000991 C3                      	ret
+  1104                                  
+  1105                                  cs_high:
+  1106 00000992 BA72F8                  	mov	dx,P3LTC
+  1107 00000995 EC                      	in	al,dx
+  1108 00000996 0C40                    	or	al,SDnCS
+  1109 00000998 EE                      	out	dx,al
+  1110 00000999 53                      	push	bx
+  1111 0000099A 51                      	push	cx
+  1112 0000099B 56                      	push	si
+  1113 0000099C 57                      	push	di
+  1114 0000099D 31F6                    	xor	si,si
+  1115 0000099F 31FF                    	xor	di,di
+  1116 000009A1 B90100                  	mov	cx,1
+  1117 000009A4 E875FE                  	call	spi_xfer
+  1118 000009A7 5F                      	pop	di
+  1119 000009A8 5E                      	pop	si
+  1120 000009A9 59                      	pop	cx
+  1121 000009AA 5B                      	pop	bx
+  1122 000009AB C606[501C]00            	mov	byte [held],0
+  1123 000009B0 C606[521C]2C            	mov	byte [aidx],WINLEN
+  1124 000009B5 C3                      	ret
+  1125                                  
+  1126                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1127                                  ; SD commands.
+  1128                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1129                                  
+  1130                                  ; sd_cmd -- send command AL with argument EBX and CRC byte AH (end bit
+  1131                                  ; included; only CMD0 and CMD8 are checked in SPI mode), and return its
+  1132                                  ; R1 in AL.  AL = FFh and CF set if no answer started in the window.  The
+  1133                                  ; card must be selected.  Leaves the transaction positioned after R1, at
+  1134                                  ; the offset found, for rd_abyte and rd_ablock.
+  1135                                  ;
+  1136                                  ; One burst of WINLEN bytes: FF, 40|cmd, the argument big end first, the
+  1137                                  ; CRC, FF, then sixteen more FFs to clock the answer in.  R1's bit 7 is
+  1138                                  ; always 0 and the card sends FFs until it answers, so the first 0 bit
+  1139                                  ; from byte 6 on (an answer can start in byte 7, and arrive a bit early)
+  1140                                  ; is the top bit of R1.
+  1141                                  sd_cmd:
+  1142 000009B6 6653                    	push	ebx
+  1143 000009B8 51                      	push	cx
+  1144 000009B9 52                      	push	dx
+  1145 000009BA 56                      	push	si
+  1146 000009BB 57                      	push	di
+  1147 000009BC E88300                  	call	mkframe
+  1148 000009BF BE[5F1C]                	mov	si,cmdbuf		; preamble, frame, window
+  1149 000009C2 BF[8B1C]                	mov	di,win
+  1150 000009C5 803E[221C]00            	cmp	byte [split],0
+  1151 000009CA 7508                    	jne	.split
+  1152 000009CC B91600                  	mov	cx,WINLEN/2
+  1153 000009CF E88801                  	call	spi_burst		; the tight loop: right at any speed
+  1154 000009D2 EB19                    	jmp	.sent
+  1155 000009D4 B90E00                  .split:	mov	cx,(PRE+8)/2		; preamble and frame alone
+  1156 000009D7 E842FE                  	call	spi_xfer
+  1157 000009DA 7211                    	jc	.sent
+  1158 000009DC B90800                  	mov	cx,(WINLEN-PRE-8)/2	; then the window, a word a burst
+  1159 000009DF 51                      .sp1:	push	cx
+  1160 000009E0 31F6                    	xor	si,si
+  1161 000009E2 B90100                  	mov	cx,1
+  1162 000009E5 E834FE                  	call	spi_xfer		; DI advances
+  1163 000009E8 59                      	pop	cx
+  1164 000009E9 7202                    	jc	.sent
+  1165 000009EB E2F2                    	loop	.sp1
+  1166 000009ED C606[501C]00            .sent:	mov	byte [held],0
+  1167 000009F2 721E                    	jc	.none
+  1168 000009F4 BBD000                  	mov	bx,(PRE+6)*8		; bit number: R1 can start in frame byte 7
+  1169 000009F7 89DE                    .find:	mov	si,bx
+  1170 000009F9 C1EE03                  	shr	si,3
+  1171 000009FC 8A84[8B1C]              	mov	al,[win+si]
+  1172 00000A00 88D9                    	mov	cl,bl
+  1173 00000A02 80E107                  	and	cl,7
+  1174 00000A05 D2E0                    	shl	al,cl
+  1175 00000A07 A880                    	test	al,80h
+  1176 00000A09 7416                    	jz	.found
+  1177 00000A0B 43                      	inc	bx
+  1178 00000A0C 81FB3001                	cmp	bx,(WINLEN-6)*8		; room for R1 and lookahead
+  1179 00000A10 72E5                    	jb	.find
+  1180 00000A12 C606[521C]2C            .none:	mov	byte [aidx],WINLEN
+  1181 00000A17 C606[531C]00            	mov	byte [sbits],0
+  1182 00000A1C B0FF                    	mov	al,0FFh
+  1183 00000A1E F9                      	stc
+  1184 00000A1F EB1A                    	jmp	.out
+  1185 00000A21 88D8                    .found:	mov	al,bl
+  1186 00000A23 2407                    	and	al,7
+  1187 00000A25 A2[531C]                	mov	[sbits],al
+  1188 00000A28 C1EB03                  	shr	bx,3
+  1189 00000A2B 8A87[8B1C]              	mov	al,[win+bx]
+  1190 00000A2F A2[541C]                	mov	[la],al
+  1191 00000A32 43                      	inc	bx
+  1192 00000A33 881E[521C]              	mov	[aidx],bl
+  1193 00000A37 E8E2FE                  	call	rd_abyte		; R1
+  1194 00000A3A F8                      	clc
+  1195 00000A3B 5F                      .out:	pop	di
+  1196 00000A3C 5E                      	pop	si
+  1197 00000A3D 5A                      	pop	dx
+  1198 00000A3E 59                      	pop	cx
+  1199 00000A3F 665B                    	pop	ebx
+  1200 00000A41 C3                      	ret
+  1201                                  
+  1202                                  ; mkframe -- command AL, argument EBX, CRC byte AH into the frame: FF,
+  1203                                  ; 40|cmd, the argument big end first, the CRC, FF.  The FFs before it (the
+  1204                                  ; preamble) and after it (the window), are never written.  Clears the
+  1205                                  ; trace and the SSIO error flags.
+  1206                                  ;
+  1207                                  ; Why a preamble.  The transmitter starts in step with the free-running
+  1208                                  ; baud-rate generator; caught high, the clock pin goes from floating low
+  1209                                  ; straight to high, an edge the card counts -- and DI at that instant is
+  1210                                  ; still floating, held LOW by R7.  So the card can see a 0 before the
+  1211                                  ; burst's first bit, takes it for a command's start bit, and swallows the
+  1212                                  ; next 48 bits as a command of its own: CMD0 went unanswered in v3's first
+  1213                                  ; run, v5, v7 and v8, card reinserted or not, and was answered in the
+  1214                                  ; others -- a matter of phase.  Twenty bytes of FF first let any such
+  1215                                  ; phantom command end, be answered (illegal command) and finish before
+  1216                                  ; the real frame; the search for R1 starts after the frame, past the
+  1217                                  ; phantom's answer.
+  1218                                  mkframe:
+  1219 00000A42 6653                    	push	ebx
+  1220 00000A44 C606[581C]00            	mov	byte [ntrace],0
+  1221 00000A49 C606[571C]00            	mov	byte [ssio_err],0
+  1222 00000A4E C606[731C]FF            	mov	byte [frame],0FFh
+  1223 00000A53 0C40                    	or	al,40h
+  1224 00000A55 A2[741C]                	mov	[frame+1],al
+  1225 00000A58 8826[791C]              	mov	[frame+6],ah
+  1226 00000A5C C606[7A1C]FF            	mov	byte [frame+7],0FFh
+  1227 00000A61 881E[781C]              	mov	[frame+5],bl
+  1228 00000A65 883E[771C]              	mov	[frame+4],bh
+  1229 00000A69 66C1EB10                	shr	ebx,16
+  1230 00000A6D 881E[761C]              	mov	[frame+3],bl
+  1231 00000A71 883E[751C]              	mov	[frame+2],bh
+  1232 00000A75 665B                    	pop	ebx
+  1233 00000A77 C3                      	ret
+  1234                                  
+  1235                                  ; wait_token -- the card's bytes until one is not FFh, for up to half a
+  1236                                  ; second.  AL = that byte (FEh starts a data block).
+  1237                                  wait_token:
+  1238 00000A78 53                      	push	bx
+  1239 00000A79 51                      	push	cx
+  1240 00000A7A E85306                  	call	ticks
+  1241 00000A7D 89C3                    	mov	bx,ax
+  1242 00000A7F B90001                  .w:	mov	cx,256
+  1243 00000A82 E897FE                  .w1:	call	rd_abyte
+  1244 00000A85 3CFF                    	cmp	al,0FFh
+  1245 00000A87 750E                    	jne	.got
+  1246 00000A89 E2F7                    	loop	.w1
+  1247 00000A8B E84206                  	call	ticks
+  1248 00000A8E 29D8                    	sub	ax,bx
+  1249 00000A90 83F809                  	cmp	ax,9
+  1250 00000A93 72EA                    	jb	.w
+  1251 00000A95 B0FF                    	mov	al,0FFh
+  1252 00000A97 59                      .got:	pop	cx
+  1253 00000A98 5B                      	pop	bx
+  1254 00000A99 C3                      	ret
+  1255                                  
+  1256                                  ; ---- A data command, in one burst --------------------------------------
+  1257                                  ;
+  1258                                  ; The command, R1, the wait, the token, the data and its CRC16 all go in
+  1259                                  ; one burst, so one offset serves the lot: the offset can differ from one
+  1260                                  ; burst to the next, and a fast card's token can arrive inside the
+  1261                                  ; command's own window (v6).
+  1262                                  ;
+  1263                                  ;   words 0 to WINLEN/2-1	the preamble, the frame and its window: the
+  1264                                  ;			transmitter refilled from cmdbuf, every word kept in
+  1265                                  ;			xbuf
+  1266                                  ;   then		the transmitter left alone -- it repeats its last word,
+  1267                                  ;			FFFF, an underflow, and exactly what the card wants --
+  1268                                  ;			and every word read into a ring of RINGW words, until
+  1269                                  ;			XDATA words after the first that is not FFFF
+  1270                                  ;
+  1271                                  ; The ring keeps the last RINGW words in order, so a token that came in
+  1272                                  ; the window followed by data starting with FFFF loses nothing (v11's
+  1273                                  ; "ea" at 1 MHz); a long wait for the token only overwrites FFs, whole
+  1274                                  ; words at a time, which leaves the alignment alone.  rd_xact unrolls the
+  1275                                  ; ring after the window, oldest first.
+  1276                                  
+  1277                                  XDATA		equ	262		; > 1 + 257 words: token, 512+2 bytes
+  1278                                  RINGW		equ	560		; > XDATA + 257: room for all-FF data
+  1279                                  
+  1280                                  ; xact_burst -- send cmdbuf, then FFs; keep the window in xbuf and the
+  1281                                  ; rest in the ring, as above.  [rtot] = words into the ring, [rwp] = where
+  1282                                  ; the next would have gone.  CF if the SSIO stopped, or nothing but FFFF
+  1283                                  ; came for CAPMAX words.  Interrupts off.
+  1284                                  CAPMAX		equ	30000		; 0.5s at 1 MHz, 0.2s at 2.5
+  1285                                  xact_burst:
+  1286 00000A9A 55                      	push	bp
+  1287 00000A9B 9C                      	pushf
+  1288 00000A9C FA                      	cli
+  1289 00000A9D BE[5F1C]                	mov	si,cmdbuf
+  1290 00000AA0 BF[D72B]                	mov	di,xbuf
+  1291 00000AA3 AD                      	lodsw				; word 0 waits in the buffer ...
+  1292 00000AA4 86C4                    	xchg	al,ah
+  1293 00000AA6 BA80F4                  	mov	dx,SSIOTBUF
+  1294 00000AA9 EF                      	out	dx,ax
+  1295 00000AAA E84FFD                  	call	genstart		; ... goes to the shifter at enable,
+  1296 00000AAD AD                      	lodsw				;  and word 1 takes its place
+  1297 00000AAE 86C4                    	xchg	al,ah
+  1298 00000AB0 BA80F4                  	mov	dx,SSIOTBUF
+  1299 00000AB3 EF                      	out	dx,ax
+  1300 00000AB4 BD1600                  	mov	bp,WINLEN/2
+  1301                                  	; Each word that comes in means the shifter has just taken the word
+  1302                                  	; waiting in the buffer: the next goes in at once, and the word in is
+  1303                                  	; read while the following one shifts.
+  1304 00000AB7 BA86F4                  .w:	mov	dx,SSIOCON1
+  1305 00000ABA 31DB                    	xor	bx,bx			; 65536 polls: a word at any speed
+  1306 00000ABC EC                      .w1:	in	al,dx
+  1307 00000ABD A804                    	test	al,RHBF
+  1308 00000ABF 7505                    	jnz	.w2
+  1309 00000AC1 4B                      	dec	bx
+  1310 00000AC2 75F8                    	jnz	.w1
+  1311 00000AC4 EB70                    	jmp	.fail
+  1312 00000AC6 B8FFFF                  .w2:	mov	ax,0FFFFh
+  1313 00000AC9 81FE[8B1C]              	cmp	si,cmdbuf+WINLEN
+  1314 00000ACD 7303                    	jae	.w3
+  1315 00000ACF AD                      	lodsw
+  1316 00000AD0 86C4                    	xchg	al,ah
+  1317 00000AD2 BA80F4                  .w3:	mov	dx,SSIOTBUF
+  1318 00000AD5 EF                      	out	dx,ax
+  1319 00000AD6 BA82F4                  	mov	dx,SSIORBUF
+  1320 00000AD9 ED                      	in	ax,dx
+  1321 00000ADA 86C4                    	xchg	al,ah			; first byte first
+  1322 00000ADC AB                      	stosw
+  1323 00000ADD 4D                      	dec	bp
+  1324 00000ADE 75D7                    	jnz	.w
+  1325                                  	; The rest: read only.
+  1326 00000AE0 BF[3825]                	mov	di,xring
+  1327 00000AE3 31ED                    	xor	bp,bp			; BP = words into the ring
+  1328 00000AE5 31DB                    	xor	bx,bx			; BX = BP to stop at, once known
+  1329 00000AE7 B93075                  	mov	cx,CAPMAX
+  1330 00000AEA BA86F4                  .r:	mov	dx,SSIOCON1
+  1331 00000AED 31F6                    	xor	si,si			; 65536 polls (SI is free once the frame
+  1332 00000AEF EC                      .r1:	in	al,dx			;  is out)
+  1333 00000AF0 A804                    	test	al,RHBF
+  1334 00000AF2 7505                    	jnz	.r2
+  1335 00000AF4 4E                      	dec	si
+  1336 00000AF5 75F8                    	jnz	.r1
+  1337 00000AF7 EB3D                    	jmp	.fail
+  1338 00000AF9 BA82F4                  .r2:	mov	dx,SSIORBUF
+  1339 00000AFC ED                      	in	ax,dx
+  1340 00000AFD 86C4                    	xchg	al,ah
+  1341 00000AFF AB                      	stosw
+  1342 00000B00 81FF[9829]              	cmp	di,xring+RINGW*2
+  1343 00000B04 7203                    	jb	.r3
+  1344 00000B06 BF[3825]                	mov	di,xring
+  1345 00000B09 45                      .r3:	inc	bp
+  1346 00000B0A 09DB                    	or	bx,bx
+  1347 00000B0C 750B                    	jnz	.r4
+  1348 00000B0E 83F8FF                  	cmp	ax,0FFFFh
+  1349 00000B11 7419                    	je	.r5
+  1350 00000B13 89EB                    	mov	bx,bp			; the first that is not FFFF
+  1351 00000B15 81C30601                	add	bx,XDATA
+  1352 00000B19 39DD                    .r4:	cmp	bp,bx
+  1353 00000B1B 72CD                    	jb	.r
+  1354 00000B1D E81D00                  	call	ssio_stop
+  1355 00000B20 892E[2F25]              	mov	[rtot],bp
+  1356 00000B24 893E[3125]              	mov	[rwp],di
+  1357 00000B28 9D                      	popf
+  1358 00000B29 F8                      	clc
+  1359 00000B2A 5D                      	pop	bp
+  1360 00000B2B C3                      	ret
+  1361 00000B2C 49                      .r5:	dec	cx
+  1362 00000B2D 75BB                    	jnz	.r
+  1363 00000B2F E80B00                  	call	ssio_stop		; nothing came
+  1364 00000B32 9D                      	popf
+  1365 00000B33 F9                      	stc
+  1366 00000B34 5D                      	pop	bp
+  1367 00000B35 C3                      	ret
+  1368 00000B36 E80400                  .fail:	call	ssio_stop
+  1369 00000B39 9D                      	popf
+  1370 00000B3A F9                      	stc
+  1371 00000B3B 5D                      	pop	bp
+  1372 00000B3C C3                      	ret
+  1373                                  
+  1374                                  ; ssio_stop -- end a burst: the word shifting finishes, any word waiting
+  1375                                  ; in the buffer is never sent; that last word read and dropped.  The
+  1376                                  ; overflow flag is added to [ssio_err] first -- not the underflow flag,
+  1377                                  ; which a burst ending on a repeated FFFF sets on purpose.
+  1378                                  ssio_stop:
+  1379 00000B3D BA86F4                  	mov	dx,SSIOCON1
+  1380 00000B40 EC                      	in	al,dx
+  1381 00000B41 2408                    	and	al,ROE
+  1382 00000B43 0806[571C]              	or	[ssio_err],al
+  1383 00000B47 30C0                    	xor	al,al
+  1384 00000B49 EE                      	out	dx,al
+  1385 00000B4A 51                      	push	cx
+  1386 00000B4B 31C9                    	xor	cx,cx
+  1387 00000B4D EC                      .s1:	in	al,dx
+  1388 00000B4E A804                    	test	al,RHBF
+  1389 00000B50 7502                    	jnz	.s2
+  1390 00000B52 E2F9                    	loop	.s1
+  1391 00000B54 59                      .s2:	pop	cx
+  1392 00000B55 BA82F4                  	mov	dx,SSIORBUF
+  1393 00000B58 ED                      	in	ax,dx
+  1394 00000B59 C3                      	ret
+  1395                                  
+  1396                                  ; spi_burst -- send CX words (at least 2) from SI, keeping the CX words
+  1397                                  ; received at DI; the last word goes out once more as the burst ends, so
+  1398                                  ; it should be FFFF.  CF if the SSIO stopped.  Interrupts off.
+  1399                                  spi_burst:
+  1400 00000B5A 55                      	push	bp
+  1401 00000B5B 9C                      	pushf
+  1402 00000B5C FA                      	cli
+  1403 00000B5D 89CD                    	mov	bp,cx			; BP = words still to receive
+  1404 00000B5F AD                      	lodsw
+  1405 00000B60 86C4                    	xchg	al,ah
+  1406 00000B62 BA80F4                  	mov	dx,SSIOTBUF
+  1407 00000B65 EF                      	out	dx,ax
+  1408 00000B66 E893FC                  	call	genstart
+  1409 00000B69 AD                      	lodsw
+  1410 00000B6A 86C4                    	xchg	al,ah
+  1411 00000B6C BA80F4                  	mov	dx,SSIOTBUF
+  1412 00000B6F EF                      	out	dx,ax
+  1413 00000B70 83E902                  	sub	cx,2			; CX = words still to send
+  1414 00000B73 BA86F4                  .l:	mov	dx,SSIOCON1
+  1415 00000B76 31DB                    	xor	bx,bx			; 65536 polls: a word at any speed.  (256
+  1416 00000B78 EC                      .l1:	in	al,dx			;  was too few at 385 kHz: on-chip I/O
+  1417 00000B79 A804                    	test	al,RHBF			;  is quick, and v12 lost every command)
+  1418 00000B7B 750A                    	jnz	.l2
+  1419 00000B7D 4B                      	dec	bx
+  1420 00000B7E 75F8                    	jnz	.l1
+  1421 00000B80 E8BAFF                  	call	ssio_stop
+  1422 00000B83 9D                      	popf
+  1423 00000B84 F9                      	stc
+  1424 00000B85 5D                      	pop	bp
+  1425 00000B86 C3                      	ret
+  1426 00000B87 E314                    .l2:	jcxz	.l3
+  1427 00000B89 AD                      	lodsw
+  1428 00000B8A 86C4                    	xchg	al,ah
+  1429 00000B8C BA80F4                  	mov	dx,SSIOTBUF
+  1430 00000B8F EF                      	out	dx,ax
+  1431 00000B90 49                      	dec	cx
+  1432 00000B91 750A                    	jnz	.l3
+  1433 00000B93 BA86F4                  	mov	dx,SSIOCON1		; the last word is in: an underflow
+  1434 00000B96 EC                      	in	al,dx			;  before now was a real one
+  1435 00000B97 2488                    	and	al,TUE|ROE
+  1436 00000B99 0806[571C]              	or	[ssio_err],al
+  1437 00000B9D BA82F4                  .l3:	mov	dx,SSIORBUF
+  1438 00000BA0 ED                      	in	ax,dx
+  1439 00000BA1 86C4                    	xchg	al,ah
+  1440 00000BA3 AB                      	stosw
+  1441 00000BA4 4D                      	dec	bp
+  1442 00000BA5 75CC                    	jnz	.l
+  1443 00000BA7 E893FF                  	call	ssio_stop
+  1444 00000BAA 9D                      	popf
+  1445 00000BAB F8                      	clc
+  1446 00000BAC 5D                      	pop	bp
+  1447 00000BAD C3                      	ret
+  1448                                  
+  1449                                  ; xbits -- AL = the 8 bits of xbuf starting at bit BX.  All else kept.
+  1450                                  xbits:
+  1451 00000BAE 51                      	push	cx
+  1452 00000BAF 56                      	push	si
+  1453 00000BB0 89DE                    	mov	si,bx
+  1454 00000BB2 C1EE03                  	shr	si,3
+  1455 00000BB5 88D9                    	mov	cl,bl
+  1456 00000BB7 80E107                  	and	cl,7
+  1457 00000BBA 8AA4[D72B]              	mov	ah,[xbuf+si]
+  1458 00000BBE 8A84[D82B]              	mov	al,[xbuf+si+1]
+  1459 00000BC2 D3E0                    	shl	ax,cl
+  1460 00000BC4 88E0                    	mov	al,ah
+  1461 00000BC6 5E                      	pop	si
+  1462 00000BC7 59                      	pop	cx
+  1463 00000BC8 C3                      	ret
+  1464                                  
+  1465                                  ; rd_xact -- data command AL, argument EBX: CX bytes of data, then its two
+  1466                                  ; CRC16 bytes, to DI.  AL = R1 (FFh if none).  CF on failure, [why] saying
+  1467                                  ; which.  Tried again, up to three times, if the block was not kept whole.
+  1468                                  rd_xact:
+  1469 00000BC9 A2[CE2B]                	mov	[xcmd],al
+  1470 00000BCC 66891E[CF2B]            	mov	[xarg],ebx
+  1471 00000BD1 890E[D32B]              	mov	[xn],cx
+  1472 00000BD5 893E[D52B]              	mov	[xdst],di
+  1473 00000BD9 C606[C82B]03            	mov	byte [xtries],3
+  1474 00000BDE A0[CE2B]                .again:	mov	al,[xcmd]
+  1475 00000BE1 668B1E[CF2B]            	mov	ebx,[xarg]
+  1476 00000BE6 B401                    	mov	ah,01h			; CRC: unchecked after CMD8
+  1477 00000BE8 E857FE                  	call	mkframe
+  1478 00000BEB E892FD                  	call	cs_low
+  1479 00000BEE E8A9FE                  	call	xact_burst
+  1480 00000BF1 9C                      	pushf
+  1481 00000BF2 E89DFD                  	call	cs_high
+  1482 00000BF5 9D                      	popf
+  1483 00000BF6 0F829800                	jc	.timeout
+  1484 00000BFA E8AF00                  	call	unroll
+  1485 00000BFD E8EA00                  	call	find_r1			; BX = its first bit, AL = R1
+  1486 00000C00 0F828500                	jc	.nor1
+  1487 00000C04 08C0                    	or	al,al			; R1 must be 00
+  1488 00000C06 7407                    	jz	.tok
+  1489 00000C08 C606[241C]01            	mov	byte [why],WHY_R1
+  1490 00000C0D F9                      	stc
+  1491 00000C0E C3                      	ret
+  1492 00000C0F 8B16[CC2B]              .tok:	mov	dx,[xlen]		; the token: the first byte after R1, at
+  1493 00000C13 C1E203                  	shl	dx,3			;  its offset, that is not FFh
+  1494 00000C16 83EA10                  	sub	dx,16
+  1495 00000C19 83C308                  .t:	add	bx,8
+  1496 00000C1C 39D3                    	cmp	bx,dx
+  1497 00000C1E 735B                    	jae	.notok
+  1498 00000C20 E88BFF                  	call	xbits
+  1499 00000C23 3CFF                    	cmp	al,0FFh
+  1500 00000C25 74F2                    	je	.t
+  1501 00000C27 A2[4A1C]                	mov	[tokb],al
+  1502 00000C2A 3CFE                    	cmp	al,0FEh
+  1503 00000C2C 7552                    	jne	.badtok
+  1504 00000C2E 83C308                  	add	bx,8			; the data's first bit
+  1505 00000C31 A1[D32B]                	mov	ax,[xn]
+  1506 00000C34 83C002                  	add	ax,2			; and its CRC: all of it kept?
+  1507 00000C37 C1E003                  	shl	ax,3
+  1508 00000C3A 01D8                    	add	ax,bx
+  1509 00000C3C 83C008                  	add	ax,8
+  1510 00000C3F 8B16[CC2B]              	mov	dx,[xlen]
+  1511 00000C43 C1E203                  	shl	dx,3
+  1512 00000C46 39D0                    	cmp	ax,dx
+  1513 00000C48 7719                    	ja	.retry
+  1514 00000C4A 8B0E[D32B]              	mov	cx,[xn]
+  1515 00000C4E 83C102                  	add	cx,2
+  1516 00000C51 8B3E[D52B]              	mov	di,[xdst]
+  1517 00000C55 E8B000                  	call	xcopy
+  1518 00000C58 30C0                    	xor	al,al			; R1
+  1519 00000C5A F606[571C]08            	test	byte [ssio_err],ROE	; a word lost.  (TUE is expected: the
+  1520 00000C5F 7513                    	jnz	.ssio			;  transmitter repeats FFFF on purpose)
+  1521 00000C61 F8                      	clc
+  1522 00000C62 C3                      	ret
+  1523 00000C63 FE0E[C82B]              .retry:	dec	byte [xtries]
+  1524 00000C67 0F8573FF                	jnz	.again
+  1525 00000C6B C606[241C]05            	mov	byte [why],WHY_SHORT
+  1526 00000C70 30C0                    	xor	al,al
+  1527 00000C72 F9                      	stc
+  1528 00000C73 C3                      	ret
+  1529 00000C74 C606[241C]04            .ssio:	mov	byte [why],WHY_SSIO
+  1530 00000C79 F9                      	stc
+  1531 00000C7A C3                      	ret
+  1532 00000C7B C606[4A1C]FF            .notok:	mov	byte [tokb],0FFh
+  1533                                  .badtok:
+  1534 00000C80 C606[241C]02            	mov	byte [why],WHY_TOK
+  1535 00000C85 30C0                    	xor	al,al
+  1536 00000C87 F9                      	stc
+  1537 00000C88 C3                      	ret
+  1538 00000C89 B0FF                    .nor1:	mov	al,0FFh
+  1539 00000C8B C606[241C]01            	mov	byte [why],WHY_R1
+  1540 00000C90 F9                      	stc
+  1541 00000C91 C3                      	ret
+  1542                                  .timeout:
+  1543 00000C92 C606[241C]02            	mov	byte [why],WHY_TOK
+  1544 00000C97 C606[4A1C]FF            	mov	byte [tokb],0FFh
+  1545 00000C9C F606[571C]08            	test	byte [ssio_err],ROE
+  1546 00000CA1 7405                    	jz	.to1
+  1547 00000CA3 C606[241C]04            	mov	byte [why],WHY_SSIO
+  1548 00000CA8 B0FF                    .to1:	mov	al,0FFh
+  1549 00000CAA F9                      	stc
+  1550 00000CAB C3                      	ret
+  1551                                  
+  1552                                  ; unroll -- the ring after the window in xbuf, oldest word first; [xlen]
+  1553                                  ; = the bytes now in xbuf.
+  1554                                  unroll:
+  1555 00000CAC BF[032C]                	mov	di,xbuf+WINLEN
+  1556 00000CAF 8B0E[2F25]              	mov	cx,[rtot]
+  1557 00000CB3 81F93002                	cmp	cx,RINGW
+  1558 00000CB7 7621                    	jbe	.lin
+  1559 00000CB9 8B36[3125]              	mov	si,[rwp]		; wrapped: rwp to the end, then the start
+  1560 00000CBD B9[9829]                	mov	cx,xring+RINGW*2
+  1561 00000CC0 29F1                    	sub	cx,si
+  1562 00000CC2 D1E9                    	shr	cx,1
+  1563 00000CC4 F3A5                    	rep	movsw
+  1564 00000CC6 BE[3825]                	mov	si,xring
+  1565 00000CC9 8B0E[3125]              	mov	cx,[rwp]
+  1566 00000CCD 81E9[3825]              	sub	cx,xring
+  1567 00000CD1 D1E9                    	shr	cx,1
+  1568 00000CD3 F3A5                    	rep	movsw
+  1569 00000CD5 B83002                  	mov	ax,RINGW
+  1570 00000CD8 EB07                    	jmp	.len
+  1571 00000CDA BE[3825]                .lin:	mov	si,xring
+  1572 00000CDD 89C8                    	mov	ax,cx
+  1573 00000CDF F3A5                    	rep	movsw
+  1574 00000CE1 D1E0                    .len:	shl	ax,1
+  1575 00000CE3 83C02C                  	add	ax,WINLEN
+  1576 00000CE6 A3[CC2B]                	mov	[xlen],ax
+  1577 00000CE9 C3                      	ret
+  1578                                  
+  1579                                  ; find_r1 -- in xbuf: BX = the first 0 bit from frame byte 6 on, AL = the
+  1580                                  ; 8 bits from there (R1), [sbits] = BX mod 8.  CF if there is none.
+  1581                                  find_r1:
+  1582 00000CEA BBD000                  	mov	bx,(PRE+6)*8
+  1583 00000CED E8BEFE                  .r:	call	xbits
+  1584 00000CF0 A880                    	test	al,80h
+  1585 00000CF2 7409                    	jz	.r1
+  1586 00000CF4 43                      	inc	bx
+  1587 00000CF5 81FB3001                	cmp	bx,(WINLEN-6)*8
+  1588 00000CF9 72F2                    	jb	.r
+  1589 00000CFB F9                      	stc
+  1590 00000CFC C3                      	ret
+  1591 00000CFD 88DC                    .r1:	mov	ah,bl
+  1592 00000CFF 80E407                  	and	ah,7
+  1593 00000D02 8826[531C]              	mov	[sbits],ah
+  1594 00000D06 F8                      	clc
+  1595 00000D07 C3                      	ret
+  1596                                  
+  1597                                  ; xcopy -- CX bytes of xbuf from bit BX to DI: a plain copy when BX is on a
+  1598                                  ; byte, else each byte put together from two.  DI advances.
+  1599                                  xcopy:
+  1600 00000D08 89DE                    	mov	si,bx
+  1601 00000D0A C1EE03                  	shr	si,3
+  1602 00000D0D 81C6[D72B]              	add	si,xbuf
+  1603 00000D11 89D8                    	mov	ax,bx
+  1604 00000D13 2407                    	and	al,7
+  1605 00000D15 7503                    	jnz	.shift
+  1606 00000D17 F3A4                    	rep	movsb
+  1607 00000D19 C3                      	ret
+  1608 00000D1A 89CA                    .shift:	mov	dx,cx
+  1609 00000D1C 88C1                    	mov	cl,al
+  1610 00000D1E 8A24                    .s1:	mov	ah,[si]
+  1611 00000D20 8A4401                  	mov	al,[si+1]
+  1612 00000D23 D3E0                    	shl	ax,cl
+  1613 00000D25 8825                    	mov	[di],ah
+  1614 00000D27 46                      	inc	si
+  1615 00000D28 47                      	inc	di
+  1616 00000D29 4A                      	dec	dx
+  1617 00000D2A 75F2                    	jnz	.s1
+  1618 00000D2C C3                      	ret
+  1619                                  
+  1620                                  ; wr_sector -- secbuf to sector EBX.  CF on failure, [why] saying which and,
+  1621                                  ; unless [quiet], a message.
+  1622                                  ;
+  1623                                  ; One burst: the preamble, the CMD24 frame and its window (R1 arrives in
+  1624                                  ; it), FF FE -- the token, a byte at least after R1 -- the 512 bytes, their
+  1625                                  ; CRC16, and WRESP bytes of FF in which the card's data response comes.
+  1626                                  ; R1 locates the offset; the response is the first byte after the CRC, at
+  1627                                  ; it, that is not FF, and must say "accepted" (xxx0 0101).  Then the card
+  1628                                  ; holds DO low while it programs, polled in bursts of its own (busy is all
+  1629                                  ; 0s: the offset does not matter) until a word of FFFF.  Then CMD13, the
+  1630                                  ; card's status, must be 00 00.
+  1631                                  WRESP		equ	8
+  1632                                  WTXW		equ	(WINLEN+2+512+2+WRESP)/2
+  1633                                  wr_sector:
+  1634 00000D2D C606[241C]00            	mov	byte [why],WHY_OK
+  1635 00000D32 803E[561C]00            	cmp	byte [ccs],0
+  1636 00000D37 7504                    	jne	.blk
+  1637 00000D39 66C1E309                	shl	ebx,9			; byte addressed
+  1638 00000D3D B018                    .blk:	mov	al,24
+  1639 00000D3F B401                    	mov	ah,01h
+  1640 00000D41 E8FEFC                  	call	mkframe
+  1641 00000D44 BE[5F1C]                	mov	si,cmdbuf		; build the burst
+  1642 00000D47 BF[F720]                	mov	di,wtx
+  1643 00000D4A B91600                  	mov	cx,WINLEN/2
+  1644 00000D4D F3A5                    	rep	movsw
+  1645 00000D4F B8FFFE                  	mov	ax,0FEFFh		; FF, then the token FE
+  1646 00000D52 AB                      	stosw
+  1647 00000D53 BE[EF1C]                	mov	si,secbuf
+  1648 00000D56 B90001                  	mov	cx,256
+  1649 00000D59 F3A5                    	rep	movsw
+  1650 00000D5B 57                      	push	di
+  1651 00000D5C BE[EF1C]                	mov	si,secbuf
+  1652 00000D5F B90002                  	mov	cx,512
+  1653 00000D62 E84C03                  	call	crc16
+  1654 00000D65 5F                      	pop	di
+  1655 00000D66 86C4                    	xchg	al,ah			; big end first
+  1656 00000D68 AB                      	stosw
+  1657 00000D69 B8FFFF                  	mov	ax,0FFFFh
+  1658 00000D6C B90400                  	mov	cx,WRESP/2
+  1659 00000D6F F3AB                    	rep	stosw
+  1660 00000D71 E80CFC                  	call	cs_low
+  1661 00000D74 BE[F720]                	mov	si,wtx
+  1662 00000D77 BF[D72B]                	mov	di,xbuf
+  1663 00000D7A B91C01                  	mov	cx,WTXW
+  1664 00000D7D E8DAFD                  	call	spi_burst
+  1665 00000D80 0F829F00                	jc	.ssio
+  1666 00000D84 F606[571C]88            	test	byte [ssio_err],TUE|ROE	; every word out in time (spi_burst looks
+  1667 00000D89 0F859600                	jnz	.ssio			;  until the last is in), none lost
+  1668 00000D8D C706[CC2B]3802          	mov	word [xlen],WTXW*2
+  1669 00000D93 E854FF                  	call	find_r1
+  1670 00000D96 0F829300                	jc	.nor1
+  1671 00000D9A 08C0                    	or	al,al
+  1672 00000D9C 0F858F00                	jnz	.badr1
+  1673                                  	; the card byte sent while the host sent byte t starts at bit 8t of
+  1674                                  	; xbuf, less 8 when the offset is not 0 (it comes a bit early)
+  1675 00000DA0 BB8011                  	mov	bx,(WINLEN+2+512+2)*8
+  1676 00000DA3 0FB606[531C]            	movzx	ax,byte [sbits]
+  1677 00000DA8 09C0                    	or	ax,ax
+  1678 00000DAA 7405                    	jz	.r0
+  1679 00000DAC 83EB08                  	sub	bx,8
+  1680 00000DAF 01C3                    	add	bx,ax
+  1681 00000DB1 B90600                  .r0:	mov	cx,WRESP-2		; (xbits reads a byte ahead)
+  1682 00000DB4 E8F7FD                  .dr:	call	xbits
+  1683 00000DB7 3CFF                    	cmp	al,0FFh
+  1684 00000DB9 7505                    	jne	.resp
+  1685 00000DBB 83C308                  	add	bx,8
+  1686 00000DBE E2F4                    	loop	.dr
+  1687 00000DC0 A2[3325]                .resp:	mov	[wresp],al
+  1688 00000DC3 241F                    	and	al,1Fh
+  1689 00000DC5 3C05                    	cmp	al,05h			; accepted
+  1690 00000DC7 7573                    	jne	.badresp
+  1691 00000DC9 E80403                  	call	ticks			; busy
+  1692 00000DCC A3[591C]                	mov	[t0],ax
+  1693 00000DCF 31F6                    .busy:	xor	si,si
+  1694 00000DD1 31FF                    	xor	di,di
+  1695 00000DD3 B90100                  	mov	cx,1
+  1696 00000DD6 E843FA                  	call	spi_xfer
+  1697 00000DD9 83F8FF                  	cmp	ax,0FFFFh
+  1698 00000DDC 7416                    	je	.done
+  1699 00000DDE E8EF02                  	call	ticks
+  1700 00000DE1 2B06[591C]              	sub	ax,[t0]
+  1701 00000DE5 83F80A                  	cmp	ax,10			; half a second
+  1702 00000DE8 72E5                    	jb	.busy
+  1703 00000DEA E8A5FB                  	call	cs_high
+  1704 00000DED C606[241C]07            	mov	byte [why],WHY_BUSY
+  1705 00000DF2 EB57                    	jmp	.say
+  1706 00000DF4 E8D902                  .done:	call	ticks
+  1707 00000DF7 2B06[591C]              	sub	ax,[t0]
+  1708 00000DFB A3[3625]                	mov	[wbusy],ax
+  1709 00000DFE E891FB                  	call	cs_high
+  1710 00000E01 E87CFB                  	call	cs_low			; CMD13: status, R2
+  1711 00000E04 B00D                    	mov	al,13
+  1712 00000E06 6631DB                  	xor	ebx,ebx
+  1713 00000E09 B401                    	mov	ah,01h
+  1714 00000E0B E8A8FB                  	call	sd_cmd
+  1715 00000E0E A2[3425]                	mov	[wstat],al
+  1716 00000E11 E808FB                  	call	rd_abyte
+  1717 00000E14 A2[3525]                	mov	[wstat+1],al
+  1718 00000E17 E878FB                  	call	cs_high
+  1719 00000E1A 833E[3425]00            	cmp	word [wstat],0
+  1720 00000E1F 7525                    	jne	.badstat
+  1721 00000E21 F8                      	clc
+  1722 00000E22 C3                      	ret
+  1723 00000E23 E86CFB                  .ssio:	call	cs_high
+  1724 00000E26 C606[241C]04            	mov	byte [why],WHY_SSIO
+  1725 00000E2B EB1E                    	jmp	.say
+  1726 00000E2D B0FF                    .nor1:	mov	al,0FFh
+  1727 00000E2F E860FB                  .badr1:	call	cs_high
+  1728 00000E32 A2[481C]                	mov	[r1v],al
+  1729 00000E35 C606[241C]01            	mov	byte [why],WHY_R1
+  1730 00000E3A EB0F                    	jmp	.say
+  1731                                  .badresp:
+  1732 00000E3C E853FB                  	call	cs_high
+  1733 00000E3F C606[241C]06            	mov	byte [why],WHY_WRESP
+  1734 00000E44 EB05                    	jmp	.say
+  1735                                  .badstat:
+  1736 00000E46 C606[241C]08            	mov	byte [why],WHY_STAT
+  1737 00000E4B 803E[231C]00            .say:	cmp	byte [quiet],0
+  1738 00000E50 750C                    	jne	.q
+  1739                                  	say	m_wrbad
+    97 00000E52 BA[7813]            <1>  mov dx,%1
+    98 00000E55 E8D602              <1>  call puts
+  1740 00000E58 A0[481C]                	mov	al,[r1v]
+  1741 00000E5B E80200                  	call	why_say
+  1742 00000E5E F9                      .q:	stc
+  1743 00000E5F C3                      	ret
+  1744                                  
+  1745                                  ; why_say -- print what [why] says, with the R1 (AL), token or SSIO flags
+  1746                                  ; involved.
+  1747                                  why_say:
+  1748 00000E60 50                      	push	ax
+  1749 00000E61 0FB636[241C]            	movzx	si,byte [why]
+  1750 00000E66 D1E6                    	shl	si,1
+  1751 00000E68 8B94[251C]              	mov	dx,[whyname+si]
+  1752 00000E6C E8BF02                  	call	puts
+  1753 00000E6F 803E[241C]01            	cmp	byte [why],WHY_R1
+  1754 00000E74 750B                    	jne	.w1
+  1755                                  	say	m_r1is
+    97 00000E76 BA[421B]            <1>  mov dx,%1
+    98 00000E79 E8B202              <1>  call puts
+  1756 00000E7C 58                      	pop	ax
+  1757 00000E7D 50                      	push	ax
+  1758 00000E7E E8C802                  	call	hex8
+  1759 00000E81 803E[241C]02            .w1:	cmp	byte [why],WHY_TOK
+  1760 00000E86 750C                    	jne	.w2
+  1761                                  	say	m_tokis
+    97 00000E88 BA[481B]            <1>  mov dx,%1
+    98 00000E8B E8A002              <1>  call puts
+  1762 00000E8E A0[4A1C]                	mov	al,[tokb]
+  1763 00000E91 E8B502                  	call	hex8
+  1764 00000E94 803E[241C]04            .w2:	cmp	byte [why],WHY_SSIO
+  1765 00000E99 750C                    	jne	.w3
+  1766                                  	say	m_terr
+    97 00000E9B BA[3C1A]            <1>  mov dx,%1
+    98 00000E9E E88D02              <1>  call puts
+  1767 00000EA1 A0[571C]                	mov	al,[ssio_err]
+  1768 00000EA4 E8A202                  	call	hex8
+  1769 00000EA7 803E[241C]06            .w3:	cmp	byte [why],WHY_WRESP
+  1770 00000EAC 750C                    	jne	.w4
+  1771                                  	say	m_tokis
+    97 00000EAE BA[481B]            <1>  mov dx,%1
+    98 00000EB1 E87A02              <1>  call puts
+  1772 00000EB4 A0[3325]                	mov	al,[wresp]
+  1773 00000EB7 E88F02                  	call	hex8
+  1774 00000EBA 803E[241C]08            .w4:	cmp	byte [why],WHY_STAT
+  1775 00000EBF 7511                    	jne	.w5
+  1776                                  	say	m_tokis
+    97 00000EC1 BA[481B]            <1>  mov dx,%1
+    98 00000EC4 E86702              <1>  call puts
+  1777 00000EC7 A1[3425]                	mov	ax,[wstat]
+  1778 00000ECA E87C02                  	call	hex8
+  1779 00000ECD 88E0                    	mov	al,ah
+  1780 00000ECF E87702                  	call	hex8
+  1781 00000ED2 E8CBF8                  .w5:	call	showofs
+  1782 00000ED5 E86802                  	call	crlf
+  1783 00000ED8 58                      	pop	ax
+  1784 00000ED9 C3                      	ret
+  1785                                  
+  1786                                  ; rd_reg -- CMD9 or CMD10 (AL): sixteen bytes of CSD or CID to DI,
+  1787                                  ; printed, CRC7 checked.  CF and a message on failure.
+  1788                                  rd_reg:
+  1789 00000EDA C606[241C]00            	mov	byte [why],WHY_OK
+  1790 00000EDF 57                      	push	di
+  1791 00000EE0 6631DB                  	xor	ebx,ebx
+  1792 00000EE3 B91000                  	mov	cx,16			; its CRC16 follows, unchecked: the
+  1793 00000EE6 BF[B42B]                	mov	di,regbuf		;  register has its own CRC7
+  1794 00000EE9 E8DDFC                  	call	rd_xact
+  1795 00000EEC 5F                      	pop	di
+  1796 00000EED 7238                    	jc	.bad
+  1797 00000EEF 57                      	push	di
+  1798 00000EF0 BE[B42B]                	mov	si,regbuf
+  1799 00000EF3 B91000                  	mov	cx,16
+  1800 00000EF6 F3A4                    	rep	movsb
+  1801 00000EF8 5E                      	pop	si
+  1802 00000EF9 56                      	push	si
+  1803 00000EFA B91000                  	mov	cx,16
+  1804 00000EFD E86C02                  	call	hexbytes
+  1805 00000F00 E89DF8                  	call	showofs
+  1806 00000F03 5E                      	pop	si
+  1807 00000F04 B90F00                  	mov	cx,15
+  1808 00000F07 E85C01                  	call	crc7
+  1809 00000F0A 3A440F                  	cmp	al,[si+15]
+  1810 00000F0D 7508                    	jne	.badcrc
+  1811                                  	say	m_crcok
+    97 00000F0F BA[2619]            <1>  mov dx,%1
+    98 00000F12 E81902              <1>  call puts
+  1812 00000F15 F8                      	clc
+  1813 00000F16 C3                      	ret
+  1814                                  .badcrc:
+  1815 00000F17 50                      	push	ax
+  1816                                  	say	m_crcbad
+    97 00000F18 BA[3219]            <1>  mov dx,%1
+    98 00000F1B E81002              <1>  call puts
+  1817 00000F1E 58                      	pop	ax
+  1818 00000F1F E82702                  	call	hex8
+  1819 00000F22 E81B02                  	call	crlf
+  1820 00000F25 F9                      	stc
+  1821 00000F26 C3                      	ret
+  1822                                  .bad:	say	m_bad2
+  1822                              <1> .bad: 
+    97 00000F27 BA[371B]            <1>  mov dx,%1
+    98 00000F2A E80102              <1>  call puts
+  1823 00000F2D E830FF                  	call	why_say
+  1824 00000F30 F9                      	stc
+  1825 00000F31 C3                      	ret
+  1826                                  
+  1827                                  ; rd_sector -- sector EBX to secbuf, CRC16 checked.  CF on failure, with
+  1828                                  ; [why] saying which (WHY_*) and, unless [quiet], a message.
+  1829                                  rd_sector:
+  1830 00000F32 C606[241C]00            	mov	byte [why],WHY_OK
+  1831 00000F37 803E[561C]00            	cmp	byte [ccs],0
+  1832 00000F3C 7504                    	jne	.blk
+  1833 00000F3E 66C1E309                	shl	ebx,9			; byte addressed
+  1834 00000F42 B011                    .blk:	mov	al,17
+  1835 00000F44 BF[EF1C]                	mov	di,secbuf
+  1836 00000F47 B90002                  	mov	cx,512			; the data, then its CRC16, big end first
+  1837 00000F4A E87CFC                  	call	rd_xact
+  1838 00000F4D 7242                    	jc	.bad
+  1839 00000F4F BE[EF1C]                	mov	si,secbuf
+  1840 00000F52 B90002                  	mov	cx,512
+  1841 00000F55 E85901                  	call	crc16
+  1842 00000F58 86C4                    	xchg	al,ah
+  1843 00000F5A 3B06[EF1E]              	cmp	ax,[secbuf+512]
+  1844 00000F5E 7502                    	jne	.badcrc
+  1845 00000F60 F8                      	clc
+  1846 00000F61 C3                      	ret
+  1847                                  .badcrc:
+  1848 00000F62 C606[241C]03            	mov	byte [why],WHY_CRC
+  1849 00000F67 803E[231C]00            	cmp	byte [quiet],0
+  1850 00000F6C 7533                    	jne	.q
+  1851 00000F6E 50                      	push	ax
+  1852                                  	say	m_dcrcbad
+    97 00000F6F BA[4F1B]            <1>  mov dx,%1
+    98 00000F72 E8B901              <1>  call puts
+  1853 00000F75 58                      	pop	ax
+  1854 00000F76 86C4                    	xchg	al,ah
+  1855 00000F78 E8E801                  	call	hex16
+  1856                                  	say	m_dcrcgot
+    97 00000F7B BA[6E1B]            <1>  mov dx,%1
+    98 00000F7E E8AD01              <1>  call puts
+  1857 00000F81 A1[EF1E]                	mov	ax,[secbuf+512]
+  1858 00000F84 86C4                    	xchg	al,ah
+  1859 00000F86 E8DA01                  	call	hex16
+  1860 00000F89 E814F8                  	call	showofs
+  1861 00000F8C E8B101                  	call	crlf
+  1862 00000F8F F9                      	stc
+  1863 00000F90 C3                      	ret
+  1864 00000F91 803E[231C]00            .bad:	cmp	byte [quiet],0
+  1865 00000F96 7509                    	jne	.q
+  1866                                  	say	m_rdbad
+    97 00000F98 BA[241B]            <1>  mov dx,%1
+    98 00000F9B E89001              <1>  call puts
+  1867 00000F9E E8BFFE                  	call	why_say
+  1868 00000FA1 F9                      .q:	stc
+  1869 00000FA2 C3                      	ret
+  1870                                  
+  1871                                  ; The write test's pattern: byte i of the sector is (i xor A5h) xor 3Ch*(i
+  1872                                  ; div 256), so the two halves differ and no byte is the same as its
+  1873                                  ; neighbour's.
+  1874                                  patbyte:				; AL = pattern byte BX
+  1875 00000FA3 88D8                    	mov	al,bl
+  1876 00000FA5 34A5                    	xor	al,0A5h
+  1877 00000FA7 F6C701                  	test	bh,1
+  1878 00000FAA 7402                    	jz	.p1
+  1879 00000FAC 343C                    	xor	al,3Ch
+  1880 00000FAE C3                      .p1:	ret
+  1881                                  
+  1882                                  fillpat:
+  1883 00000FAF BF[EF1C]                	mov	di,secbuf
+  1884 00000FB2 31DB                    	xor	bx,bx
+  1885 00000FB4 E8ECFF                  .f:	call	patbyte
+  1886 00000FB7 AA                      	stosb
+  1887 00000FB8 43                      	inc	bx
+  1888 00000FB9 81FB0002                	cmp	bx,512
+  1889 00000FBD 72F5                    	jb	.f
+  1890 00000FBF C3                      	ret
+  1891                                  
+  1892                                  cmppat:					; ZF set if secbuf holds the pattern
+  1893 00000FC0 BE[EF1C]                	mov	si,secbuf
+  1894 00000FC3 31DB                    	xor	bx,bx
+  1895 00000FC5 E8DBFF                  .c:	call	patbyte
+  1896 00000FC8 3A04                    	cmp	al,[si]
+  1897 00000FCA 750A                    	jne	.x
+  1898 00000FCC 46                      	inc	si
+  1899 00000FCD 43                      	inc	bx
+  1900 00000FCE 81FB0002                	cmp	bx,512
+  1901 00000FD2 72F1                    	jb	.c
+  1902 00000FD4 38C0                    	cmp	al,al
+  1903 00000FD6 C3                      .x:	ret
+  1904                                  
+  1905                                  clrsec:					; secbuf to zeros, so a read must fill it
+  1906 00000FD7 BF[EF1C]                	mov	di,secbuf
+  1907 00000FDA B90001                  	mov	cx,256
+  1908 00000FDD 31C0                    	xor	ax,ax
+  1909 00000FDF F3AB                    	rep	stosw
+  1910 00000FE1 C3                      	ret
+  1911                                  
+  1912                                  busysay:				; "  ok, busy N ticks"
+  1913                                  	say	m_wrok
+    97 00000FE2 BA[3F13]            <1>  mov dx,%1
+    98 00000FE5 E84601              <1>  call puts
+  1914 00000FE8 660FB706[3625]          	movzx	eax,word [wbusy]
+  1915 00000FEE E89C01                  	call	dec32
+  1916                                  	say	m_wrticks
+    97 00000FF1 BA[4B13]            <1>  mov dx,%1
+    98 00000FF4 E83701              <1>  call puts
+  1917 00000FF7 C3                      	ret
+  1918                                  
+  1919                                  ; capacity -- EAX = the card's size in 512-byte sectors, from the CSD.
+  1920                                  capacity:
+  1921 00000FF8 A0[DF1C]                	mov	al,[csd]
+  1922 00000FFB C0E806                  	shr	al,6
+  1923 00000FFE 3C01                    	cmp	al,1
+  1924 00001000 7447                    	je	.v2
+  1925                                  	; CSD 1.0: (C_SIZE+1) << (C_SIZE_MULT+2) blocks of 2^READ_BL_LEN
+  1926 00001002 660FB606[E51C]          	movzx	eax,byte [csd+6]
+  1927 00001008 2403                    	and	al,3
+  1928 0000100A 66C1E008                	shl	eax,8
+  1929 0000100E A0[E61C]                	mov	al,[csd+7]
+  1930 00001011 66C1E002                	shl	eax,2
+  1931 00001015 660FB60E[E71C]          	movzx	ecx,byte [csd+8]
+  1932 0000101B C0E906                  	shr	cl,6
+  1933 0000101E 6609C8                  	or	eax,ecx
+  1934 00001021 6640                    	inc	eax			; C_SIZE + 1
+  1935 00001023 8A0E[E81C]              	mov	cl,[csd+9]
+  1936 00001027 80E103                  	and	cl,3
+  1937 0000102A D0E1                    	shl	cl,1
+  1938 0000102C 8A2E[E91C]              	mov	ch,[csd+10]
+  1939 00001030 C0ED07                  	shr	ch,7
+  1940 00001033 08E9                    	or	cl,ch			; C_SIZE_MULT
+  1941 00001035 80C102                  	add	cl,2
+  1942 00001038 66D3E0                  	shl	eax,cl
+  1943 0000103B 8A0E[E41C]              	mov	cl,[csd+5]
+  1944 0000103F 80E10F                  	and	cl,0Fh			; READ_BL_LEN
+  1945 00001042 80E909                  	sub	cl,9
+  1946 00001045 66D3E0                  	shl	eax,cl			; in 512-byte sectors
+  1947 00001048 C3                      	ret
+  1948                                  .v2:	; CSD 2.0: (C_SIZE+1) * 512K
+  1949 00001049 660FB606[E61C]          	movzx	eax,byte [csd+7]
+  1950 0000104F 243F                    	and	al,3Fh
+  1951 00001051 66C1E008                	shl	eax,8
+  1952 00001055 A0[E71C]                	mov	al,[csd+8]
+  1953 00001058 66C1E008                	shl	eax,8
+  1954 0000105C A0[E81C]                	mov	al,[csd+9]
+  1955 0000105F 6640                    	inc	eax
+  1956 00001061 66C1E00A                	shl	eax,10
+  1957 00001065 C3                      	ret
+  1958                                  
+  1959                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1960                                  ; CRCs, as SD uses them.
+  1961                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  1962                                  
+  1963                                  ; crc7 -- CX bytes at SI: AL = the CRC7 shifted left with the end bit, as
+  1964                                  ; it ends a CID or CSD.  x^7 + x^3 + 1.
+  1965                                  crc7:
+  1966 00001066 51                      	push	cx
+  1967 00001067 52                      	push	dx
+  1968 00001068 56                      	push	si
+  1969 00001069 30D2                    	xor	dl,dl			; the CRC, in bits 6:0
+  1970 0000106B AC                      .byte:	lodsb
+  1971 0000106C B608                    	mov	dh,8
+  1972 0000106E 88D4                    .bit:	mov	ah,dl
+  1973 00001070 D0E4                    	shl	ah,1			; bit 7 = the CRC's top bit
+  1974 00001072 30C4                    	xor	ah,al			; ... with the data's
+  1975 00001074 D0E2                    	shl	dl,1
+  1976 00001076 80E27F                  	and	dl,7Fh
+  1977 00001079 F6C480                  	test	ah,80h
+  1978 0000107C 7403                    	jz	.nx
+  1979 0000107E 80F209                  	xor	dl,09h
+  1980 00001081 D0E0                    .nx:	shl	al,1
+  1981 00001083 FECE                    	dec	dh
+  1982 00001085 75E7                    	jnz	.bit
+  1983 00001087 E2E2                    	loop	.byte
+  1984 00001089 88D0                    	mov	al,dl
+  1985 0000108B D0E0                    	shl	al,1
+  1986 0000108D 0C01                    	or	al,1
+  1987 0000108F 5E                      	pop	si
+  1988 00001090 5A                      	pop	dx
+  1989 00001091 59                      	pop	cx
+  1990 00001092 C3                      	ret
+  1991                                  
+  1992                                  ; crcinit -- crctab[b] = the CRC16 of b followed by eight 0 bits.
+  1993                                  crcinit:
+  1994 00001093 BF[2F23]                	mov	di,crctab
+  1995 00001096 31DB                    	xor	bx,bx
+  1996 00001098 88DC                    .n:	mov	ah,bl
+  1997 0000109A 30C0                    	xor	al,al
+  1998 0000109C B90800                  	mov	cx,8
+  1999 0000109F D1E0                    .b:	shl	ax,1
+  2000 000010A1 7303                    	jnc	.s
+  2001 000010A3 352110                  	xor	ax,1021h
+  2002 000010A6 E2F7                    .s:	loop	.b
+  2003 000010A8 AB                      	stosw
+  2004 000010A9 43                      	inc	bx
+  2005 000010AA 81FB0001                	cmp	bx,256
+  2006 000010AE 72E8                    	jb	.n
+  2007 000010B0 C3                      	ret
+  2008                                  
+  2009                                  ; crc16 -- CX bytes at SI: AX = their CRC16-CCITT, x^16 + x^12 + x^5 + 1,
+  2010                                  ; starting from 0, as an SD data block carries it.  A byte a table entry.
+  2011                                  crc16:
+  2012 000010B1 53                      	push	bx
+  2013 000010B2 51                      	push	cx
+  2014 000010B3 52                      	push	dx
+  2015 000010B4 56                      	push	si
+  2016 000010B5 31D2                    	xor	dx,dx
+  2017 000010B7 AC                      .byte:	lodsb
+  2018 000010B8 30F0                    	xor	al,dh
+  2019 000010BA 0FB6D8                  	movzx	bx,al
+  2020 000010BD D1E3                    	shl	bx,1
+  2021 000010BF 88D6                    	mov	dh,dl
+  2022 000010C1 30D2                    	xor	dl,dl
+  2023 000010C3 3397[2F23]              	xor	dx,[crctab+bx]
+  2024 000010C7 E2EE                    	loop	.byte
+  2025 000010C9 89D0                    	mov	ax,dx
+  2026 000010CB 5E                      	pop	si
+  2027 000010CC 5A                      	pop	dx
+  2028 000010CD 59                      	pop	cx
+  2029 000010CE 5B                      	pop	bx
+  2030 000010CF C3                      	ret
+  2031                                  
+  2032                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2033                                  ; Output.
+  2034                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2035                                  
+  2036                                  ; ticks -- AX = the low word of the BIOS tick count.
+  2037                                  ticks:
+  2038 000010D0 06                      	push	es
+  2039 000010D1 53                      	push	bx
+  2040 000010D2 31DB                    	xor	bx,bx
+  2041 000010D4 8EC3                    	mov	es,bx
+  2042 000010D6 26A16C04                	mov	ax,[es:400h+TICKS]
+  2043 000010DA 5B                      	pop	bx
+  2044 000010DB 07                      	pop	es
+  2045 000010DC C3                      	ret
+  2046                                  
+  2047                                  ; trace -- what the last command sent and got back, raw, and the card's
+  2048                                  ; bytes after the offset was found.
+  2049                                  trace:
+  2050                                  	say	m_tsent
+    97 000010DD BA[B51B]            <1>  mov dx,%1
+    98 000010E0 E84B00              <1>  call puts
+  2051 000010E3 BE[731C]                	mov	si,frame
+  2052 000010E6 B90800                  	mov	cx,8
+  2053 000010E9 E88000                  	call	hexbytes
+  2054                                  	say	m_tpre
+    97 000010EC BA[D01B]            <1>  mov dx,%1
+    98 000010EF E83C00              <1>  call puts
+  2055 000010F2 BE[8B1C]                	mov	si,win
+  2056 000010F5 B91400                  	mov	cx,PRE
+  2057 000010F8 E87100                  	call	hexbytes
+  2058                                  	say	m_tgot
+    97 000010FB BA[EB1B]            <1>  mov dx,%1
+    98 000010FE E82D00              <1>  call puts
+  2059 00001101 BE[9F1C]                	mov	si,win+PRE
+  2060 00001104 B91800                  	mov	cx,WINLEN-PRE
+  2061 00001107 E86200                  	call	hexbytes
+  2062                                  	say	m_tthen
+    97 0000110A BA[061C]            <1>  mov dx,%1
+    98 0000110D E81E00              <1>  call puts
+  2063 00001110 BE[B71C]                	mov	si,tracebuf
+  2064 00001113 0FB60E[581C]            	movzx	cx,byte [ntrace]
+  2065 00001118 E85100                  	call	hexbytes
+  2066 0000111B E882F6                  	call	showofs
+  2067                                  	say	m_terr
+    97 0000111E BA[3C1A]            <1>  mov dx,%1
+    98 00001121 E80A00              <1>  call puts
+  2068 00001124 A0[571C]                	mov	al,[ssio_err]
+  2069 00001127 E81F00                  	call	hex8
+  2070 0000112A E81300                  	call	crlf
+  2071 0000112D C3                      	ret
+  2072                                  
+  2073 0000112E 50                      puts:	push	ax			; DX -> '$'-terminated
+  2074 0000112F B409                    	mov	ah,9
+  2075 00001131 CD21                    	int	21h
+  2076 00001133 58                      	pop	ax
+  2077 00001134 C3                      	ret
+  2078                                  
+  2079 00001135 50                      putc:	push	ax			; AL
+  2080 00001136 52                      	push	dx
+  2081 00001137 88C2                    	mov	dl,al
+  2082 00001139 B402                    	mov	ah,2
+  2083 0000113B CD21                    	int	21h
+  2084 0000113D 5A                      	pop	dx
+  2085 0000113E 58                      	pop	ax
+  2086 0000113F C3                      	ret
+  2087                                  
+  2088 00001140 52                      crlf:	push	dx
+  2089                                  	say	m_crlf
+    97 00001141 BA[F911]            <1>  mov dx,%1
+    98 00001144 E8E7FF              <1>  call puts
+  2090 00001147 5A                      	pop	dx
+  2091 00001148 C3                      	ret
+  2092                                  
+  2093 00001149 50                      hex8:	push	ax			; AL, two digits
+  2094 0000114A 50                      	push	ax
+  2095 0000114B C0E804                  	shr	al,4
+  2096 0000114E E80600                  	call	.dig
+  2097 00001151 58                      	pop	ax
+  2098 00001152 E80200                  	call	.dig
+  2099 00001155 58                      	pop	ax
+  2100 00001156 C3                      	ret
+  2101 00001157 240F                    .dig:	and	al,0Fh
+  2102 00001159 0430                    	add	al,'0'
+  2103 0000115B 3C39                    	cmp	al,'9'
+  2104 0000115D 7602                    	jbe	.d1
+  2105 0000115F 0407                    	add	al,7
+  2106 00001161 EBD2                    .d1:	jmp	putc
+  2107                                  
+  2108 00001163 86C4                    hex16:	xchg	al,ah			; AX, four digits
+  2109 00001165 E8E1FF                  	call	hex8
+  2110 00001168 86C4                    	xchg	al,ah
+  2111 0000116A EBDD                    	jmp	hex8
+  2112                                  
+  2113                                  hexbytes:				; CX bytes at SI, spaced
+  2114 0000116C E30D                    	jcxz	.done
+  2115 0000116E 50                      	push	ax
+  2116 0000116F AC                      .b:	lodsb
+  2117 00001170 E8D6FF                  	call	hex8
+  2118 00001173 B020                    	mov	al,' '
+  2119 00001175 E8BDFF                  	call	putc
+  2120 00001178 E2F5                    	loop	.b
+  2121 0000117A 58                      	pop	ax
+  2122 0000117B C3                      .done:	ret
+  2123                                  
+  2124 0000117C AC                      ascii:	lodsb				; CX printable bytes at SI
+  2125 0000117D 3C20                    	cmp	al,20h
+  2126 0000117F 7204                    	jb	.dot
+  2127 00001181 3C7E                    	cmp	al,7Eh
+  2128 00001183 7602                    	jbe	.p
+  2129 00001185 B02E                    .dot:	mov	al,'.'
+  2130 00001187 E8ABFF                  .p:	call	putc
+  2131 0000118A E2F0                    	loop	ascii
+  2132 0000118C C3                      	ret
+  2133                                  
+  2134 0000118D 6650                    dec32:	push	eax			; EAX, unsigned decimal
+  2135 0000118F 6651                    	push	ecx
+  2136 00001191 6652                    	push	edx
+  2137 00001193 66B90A000000            	mov	ecx,10
+  2138 00001199 6AFF                    	push	word 0FFFFh		; end marker
+  2139 0000119B 6631D2                  .div:	xor	edx,edx
+  2140 0000119E 66F7F1                  	div	ecx
+  2141 000011A1 52                      	push	dx
+  2142 000011A2 6609C0                  	or	eax,eax
+  2143 000011A5 75F4                    	jnz	.div
+  2144 000011A7 58                      .out:	pop	ax
+  2145 000011A8 83F8FF                  	cmp	ax,0FFFFh
+  2146 000011AB 7407                    	je	.end
+  2147 000011AD 0430                    	add	al,'0'
+  2148 000011AF E883FF                  	call	putc
+  2149 000011B2 EBF3                    	jmp	.out
+  2150 000011B4 665A                    .end:	pop	edx
+  2151 000011B6 6659                    	pop	ecx
+  2152 000011B8 6658                    	pop	eax
+  2153 000011BA C3                      	ret
+  2154                                  
+  2155                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2156                                  ; Messages.
+  2157                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2158                                  
+  2159 000011BB 534454455354203133-     m_banner db	"SDTEST 13 -- SBC-386EX microSD bring-up",13,10,13,10,"$"
+  2159 000011C4 202D2D205342432D33-
+  2159 000011CD 38364558206D696372-
+  2159 000011D6 6F5344206272696E67-
+  2159 000011DF 2D75700D0A0D0A24   
+  2160 000011E7 20206F6B0D0A24          m_ok	db	"  ok",13,10,"$"
+  2161 000011EE 20204641494C45440D-     m_bad	db	"  FAILED",13,10,"$"
+  2161 000011F7 0A24               
+  2162 000011F9 0D0A24                  m_crlf	db	13,10,"$"
+  2163 000011FC 0D0A53746F70706564-     m_stop	db	13,10,"Stopped.",13,10,"$"
+  2163 00001205 2E0D0A24           
+  2164 00001209 0D0A416C6C20737465-     m_done	db	13,10,"All steps passed.",13,10,"$"
+  2164 00001212 707320706173736564-
+  2164 0000121B 2E0D0A24           
+  2165 0000121F 31312E205772697465-     m_wr	db	"11. Write test on sector 2 (before the partition): saving it        $"
+  2165 00001228 2074657374206F6E20-
+  2165 00001231 736563746F72203220-
+  2165 0000123A 286265666F72652074-
+  2165 00001243 686520706172746974-
+  2165 0000124C 696F6E293A20736176-
+  2165 00001255 696E67206974202020-
+  2165 0000125E 202020202024       
+  2166 00001264 202020207772697469-     m_wr1	db	"    writing a pattern                                $"
+  2166 0000126D 6E6720612070617474-
+  2166 00001276 65726E202020202020-
+  2166 0000127F 202020202020202020-
+  2166 00001288 202020202020202020-
+  2166 00001291 202020202020202024 
+  2167 0000129A 202020207265616469-     m_wr2	db	"    reading it back (want the pattern)                $"
+  2167 000012A3 6E6720697420626163-
+  2167 000012AC 6B202877616E742074-
+  2167 000012B5 686520706174746572-
+  2167 000012BE 6E2920202020202020-
+  2167 000012C7 202020202020202020-
+  2167 000012D0 24                 
+  2168 000012D1 202020207772697469-     m_wr3	db	"    writing the saved sector back                     $"
+  2168 000012DA 6E6720746865207361-
+  2168 000012E3 76656420736563746F-
+  2168 000012EC 72206261636B202020-
+  2168 000012F5 202020202020202020-
+  2168 000012FE 202020202020202020-
+  2168 00001307 24                 
+  2169 00001308 202020207265616469-     m_wr4	db	"    reading it back (want what was saved)             $"
+  2169 00001311 6E6720697420626163-
+  2169 0000131A 6B202877616E742077-
+  2169 00001323 686174207761732073-
+  2169 0000132C 617665642920202020-
+  2169 00001335 202020202020202020-
+  2169 0000133E 24                 
+  2170 0000133F 20206F6B2C20627573-     m_wrok	db	"  ok, busy $"
+  2170 00001348 792024             
+  2171 0000134B 207469636B730D0A24      m_wrticks db	" ticks",13,10,"$"
+  2172 00001354 20204641494C45443A-     m_wrdiff db	"  FAILED: it reads back different",13,10,"$"
+  2172 0000135D 206974207265616473-
+  2172 00001366 206261636B20646966-
+  2172 0000136F 666572656E740D0A24 
+  2173 00001378 0D0A20202077726974-     m_wrbad	db	13,10,"   write FAILED: $"
+  2173 00001381 65204641494C45443A-
+  2173 0000138A 2024               
+  2174 0000138C 202040206269742024      m_at	db	"  @ bit $"
+  2175                                  
+  2176 00001395 312E20503344495220-     m_p3dir	db	"1. P3DIR   (want bit 6 set, CS# open drain)     $"
+  2176 0000139E 20202877616E742062-
+  2176 000013A7 69742036207365742C-
+  2176 000013B0 20435323206F70656E-
+  2176 000013B9 20647261696E292020-
+  2176 000013C2 20202024           
+  2177 000013C6 20204641494C45443A-     m_p3bad	db	"  FAILED: CS# would be driven to 5V.  Not touching the card.",13,10,"$"
+  2177 000013CF 2043532320776F756C-
+  2177 000013D8 642062652064726976-
+  2177 000013E1 656E20746F2035562E-
+  2177 000013EA 20204E6F7420746F75-
+  2177 000013F3 6368696E6720746865-
+  2177 000013FC 20636172642E0D0A24 
+  2178 00001405 20202050494E434647-     m_pincfg db	"   PINCFG  (want bits 1:0 clear, SSIO pins)     $"
+  2178 0000140E 20202877616E742062-
+  2178 00001417 69747320313A302063-
+  2178 00001420 6C6561722C20535349-
+  2178 00001429 4F2070696E73292020-
+  2178 00001432 20202024           
+  2179 00001436 20204641494C45443A-     m_pinbad db	"  FAILED: the pins are SIO1's RTS1#/DTR1#, not the SSIO's",13,10,"$"
+  2179 0000143F 207468652070696E73-
+  2179 00001448 206172652053494F31-
+  2179 00001451 27732052545331232F-
+  2179 0000145A 44545231232C206E6F-
+  2179 00001463 742074686520535349-
+  2179 0000146C 4F27730D0A24       
+  2180 00001472 20202053494F434647-     m_siocfg db	"   SIOCFG  (want bit 2 set, SSIO from SERCLK)   $"
+  2180 0000147B 20202877616E742062-
+  2180 00001484 69742032207365742C-
+  2180 0000148D 205353494F2066726F-
+  2180 00001496 6D20534552434C4B29-
+  2180 0000149F 20202024           
+  2181 000014A3 202062697420322063-     m_siowarn db	"  bit 2 clear: PSCLK clocks the SSIO, speeds differ",13,10,"$"
+  2181 000014AC 6C6561723A20505343-
+  2181 000014B5 4C4B20636C6F636B73-
+  2181 000014BE 20746865205353494F-
+  2181 000014C7 2C2073706565647320-
+  2181 000014D0 6469666665720D0A24 
+  2182 000014D9 202020503350494E20-     m_cd	db	"   P3PIN   (want bit 1 clear, a card is in)     $"
+  2182 000014E2 20202877616E742062-
+  2182 000014EB 6974203120636C6561-
+  2182 000014F4 722C20612063617264-
+  2182 000014FD 20697320696E292020-
+  2182 00001506 20202024           
+  2183 0000150A 20204641494C45443A-     m_nocard db	"  FAILED: no card (P3.1 high)",13,10,"$"
+  2183 00001513 206E6F206361726420-
+  2183 0000151C 2850332E3120686967-
+  2183 00001525 68290D0A24         
+  2184                                  
+  2185 0000152A 322E205353494F4354-     m_ssio	db	"2. SSIOCTR (want bit 7 set, generator running)  $"
+  2185 00001533 52202877616E742062-
+  2185 0000153C 69742037207365742C-
+  2185 00001545 2067656E657261746F-
+  2185 0000154E 722072756E6E696E67-
+  2185 00001557 29202024           
+  2186 0000155B 20204641494C45443A-     m_genbad db	"  FAILED: the baud-rate generator did not start",13,10,"$"
+  2186 00001564 207468652062617564-
+  2186 0000156D 2D726174652067656E-
+  2186 00001576 657261746F72206469-
+  2186 0000157F 64206E6F7420737461-
+  2186 00001588 72740D0A24         
+  2187 0000158D 20202031363020636C-     m_wake	db	"   160 clocks, CS# high; got: $"
+  2187 00001596 6F636B732C20435323-
+  2187 0000159F 20686967683B20676F-
+  2187 000015A8 743A2024           
+  2188 000015AC 20204641494C45443A-     m_noword db	"  FAILED: the SSIO never completed a word (RHBF stayed clear)",13,10,"$"
+  2188 000015B5 20746865205353494F-
+  2188 000015BE 206E6576657220636F-
+  2188 000015C7 6D706C657465642061-
+  2188 000015D0 20776F726420285248-
+  2188 000015D9 424620737461796564-
+  2188 000015E2 20636C656172290D0A-
+  2188 000015EB 24                 
+  2189 000015EC 0D0A2020202877616E-     m_wakeexp db	13,10,"   (want all FF: DO floats, pulled up)",13,10,"$"
+  2189 000015F5 7420616C6C2046463A-
+  2189 000015FE 20444F20666C6F6174-
+  2189 00001607 732C2070756C6C6564-
+  2189 00001610 207570290D0A24     
+  2190                                  
+  2191 00001617 332E20434D44302074-     m_align	db	"3. CMD0 twice at each start delay D (want 01 both times)",13,10,"$"
+  2191 00001620 776963652061742065-
+  2191 00001629 616368207374617274-
+  2191 00001632 2064656C6179204420-
+  2191 0000163B 2877616E7420303120-
+  2191 00001644 626F74682074696D65-
+  2191 0000164D 73290D0A24         
+  2192 00001652 202020443D24            m_phd	db	"   D=$"
+  2193 00001658 2020207573696E6720-     m_phuse	db	"   using D=$"
+  2193 00001661 443D24             
+  2194 00001664 20202024                m_svhead db	"   $"
+  2195 00001668 5458206D6173746572-     m_txm	db	"TX master/RX slave$"
+  2195 00001671 2F525820736C617665-
+  2195 0000167A 24                 
+  2196 0000167B 5258206D6173746572-     m_rxm	db	"RX master/TX slave$"
+  2196 00001684 2F545820736C617665-
+  2196 0000168D 24                 
+  2197 0000168E 2C206F6E6520627572-     m_long	db	", one burst$"
+  2197 00001697 737424             
+  2198 0000169A 2C2073706C69742020-     m_split	db	", split    $"
+  2198 000016A3 202024             
+  2199 000016A6 202052312024            m_svr1	db	"  R1 $"
+  2200 000016AC 0D0A20202020206672-     m_svwin	db	13,10,"     from the frame: $"
+  2200 000016B5 6F6D20746865206672-
+  2200 000016BE 616D653A2024       
+  2201 000016C4 20204641494C45443A-     m_noalign db	"  FAILED: no steady R1 01",13,10,"$"
+  2201 000016CD 206E6F207374656164-
+  2201 000016D6 792052312030310D0A-
+  2201 000016DF 24                 
+  2202 000016E0 2020207573696E6720-     m_using	db	"   using $"
+  2202 000016E9 24                 
+  2203 000016EA 2020206E6F20616E73-     m_flush	db	"   no answer: clocking out any transfer left over, CMD12, then again",13,10,"$"
+  2203 000016F3 7765723A20636C6F63-
+  2203 000016FC 6B696E67206F757420-
+  2203 00001705 616E79207472616E73-
+  2203 0000170E 666572206C65667420-
+  2203 00001717 6F7665722C20434D44-
+  2203 00001720 31322C207468656E20-
+  2203 00001729 616761696E0D0A24   
+  2204                                  
+  2205 00001731 342E20434D44302020-     m_cmd0	db	"4. CMD0    (want R1 01, idle)                   $"
+  2205 0000173A 20202877616E742052-
+  2205 00001743 312030312C2069646C-
+  2205 0000174C 652920202020202020-
+  2205 00001755 202020202020202020-
+  2205 0000175E 20202024           
+  2206 00001762 352E20434D44382020-     m_cmd8	db	"5. CMD8    (want 01, then 00 00 01 AA)          $"
+  2206 0000176B 20202877616E742030-
+  2206 00001774 312C207468656E2030-
+  2206 0000177D 302030302030312041-
+  2206 00001786 412920202020202020-
+  2206 0000178F 20202024           
+  2207 00001793 20206F6B2C20616E20-     m_v2	db	"  ok, an SD v2 card",13,10,"$"
+  2207 0000179C 534420763220636172-
+  2207 000017A5 640D0A24           
+  2208 000017A9 2020696C6C6567616C-     m_v1	db	"  illegal command: an SD v1 card",13,10,"$"
+  2208 000017B2 20636F6D6D616E643A-
+  2208 000017BB 20616E205344207631-
+  2208 000017C4 20636172640D0A24   
+  2209 000017CC 20206E6F20616E7377-     m_noans	db	"  no answer$"
+  2209 000017D5 657224             
+  2210                                  
+  2211 000017D8 362E2041434D443431-     m_acmd41 db	"6. ACMD41  (want R1 00, ready, within 2s)       $"
+  2211 000017E1 20202877616E742052-
+  2211 000017EA 312030302C20726561-
+  2211 000017F3 64792C207769746869-
+  2211 000017FC 6E2032732920202020-
+  2211 00001805 20202024           
+  2212 00001809 20204641494C45443A-     m_c55bad db	"  FAILED: CMD55 refused",13,10,"$"
+  2212 00001812 20434D443535207265-
+  2212 0000181B 66757365640D0A24   
+  2213 00001823 20204641494C45443A-     m_a41bad db	"  FAILED: still not ready",13,10,"$"
+  2213 0000182C 207374696C6C206E6F-
+  2213 00001835 742072656164790D0A-
+  2213 0000183E 24                 
+  2214 0000183F 207469636B7320206F-     m_a41ok	db	" ticks  ok",13,10,"$"
+  2214 00001848 6B0D0A24           
+  2215                                  
+  2216 0000184C 372E20434D44353820-     m_cmd58	db	"7. CMD58   (want 00, then the OCR)              $"
+  2216 00001855 20202877616E742030-
+  2216 0000185E 302C207468656E2074-
+  2216 00001867 6865204F4352292020-
+  2216 00001870 202020202020202020-
+  2216 00001879 20202024           
+  2217 0000187D 20206F6B2C20686967-     m_sdhc	db	"  ok, high capacity: block addressed",13,10,"$"
+  2217 00001886 682063617061636974-
+  2217 0000188F 793A20626C6F636B20-
+  2217 00001898 616464726573736564-
+  2217 000018A1 0D0A24             
+  2218 000018A4 20206F6B2C20737461-     m_sdsc	db	"  ok, standard capacity: byte addressed",13,10,"$"
+  2218 000018AD 6E6461726420636170-
+  2218 000018B6 61636974793A206279-
+  2218 000018BF 746520616464726573-
+  2218 000018C8 7365640D0A24       
+  2219 000018CE 2020434D4431362028-     m_c16bad db	"  CMD16 (512-byte blocks) refused: $"
+  2219 000018D7 3531322D6279746520-
+  2219 000018E0 626C6F636B73292072-
+  2219 000018E9 6566757365643A2024 
+  2220                                  
+  2221 000018F2 382E20434944202020-     m_cid	db	"8. CID     $"
+  2221 000018FB 202024             
+  2222 000018FE 2020206D616B657220-     m_maker	db	"   maker $"
+  2222 00001907 24                 
+  2223 00001908 20204F454D2024          m_oem	db	"  OEM $"
+  2224 0000190F 202070726F64756374-     m_name	db	"  product $"
+  2224 00001918 2024               
+  2225 0000191A 202020435344202020-     m_csd	db	"   CSD     $"
+  2225 00001923 202024             
+  2226 00001926 202043524337206F6B-     m_crcok	db	"  CRC7 ok",13,10,"$"
+  2226 0000192F 0D0A24             
+  2227 00001932 202043524337204241-     m_crcbad db	"  CRC7 BAD, computed $"
+  2227 0000193B 442C20636F6D707574-
+  2227 00001944 65642024           
+  2228 00001948 20202073697A652024      m_size	db	"   size $"
+  2229 00001951 20736563746F72732C-     m_sectors db	" sectors, $"
+  2229 0000195A 2024               
+  2230 0000195C 204D420D0A24            m_mb	db	" MB",13,10,"$"
+  2231                                  
+  2232 00001962 392E20536563746F72-     m_sweep	db	"9. Sector 0 once at each speed and each D=0..7 (result/offset)",13,10,"$"
+  2232 0000196B 2030206F6E63652061-
+  2232 00001974 742065616368207370-
+  2232 0000197D 65656420616E642065-
+  2232 00001986 61636820443D302E2E-
+  2232 0000198F 372028726573756C74-
+  2232 00001998 2F6F6666736574290D-
+  2232 000019A1 0A24               
+  2233 000019A3 2020207573696E6720-     m_swuse	db	"   using BV=$"
+  2233 000019AC 42563D24           
+  2234 000019B0 20443D24                m_swuse2 db	" D=$"
+  2235 000019B4 20202024                m_swhead db	"   $"
+  2236 000019B8 31204D487A20202020-     m_f4	db	"1 MHz     $"
+  2236 000019C1 2024               
+  2237 000019C3 312E3235204D487A20-     m_f3	db	"1.25 MHz  $"
+  2237 000019CC 2024               
+  2238 000019CE 312E3637204D487A20-     m_f2	db	"1.67 MHz  $"
+  2238 000019D7 2024               
+  2239 000019D9 322E35204D487A2020-     m_f1	db	"2.5 MHz   $"
+  2239 000019E2 2024               
+  2240 000019E4 6F6B24                  m_w0	db	"ok$"
+  2241 000019E7 523124                  m_w1	db	"R1$"
+  2242 000019EA 746F6B24                m_w2	db	"tok$"
+  2243 000019EE 43524324                m_w3	db	"CRC$"
+  2244 000019F2 535324                  m_w4	db	"SS$"
+  2245 000019F5 73686F727424            m_w5	db	"short$"
+  2246 000019FB 777265737024            m_w6	db	"wresp$"
+  2247 00001A01 6275737924              m_w7	db	"busy$"
+  2248 00001A06 73746174757324          m_w8	db	"status$"
+  2249 00001A0D 20204641494C45443A-     m_noswp	db	"  FAILED: no speed read sector 0 three times",13,10,"$"
+  2249 00001A16 206E6F207370656564-
+  2249 00001A1F 207265616420736563-
+  2249 00001A28 746F72203020746872-
+  2249 00001A31 65652074696D65730D-
+  2249 00001A3A 0A24               
+  2250 00001A3C 20205353494F205455-     m_terr	db	"  SSIO TUE/ROE $"
+  2250 00001A45 452F524F452024     
+  2251 00001A4C 202020617420746865-     m_sec0	db	"   at the fastest; signature (want AA55)       $"
+  2251 00001A55 20666173746573743B-
+  2251 00001A5E 207369676E61747572-
+  2251 00001A67 65202877616E742041-
+  2251 00001A70 413535292020202020-
+  2251 00001A79 202024             
+  2252 00001A7C 20206E6F2070617274-     m_nosig	db	"  no partition table signature",13,10,"$"
+  2252 00001A85 6974696F6E20746162-
+  2252 00001A8E 6C65207369676E6174-
+  2252 00001A97 7572650D0A24       
+  2253 00001A9D 202020706172746974-     m_pent	db	"   partition $"
+  2253 00001AA6 696F6E2024         
+  2254 00001AAB 3A20626F6F742024        m_pboot	db	": boot $"
+  2255 00001AB3 20747970652024          m_ptype	db	" type $"
+  2256 00001ABA 2073746172742024        m_pstart db	" start $"
+  2257 00001AC2 20736563746F727320-     m_plen	db	" sectors $"
+  2257 00001ACB 24                 
+  2258 00001ACC 203D2024                m_pmb	db	" = $"
+  2259                                  
+  2260 00001AD0 31302E203235362073-     m_speed	db	"10. 256 single-sector reads, CRC16 checked: $"
+  2260 00001AD9 696E676C652D736563-
+  2260 00001AE2 746F72207265616473-
+  2260 00001AEB 2C2043524331362063-
+  2260 00001AF4 6865636B65643A2024 
+  2261 00001AFD 207469636B732C2024      m_ticks	db	" ticks, $"
+  2262 00001B06 204B422F730D0A24        m_kbs	db	" KB/s",13,10,"$"
+  2263                                  
+  2264 00001B0E 20206E6F2064617461-     m_token	db	"  no data token; got $"
+  2264 00001B17 20746F6B656E3B2067-
+  2264 00001B20 6F742024           
+  2265 00001B24 0D0A20202072656164-     m_rdbad	db	13,10,"   read FAILED: $"
+  2265 00001B2D 204641494C45443A20-
+  2265 00001B36 24                 
+  2266 00001B37 20204641494C45443A-     m_bad2	db	"  FAILED: $"
+  2266 00001B40 2024               
+  2267 00001B42 2C2052312024            m_r1is	db	", R1 $"
+  2268 00001B48 2C20676F742024          m_tokis	db	", got $"
+  2269 00001B4F 0D0A20202064617461-     m_dcrcbad db	13,10,"   data CRC16 BAD: computed $"
+  2269 00001B58 204352433136204241-
+  2269 00001B61 443A20636F6D707574-
+  2269 00001B6A 65642024           
+  2270 00001B6E 2C20626C6F636B2073-     m_dcrcgot db	", block says $"
+  2270 00001B77 6179732024         
+  2271 00001B7C 20205353494F20756E-     m_ovf	db	"  SSIO underflow/overflow during a read, SSIOCON1 bits: $"
+  2271 00001B85 646572666C6F772F6F-
+  2271 00001B8E 766572666C6F772064-
+  2271 00001B97 7572696E6720612072-
+  2271 00001BA0 6561642C205353494F-
+  2271 00001BA9 434F4E312062697473-
+  2271 00001BB2 3A2024             
+  2272 00001BB5 0D0A2020206672616D-     m_tsent	db	13,10,"   frame sent:          $"
+  2272 00001BBE 652073656E743A2020-
+  2272 00001BC7 202020202020202024 
+  2273 00001BD0 0D0A20202064757269-     m_tpre	db	13,10,"   during the preamble: $"
+  2273 00001BD9 6E6720746865207072-
+  2273 00001BE2 65616D626C653A2024 
+  2274 00001BEB 0D0A20202066726F6D-     m_tgot	db	13,10,"   from the frame on:   $"
+  2274 00001BF4 20746865206672616D-
+  2274 00001BFD 65206F6E3A20202024 
+  2275 00001C06 0D0A20202063617264-     m_tthen	db	13,10,"   card bytes:          $"
+  2275 00001C0F 2062797465733A2020-
+  2275 00001C18 202020202020202024 
+  2276                                  
+  2277                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2278                                  ; Data.
+  2279                                  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  2280                                  
+  2281 00001C21 02                      cfg	db	TXM			; SSIOCON2: TXM or RXM
+  2282 00001C22 00                      split	db	0			; command and window as separate bursts
+  2283 00001C23 00                      quiet	db	0			; rd_sector: no messages
+  2284 00001C24 00                      why	db	0			; rd_sector: WHY_*
+  2285                                  WHY_OK	equ	0
+  2286                                  WHY_R1	equ	1
+  2287                                  WHY_TOK	equ	2
+  2288                                  WHY_CRC	equ	3
+  2289                                  WHY_SSIO equ	4
+  2290                                  WHY_SHORT equ	5
+  2291                                  WHY_WRESP equ	6
+  2292                                  WHY_BUSY equ	7
+  2293                                  WHY_STAT equ	8
+  2294 00001C25 [E419][E719][EA19]-     whyname	dw	m_w0, m_w1, m_w2, m_w3, m_w4, m_w5, m_w6, m_w7, m_w8
+  2294 00001C2B [EE19][F219][F519]-
+  2294 00001C31 [FB19][011A][061A] 
+  2295                                  NBV	equ	4
+  2296 00001C37 04030201                bvtab	db	4, 3, 2, 1		; slowest first
+  2297 00001C3B [B819][C319][CE19]-     bvname	dw	m_f4, m_f3, m_f2, m_f1
+  2297 00001C41 [D919]             
+  2298 00001C43 00                      curbv	db	0
+  2299 00001C44 00                      phd	db	0			; genstart's delay
+  2300 00001C45 00                      bestd	db	0
+  2301 00001C46 00                      curd	db	0
+  2302 00001C47 00                      dcount	db	0
+  2303 00001C48 00                      r1v	db	0
+  2304 00001C49 8C                      baud	db	BEN|BV_SLOW		; SSIOBAUD for each burst
+  2305 00001C4A 00                      tokb	db	0			; the byte where a token should be
+  2306 00001C4B 00                      bestbv	db	0
+  2307 00001C4C 00                      swok	db	0
+  2308 00001C4D 00                      sv_ok	db	0
+  2309 00001C4E 00                      sv_zero	db	0
+  2310 00001C4F 00                      sv_ofs	db	0
+  2311 00001C50 00                      held	db	0			; a raw byte is waiting in heldb
+  2312 00001C51 00                      heldb	db	0
+  2313 00001C52 2C                      aidx	db	WINLEN			; next raw byte in win
+  2314 00001C53 00                      sbits	db	0			; receive offset, 0-7
+  2315 00001C54 00                      la	db	0			; raw byte j: see rd_abyte
+  2316 00001C55 00                      hcs	db	0			; the card took CMD8: ask for high capacity
+  2317 00001C56 00                      ccs	db	0			; block addressed
+  2318 00001C57 00                      ssio_err db	0
+  2319 00001C58 00                      ntrace	db	0
+  2320 00001C59 0000                    t0	dw	0
+  2321 00001C5B 00000000                nsect	dd	0
+  2322 00001C5F FF<rep 14h>             cmdbuf	times PRE db 0FFh		; the preamble
+  2323 00001C73 00<rep 8h>              frame	times 8 db 0
+  2324 00001C7B FF<rep 10h>             	times WINLEN-PRE-8 db 0FFh	; the window's clocks
+  2325 00001C8B 00<rep 2Ch>             win	times WINLEN db 0
+  2326 00001CB7 00<rep 10h>             tracebuf times TRACEMAX db 0
+  2327 00001CC7 00<rep 4h>              r7	times 4 db 0
+  2328 00001CCB 00<rep 4h>              ocr	times 4 db 0
+  2329 00001CCF 00<rep 10h>             cid	times 16 db 0
+  2330 00001CDF 00<rep 10h>             csd	times 16 db 0
+  2331 00001CEF 00<rep 208h>            secbuf	times 520 db 0
+  2332                                  WSECT		equ	2		; the write test's sector: before the partition
+  2333 00001EF7 00<rep 200h>            savebuf	times 512 db 0
+  2334 000020F7 FF<rep 238h>            wtx	times WTXW*2 db 0FFh
+  2335 0000232F 0000<rep 100h>          crctab	times 256 dw 0
+  2336 0000252F 0000                    rtot	dw	0
+  2337 00002531 0000                    rwp	dw	0
+  2338 00002533 00                      wresp	db	0
+  2339 00002534 0000                    wstat	dw	0
+  2340 00002536 0000                    wbusy	dw	0
+  2341 00002538 FF<rep 460h>            xring	times RINGW*2 db 0FFh
+  2342 00002998 00<rep 21Ch>            rawbuf	times 540 db 0
+  2343 00002BB4 00<rep 14h>             regbuf	times 20 db 0
+  2344 00002BC8 00                      xtries	db	0
+  2345 00002BC9 00                      xnff	db	0
+  2346 00002BCA 0000                    xskip	dw	0
+  2347 00002BCC 0000                    xlen	dw	0
+  2348 00002BCE 00                      xcmd	db	0
+  2349 00002BCF 00000000                xarg	dd	0
+  2350 00002BD3 0000                    xn	dw	0
+  2351 00002BD5 0000                    xdst	dw	0
+  2352 00002BD7 FF<rep 494h>            xbuf	times WINLEN+2*RINGW+8 db 0FFh

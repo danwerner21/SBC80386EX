@@ -185,9 +185,16 @@ SETUP's console choice. Without one, the serial side is unaffected.
 | DOS diskettes | `dos t /dev/fva0` lists one; `dos x /dev/fva0 FILE` extracts; `dos r /dev/fva0 FILE` writes. See `man dos` |
 | Formatting | `/etc/fdformat -v /dev/rfva0` (1.44 MB; `rfha0` 1.2 MB, and so on). COHERENT's clock loses about 0.2 s a track while it runs, half a minute for a 1.44 MB diskette, until the next boot |
 | COHERENT diskettes | `/etc/mkfs /dev/fva0 2880`, then `mount /dev/fva0 /mnt` |
+| SD card | the on-board microSD socket: `/dev/mmc0a`–`mmc0d` are the card's partitions, `/dev/mmc0x` the whole card (raw: `/dev/rmmc0a` …). A card written on a PC is `dos t /dev/mmc0a`, `dos x /dev/mmc0a FILE`, `dos r /dev/mmc0a FILE` |
 | Manual pages | `man` *topic* |
 
 The FPU is assumed fitted (an 80387; see [section 9](#9-known-limitations)).
+
+The SD card is brought up the first time one of its devices is opened,
+and says so on the console (`mmc0: 960 MB, 1250 kHz`). Take the card out
+and its devices fail until one is opened again, which brings up whatever
+card is in then. Under DOS on the same board, `SBC386/sdcard/SD.SYS`
+gives the card a drive letter.
 
 ---
 
@@ -452,6 +459,7 @@ the few that are not.
 | `KB_DATA`, `KB_STAT` | `0x4E0`, `0x4E1` | `0x60`, `0x64` | keyboard controller |
 | `KB_XT`, `KB_SPKR` | 0, 0 | 1, 1 | XT keyboard acknowledge and PC speaker, both through port 61h |
 | `FD_BASE` | `0x430` | | ECB floppy controller base port |
+| `MMC_DEBUG` | 0 | 0 | SD card trace: 1 shows each command and its answer, 2 each data transfer too (section 7) |
 | `pit_count` *(patched)* | 9216 | 11932 | timer 0 reload for 100 Hz: the SBC's timer runs at 921,600 Hz |
 | `condev` *(patched)* | `0x580` | `0x200` | kernel console: `/dev/com1l` |
 | `early_con` *(patched)* | 0 | 0 | see section 7 |
@@ -500,6 +508,15 @@ missing or unreadable sector. Each sector is tried 8 times, with a
 controller reset half way, before the error is reported. Formatting
 reports `fd0: format cyl C head H: ST0 x ST1 y ST2 z` the same way.
 
+**SD card.** A card that will not come up says which command failed and
+what the card answered (`mmc0: CMD8 R1 …`); a sector that fails three
+times prints `mmc0: read block N failed` (or write). For more,
+`/conf/patch -k /coh.sbc MMC_DEBUG=1` traces every command: its R1, the
+bit offset the card's bytes came at (usually 7, a bit early), the SSIO's
+error flags (`8` is a receive overflow) and the bytes as they came.
+`MMC_DEBUG=2` adds each data transfer. `-k` changes `/coh.sbc` too: set
+it back to 0 when done.
+
 **Symbols.** `/coh.sbc.sym` maps addresses to names; `tools/kdis.py`
 disassembles a kernel pulled out of an image with `tools/cohfs.py`.
 
@@ -525,6 +542,7 @@ and the evidence.
 | `board/setup.sh` | serial `/dev/console`, `rtcok` | no CMOS clock: `/etc/ATclock` would wait for hours |
 | `coh.386/null.c` | `/dev/clock` fails at once when register A reads FFh | the same wait, in the kernel; the installer calls `ATclock` from places `setup.sh` cannot reach |
 | `conf/fdc/src/sbcfd.c`, `fdpio.s` | floppy driver for the ECB FDC9266 at 430h, polled, ported from the SBC BIOS: read, write, and format (the FDFORMAT ioctl /etc/fdformat uses) | no DMA or interrupt on that board; MWC's driver needs both. The data phase is assembly: in C it overran (ST1 10). A format track goes in one burst: interrupts let in between sectors made it underrun |
+| `conf/mmc/src/sbcsd.c`, `sdspi.s`; `conf/mdevice`, `board/sdevice`, `board/setup.sh` | `/dev/mmc0*`: a driver, new, for the on-board microSD socket on the 386EX's synchronous serial unit, polled | it follows `SBC386/sdcard/sdcore.inc`, which the bring-up program `SDTEST` found on the board and `SD.SYS` proved: the clock's start phase fixed each burst, a preamble before every command, the card's bytes realigned from R1, a read or write in one burst, CRC16 checked. The bursts and the realignment are assembly |
 | `conf/patch`, `install_conf/keeplist`, `board/sdevice` | `/dev/patch` in the board kernel, its tables cut to IDE, a repeat attach accepted; `ronflag`, `at_drive_ct`, `fl_dsk_ch_prob` patchable | the installer patches the running kernel and the one it installs, by name |
 | `board/mkboard.sh` | COM3/COM4 not configured | each probe of an absent port costs a 209 ms bus timeout |
 
@@ -545,6 +563,13 @@ and the evidence.
   512 bytes, and for a whole revolution per track while formatting, so
   the clock loses about 0.2 s a track formatted. The autosensing
   "special" devices are not supported.
+- **SD card: about 44 KB/s.** One card, read and written a 512-byte
+  sector per command at 1.25 MHz; 1.67 MHz overruns the polled loop in
+  the kernel (it holds under DOS). Interrupts are off for each sector,
+  about 4 ms. No multi-block transfers yet. Partition the card on a PC:
+  COHERENT's `fdisk` wants a geometry ioctl the driver does not have.
+  Tested with one 1 GB standard-capacity card; SDHC (block addressing)
+  is handled but not yet tried, and so is `mkfs` on a partition.
 
 ---
 

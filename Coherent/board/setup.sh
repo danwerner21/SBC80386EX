@@ -50,6 +50,18 @@ sed -e 's/^0lPvga3$/1lPvga3/' /etc/ttys >/tmp/ttys
 cp /tmp/ttys /etc/ttys
 rm /tmp/ttys
 
+# The on-board microSD socket (sbcsd.c, major 14): the card's four MBR
+# partitions and the whole card, block and raw.  "dos t /dev/mmc0a" lists
+# the DOS partition of a card written on a PC.
+for p in a:0 b:1 c:2 d:3 x:128; do
+	n=`echo $p | sed 's/:.*//'`
+	m=`echo $p | sed 's/.*://'`
+	rm -f /dev/mmc0$n /dev/rmmc0$n
+	/etc/mknod /dev/mmc0$n b 14 $m
+	/etc/mknod /dev/rmmc0$n c 14 $m
+	chmod 660 /dev/mmc0$n /dev/rmmc0$n
+done
+
 # Boot the board kernel by default.  tboot loads /autoboot.
 ln -f /coh.sbc /autoboot
 ls -li /autoboot /coh.sbc /coherent

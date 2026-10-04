@@ -44,19 +44,23 @@ cd $S && ar r $K/lib/k386.a i386/mchinit.o i386/die.o coh.386/misc.o \
 
 # Drivers: at (IDE), kb (8242), mm (VGA3), fdc (the ECB FDC9266, our own
 # sbcfd.c in place of MWC's fdc+fl386), patch (/dev/patch, for the
-# installer).  mmas.s through cc, as MWC did.
+# installer), mmc (sbcsd.c, the on-board microSD, which MWC never had).
+# mmas.s through cc, as MWC did.
 echo "mkkconf.sh: drivers"
 cd $S/conf/at/src && cc -o $K/at/Driver.o -c at.c || exit 1
 cd $S/conf/kb/src && cc -o $K/kb/Driver.o -c kb.c || exit 1
 cd $S/conf/mm/src && cc -c mm.c mmas.s && ar r $K/mm/Driver.a mm.o mmas.o || exit 1
 cd $S/conf/fdc/src && cc -c sbcfd.c fdpio.s && ld -r -o $K/fdc/Driver.o sbcfd.o fdpio.o || exit 1
 cd $S/conf/patch/src && cc -o $K/patch/Driver.o -c patch.c || exit 1
+[ -d $K/mmc ] || mkdir $K/mmc
+cd $S/conf/mmc/src && cc -c sbcsd.c sdspi.s && ld -r -o $K/mmc/Driver.o sbcsd.o sdspi.o || exit 1
 
 # Configuration files we changed.
 cp $S/conf/at/Space.c $K/at/Space.c
 cp $S/conf/console/Space.c $K/console/Space.c
 cp $S/conf/patch/Space.c $K/patch/Space.c
 cp $S/conf/mtune $K/mtune
+cp $S/conf/mdevice $K/mdevice
 cp $S/conf/install_conf/keeplist $K/install_conf/keeplist
 chmod a+x $K/install_conf/keeplist
 

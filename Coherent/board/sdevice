@@ -4,6 +4,7 @@
 # streams.  fdc, major 4, is our sbcfd.c for the ECB FDC9266 -- polled,
 # so no interrupt line.  mm, kb
 # and console drive the ECB VGA3 -- see the CON_ and KB_ lines in stune.
+# mmc, major 14, is sbcsd.c for the on-board microSD socket (/dev/mmc0a..x).
 # patch, /dev/patch, is on for the install diskettes: /etc/mkdev runs
 # /conf/kpatch on the running kernel.
 # Type field:
@@ -87,6 +88,7 @@ rm	Y	0	0	0	0	0x0	0x0	0x0	0x0
 pty	Y	0	0	0	0	0x0	0x0	0x0	0x0
 ms	N	0	0	0	0	0x0	0x0	0x0	0x0
 at	Y	0	5	1	14	0x0	0x0	0x0	0x0
+mmc	Y	0	0	0	0	0x0	0x0	0x0	0x0
 st	N	0	0	0	0	0x0	0x0	0x0	0x0
 aha	N	0	0	0	0	0x0	0x0	0x0	0x0
 hai	N	0	0	0	0	0x0	0x0	0x0	0x0

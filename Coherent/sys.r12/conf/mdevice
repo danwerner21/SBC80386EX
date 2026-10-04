@@ -97,6 +97,7 @@ rm	-	CGo	rm	8	8	0	255	-1	-1
 pty	-	CGo	pty	9	9	0	255	-1	-1
 ms	-	CGo	ms	10	10	0	255	-1	-1
 at	-	CGHo	at	11	11	0	255	-1	-1
+mmc	-	CGHo	mmc	14	14	0	255	-1	-1
 st	-	CGo	at	12	12	0	255	-1	-1
 aha	-	CGo	sd	13	13	0	255	-1	-1
 hai	-	CGo	scsi	13	13	0	255	-1	-1

@@ -183,7 +183,8 @@ SETUP's console choice. Without one, the serial side is unaffected.
 | Time zone | GMT, showing the DS1302's time unchanged: keep the DS1302 in local time, as DOS does |
 | Diskettes | `/dev/fva0` 1.44 MB, `/dev/fha0` 1.2 MB, `/dev/fqa0` 720K, `/dev/f9a0` 360K; drive 1 is `fva1` and so on |
 | DOS diskettes | `dos t /dev/fva0` lists one; `dos x /dev/fva0 FILE` extracts; `dos r /dev/fva0 FILE` writes. See `man dos` |
-| COHERENT diskettes | `/etc/mkfs /dev/fva0 2880`, then `mount /dev/fva0 /mnt`. Diskettes must already be formatted (format them under DOS) |
+| Formatting | `/etc/fdformat -v /dev/rfva0` (1.44 MB; `rfha0` 1.2 MB, and so on). COHERENT's clock loses about 0.2 s a track while it runs, half a minute for a 1.44 MB diskette, until the next boot |
+| COHERENT diskettes | `/etc/mkfs /dev/fva0 2880`, then `mount /dev/fva0 /mnt` |
 | Manual pages | `man` *topic* |
 
 The FPU is assumed fitted (an 80387; see [section 9](#9-known-limitations)).
@@ -447,6 +448,7 @@ the few that are not.
 | `CON_VGA` | 2 | 1 | VGA3 console: 2 = if its 8242 answers, 1 = always, 0 = never |
 | `CON_CRTC` | `0x4E2` | 0 | CRTC port (HD6445 on the VGA3); 0 = the PC's |
 | `CON_CGA` | 0 | 1 | the CGA mode/border/status registers exist |
+| `CON_VBLANK` | 1 | 0 | touch display RAM only in vertical blanking (CRTC register 31, bit 1): the VGA3's RAM is not arbitrated, and the screen snows otherwise |
 | `KB_DATA`, `KB_STAT` | `0x4E0`, `0x4E1` | `0x60`, `0x64` | keyboard controller |
 | `KB_XT`, `KB_SPKR` | 0, 0 | 1, 1 | XT keyboard acknowledge and PC speaker, both through port 61h |
 | `FD_BASE` | `0x430` | | ECB floppy controller base port |
@@ -494,7 +496,9 @@ R08i58.i58.i58.i58.i58.i58.i58.i58.
 ST1 y ST2 z`. ST1 `10` is an overrun (data not collected in time), ST1
 `02` is write-protect (reported as `fd0: write protected`), ST1 `20` with
 ST2 `20` is a CRC error in the sector's data, and ST1 `01` or `04` is a
-missing or unreadable sector.
+missing or unreadable sector. Each sector is tried 8 times, with a
+controller reset half way, before the error is reported. Formatting
+reports `fd0: format cyl C head H: ST0 x ST1 y ST2 z` the same way.
 
 **Symbols.** `/coh.sbc.sym` maps addresses to names; `tools/kdis.py`
 disassembles a kernel pulled out of an image with `tools/cohfs.py`.
@@ -516,10 +520,11 @@ and the evidence.
 | `conf/at` | `ATSREG`/`AT_HFREG`/`AT_8BIT` | 8-bit IDE at 01F0–01FF only |
 | `coh.386/lib/ksynch.c`, `i386/mchinit.c` | sleep locks initialised; memory cleared at start | kernel code assumed zeroed memory; the SBC's RAM holds the BIOS memory test's patterns |
 | `conf/kb`, `conf/mm`, `conf/console` | VGA3 console and 8242 keyboard | ports, no port 61h, CGA registers skipped, bounded waits, presence by probing |
+| `conf/mm/src/mmas.s` | `CON_VBLANK`: every display write waits for vertical blanking, a row at a time, as the SBC BIOS's `vga3.asm` does | the VGA3's RAM is shared with the CRTC with no arbitration: a CPU access during a fetch snows |
 | `i386/die.c`, `io.386/putchar.c` | `early_con` | bring-up visibility |
 | `board/setup.sh` | serial `/dev/console`, `rtcok` | no CMOS clock: `/etc/ATclock` would wait for hours |
 | `coh.386/null.c` | `/dev/clock` fails at once when register A reads FFh | the same wait, in the kernel; the installer calls `ATclock` from places `setup.sh` cannot reach |
-| `conf/fdc/src/sbcfd.c`, `fdpio.s` | floppy driver for the ECB FDC9266 at 430h, polled, ported from the SBC BIOS | no DMA or interrupt on that board; MWC's driver needs both. The data phase is assembly: in C it overran (ST1 10) |
+| `conf/fdc/src/sbcfd.c`, `fdpio.s` | floppy driver for the ECB FDC9266 at 430h, polled, ported from the SBC BIOS: read, write, and format (the FDFORMAT ioctl /etc/fdformat uses) | no DMA or interrupt on that board; MWC's driver needs both. The data phase is assembly: in C it overran (ST1 10). A format track goes in one burst: interrupts let in between sectors made it underrun |
 | `conf/patch`, `install_conf/keeplist`, `board/sdevice` | `/dev/patch` in the board kernel, its tables cut to IDE, a repeat attach accepted; `ronflag`, `at_drive_ct`, `fl_dsk_ch_prob` patchable | the installer patches the running kernel and the one it installs, by name |
 | `board/mkboard.sh` | COM3/COM4 not configured | each probe of an absent port costs a 209 ms bus timeout |
 
@@ -533,14 +538,13 @@ and the evidence.
   one, floating point would misbehave. COHERENT's own probe faults on the
   386EX for a reason not yet found (under DOS the 387 passes the same
   sequence).
-- **The VGA3 snows.** Screen writes are not yet confined to vertical
-  blanking as the SBC BIOS's are.
 - **16 MB.** The kernel uses 16 MB of the board's 64 (`HACK_LIMIT` in
   `mchinit.c`, MWC's own cap).
-- **Floppy: read and write only.** `sbcfd.c` reads and writes drives 0 and
-  1 in the standard formats, polled, with interrupts held off for each
-  sector's 512 bytes. It cannot format (`fdformat`); format diskettes
-  under DOS. The autosensing "special" devices are not supported.
+- **Floppy.** `sbcfd.c` reads, writes and formats drives 0 and 1 in the
+  standard formats, polled: interrupts are held off for each sector's
+  512 bytes, and for a whole revolution per track while formatting, so
+  the clock loses about 0.2 s a track formatted. The autosensing
+  "special" devices are not supported.
 
 ---
 

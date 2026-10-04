@@ -106,6 +106,7 @@
 	.globl	mmcrtsav
 	.globl	CON_CRTC		/ SBC-386EX: console/Space.c
 	.globl	CON_CGA			/ SBC-386EX: console/Space.c
+	.globl	CON_VBLANK		/ SBC-386EX: console/Space.c
 
 / Globals defined in this module.
 	.globl	VIDSLOW			/ Patchable kernel variable
@@ -593,10 +594,64 @@ blank:
 	movb	%fs:MM_OATTR(%ebp),ATTR		/ get original attribute
 ?blank1:
 	movb	$' ',%al
+?blank3:					/ SBC-386EX: a row at a time,
+	cmpl	$NCOL,%ecx			/  each in vertical blanking
+	jbe	?blank4
+	push	%ecx
+	movl	$NCOL,%ecx
+	call	vbwait
+	rep
+	stosw
+	pop	%ecx
+	subl	$NCOL,%ecx
+	jmp	?blank3
+?blank4:
+	call	vbwait
 	rep
 	stosw
 	pop	%eax				/ restore current attribute
 	ret
+
+////////
+/
+/ vbwait: SBC-386EX: wait for vertical blanking before touching the
+/ display RAM, when CON_VBLANK is set.
+/
+/ The ECB VGA3's 32K is shared by the CPU and the HD6445 with nothing to
+/ arbitrate: a CPU read or write while the CRTC is fetching corrupts the
+/ fetch, and the screen snows.  Bit 1 of HD6445 register 31, read through
+/ the data port, is vertical blanking -- 1553 usec of the 14271 usec
+/ frame, time for about thirteen 80-cell rows -- so every access waits
+/ for it, as the SBC BIOS's vga3.asm does, and the callers move at most
+/ a row per wait.  Cleverer schemes (a retrace-interrupt queue, tracking
+/ the beam with a timer) were tried in the BIOS and failed.
+/
+/ Bounded at 65536 reads, a few frames, so that a CRTC with no clock
+/ cannot hang the console.  With no VGA3 fitted the port floats to FFh,
+/ bit 1 reads set, and the wait ends at once.  Preserves every register.
+/
+////////
+
+vbwait:
+	cmpl	$0,%fs:CON_VBLANK
+	je	?vbw3
+	push	%eax
+	push	%ecx
+	push	%edx
+	movl	%fs:mm_io,%edx
+	movb	$31,%al
+	outb	(%dx)
+	incl	%edx
+	movl	$65536,%ecx
+?vbw1:	inb	(%dx)
+	testb	$2,%al
+	jne	?vbw2
+	decl	%ecx
+	jne	?vbw1
+?vbw2:	pop	%edx
+	pop	%ecx
+	pop	%eax
+?vbw3:	ret
 
 blanklines:
 	push	%ecx
@@ -627,6 +682,17 @@ copyf:
 	addl	%ebx,%esi
 copyf1:
 	shrl	$1,%ecx			/ word count
+?copy2:	cmpl	$NCOL,%ecx		/ SBC-386EX: a row at a time,
+	jbe	?copy3			/  each in vertical blanking
+	push	%ecx
+	movl	$NCOL,%ecx
+	call	vbwait
+	rep
+	movsw
+	pop	%ecx
+	subl	$NCOL,%ecx
+	jmp	?copy2
+?copy3:	call	vbwait
 	rep
 	movsw
 	cld
@@ -727,6 +793,7 @@ eval:
 ////////
 
 mmputc:
+	call	vbwait			/ SBC-386EX: in vertical blanking
 	stosw				/ Update display memory.
 	incb	COL
 	cmpb	$NCOL,COL		/ Past end of line?

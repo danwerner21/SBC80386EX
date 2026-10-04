@@ -29,12 +29,14 @@ int		con_beep = 1;
  * its 8242 answers: status not FFh), CON_CRTC 0x4E2 (HD6445),
  * CON_CGA 0 (no CGA mode/border/status registers), KB_DATA 0x4E0 and
  * KB_STAT 0x4E1 (the 8242), KB_XT 0 (no XT acknowledge through 61h),
- * KB_SPKR 0 (no PC speaker).
+ * KB_SPKR 0 (no PC speaker), CON_VBLANK 1 (its RAM is not arbitrated:
+ * write it only in vertical blanking, or the screen snows).
  */
 
 unsigned	CON_VGA = CON_VGA_SPEC;	/* 0 never, 1 always, 2 probe the 8242 */
 unsigned	CON_CRTC = CON_CRTC_SPEC;	/* CRTC index port; 0: 3D4h/3B4h as a PC */
 unsigned	CON_CGA = CON_CGA_SPEC;	/* nonzero: CGA/MDA registers exist */
+unsigned	CON_VBLANK = CON_VBLANK_SPEC;	/* nonzero: touch display RAM only in vertical blanking (CRTC R31 bit 1) */
 unsigned	KB_DATA = KB_DATA_SPEC;	/* keyboard controller data port */
 unsigned	KB_STAT = KB_STAT_SPEC;	/* ... status and command port */
 unsigned	KB_XT = KB_XT_SPEC;	/* nonzero: XT acknowledge through 61h */
